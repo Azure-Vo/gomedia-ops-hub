@@ -279,9 +279,7 @@ end $$;
 drop trigger if exists alerts_before_update on public.alerts;
 create trigger alerts_before_update before update on public.alerts for each row execute function public.alerts_before_update();
 
--- New sign-in accounts get a profile. The role comes from app_metadata.ops_role, which only
--- the server (Admin invite) can set; everyone else starts as staff.
--- Accounts made by the app (Admin invite, demo seed) carry ops_role in app_metadata, which only the
+-- Every new sign-in account gets a profile. Accounts made by the app (Admin invite, demo seed) carry ops_role in app_metadata, which only the
 -- server can set. Any other account (a sign-up through the public API, a user added by hand in the
 -- dashboard) starts INACTIVE and sees nothing until an admin activates it.
 create or replace function public.handle_new_user() returns trigger
