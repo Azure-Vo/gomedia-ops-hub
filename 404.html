@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Go Media Ops Hub</title>
+    <script>
+      // GitHub Pages serves this page for any path it has no file for (deep links such as
+      // /gomedia-ops-hub/quotes/123). Send the browser to the right app root with the path kept
+      // in ?__p=, and the app puts it back. Pilot lives at /<repo>/, Demo at /<repo>/demo/.
+      (function () {
+        var l = window.location;
+        var seg = l.pathname.split('/');
+        var base = '/' + (seg[1] ? seg[1] + '/' : '');
+        if (seg[2] === 'demo') base += 'demo/';
+        var rest = l.pathname.slice(base.length) + l.search;
+        l.replace(base + '?__p=' + encodeURIComponent(rest) + l.hash);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
