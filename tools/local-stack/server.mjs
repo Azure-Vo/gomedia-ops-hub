@@ -286,4 +286,34 @@ http
   })
   .listen(WEB_PORT, '127.0.0.1');
 
-console.log(`local stack ready: api http://127.0.0.1:${PORT}  web http://127.0.0.1:${WEB_PORT}`);
+// ------------------------------------------------- GitHub Pages emulation ----
+// Serves dist/pages the way GitHub Pages serves a project site: files under /<repo>/, a folder
+// path gets its index.html, anything else gets /<repo>/404.html with status 404 (no rewrites).
+const PAGES_PORT = 54350;
+const pagesDir = process.env.PAGES_DIR ?? join(root, 'dist', 'pages');
+const pagesRepo = process.env.PAGES_REPO ?? 'gomedia-ops-hub';
+http
+  .createServer((req, res) => {
+    const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (!p.startsWith(`/${pagesRepo}/`)) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      return res.end('not found');
+    }
+    if (p.endsWith('/config.js')) {
+      // Point the emulated site at this local stack instead of the real projects.
+      res.writeHead(200, { 'Content-Type': 'text/javascript' });
+      const env = p.includes('/demo/') ? 'demo' : 'pilot';
+      return res.end(`window.OPS_HUB_CONFIG = ${JSON.stringify({ supabaseUrl: `http://127.0.0.1:${PORT}`, supabaseAnonKey: ANON_KEY, environment: env })};`);
+    }
+    let file = join(pagesDir, p.slice(pagesRepo.length + 2));
+    if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
+    if (!existsSync(file)) {
+      res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(readFileSync(join(pagesDir, '404.html')));
+    }
+    res.writeHead(200, { 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream' });
+    res.end(readFileSync(file));
+  })
+  .listen(PAGES_PORT, '127.0.0.1');
+
+console.log(`local stack ready: api http://127.0.0.1:${PORT}  web http://127.0.0.1:${WEB_PORT}  pages http://127.0.0.1:${PAGES_PORT}/${pagesRepo}/`);

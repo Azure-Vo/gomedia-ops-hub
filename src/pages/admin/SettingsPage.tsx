@@ -165,7 +165,7 @@ export function SettingsPage() {
                 {(id) => (
                   <div className="flex gap-2">
                     <Input id={id} value={s.app_url ?? ''} onChange={(e) => setS({ ...s, app_url: e.target.value })} placeholder="https://…" />
-                    <Button size="sm" variant="ghost" onClick={() => setS({ ...s, app_url: window.location.origin })}>
+                    <Button size="sm" variant="ghost" onClick={() => setS({ ...s, app_url: (window.location.origin + import.meta.env.BASE_URL).replace(/\/$/, '') })}>
                       Lấy địa chỉ này
                     </Button>
                   </div>

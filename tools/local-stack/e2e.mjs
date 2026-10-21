@@ -6,7 +6,8 @@ import { mkdirSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
 const API = 'http://127.0.0.1:54321';
-const WEB = 'http://127.0.0.1:54340';
+// WEB_URL lets the same steps run against the GitHub Pages emulation (http://127.0.0.1:54350/gomedia-ops-hub).
+const WEB = process.env.WEB_URL ?? 'http://127.0.0.1:54340';
 const SHOTS = process.argv[2] ?? './e2e-shots';
 mkdirSync(SHOTS, { recursive: true });
 const keys = await (await fetch(`${API}/__test/keys`)).json();

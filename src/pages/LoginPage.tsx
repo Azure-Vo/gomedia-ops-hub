@@ -33,7 +33,7 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     const clean = email.trim().toLowerCase();
-    const { error } = await supabase.auth.signInWithOtp({ email: clean, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin } });
+    const { error } = await supabase.auth.signInWithOtp({ email: clean, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + import.meta.env.BASE_URL } });
     setBusy(false);
     if (error) return setError(friendly(error.message));
     localStorage.setItem('ops-hub-last-email', clean);

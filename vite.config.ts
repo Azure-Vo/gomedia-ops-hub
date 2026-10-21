@@ -17,7 +17,12 @@ function domainFingerprint(): string {
   return h.digest('hex').slice(0, 10);
 }
 
+// Where the app is served from: '/' (Netlify, Vercel) or a GitHub Pages sub-path such as
+// '/gomedia-ops-hub/' (Pilot) and '/gomedia-ops-hub/demo/' (Demo). Set OPS_BASE when building.
+const base = (process.env.OPS_BASE || '/').replace(/\/?$/, '/');
+
 export default defineConfig({
+  base,
   plugins: [react()],
   resolve: { alias: { '@': join(root, 'src') } },
   define: { __DOMAIN_VERSION__: JSON.stringify(domainFingerprint()) },

@@ -1,0 +1,14 @@
+{
+  "owner": "Azure-Vo",
+  "repo": "gomedia-ops-hub",
+  "pilot": {
+    "projectRef": "rclkghvbisrznfvdsoel",
+    "supabaseUrl": "https://rclkghvbisrznfvdsoel.supabase.co",
+    "publishableKey": "sb_publishable_s9oiXkiv1byTT2QaaukxAw_x87ycBkq"
+  },
+  "demo": {
+    "projectRef": "vmyqyiuftoctfmumegrq",
+    "supabaseUrl": "https://vmyqyiuftoctfmumegrq.supabase.co",
+    "publishableKey": "sb_publishable_fHlNpv_C9SBsLPRYf2ExKQ_e6tlTVNN"
+  }
+}
