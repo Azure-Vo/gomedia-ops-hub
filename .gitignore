@@ -1,0 +1,14 @@
+node_modules/
+dist/
+tools/local-stack/node_modules/
+tools/local-stack/.build/
+
+# Step 0: real client names and prepared data never go into the repository
+private/
+step0/out/
+
+.env
+.env.*
+*.local.*
+.DS_Store
+__pycache__/

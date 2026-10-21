@@ -1,0 +1,15 @@
+<!--
+  Supabase → Authentication → Email Templates → "Magic Link" (also used for the 6-digit code).
+  Subject:  Mã đăng nhập Go Media Ops Hub
+  Paste everything below this comment into the message body (Source / HTML view).
+-->
+<div style="font-family: Arial, Helvetica, sans-serif; color: #24224F; max-width: 480px">
+  <h2 style="margin: 0 0 12px">Đăng nhập Go Media Ops Hub</h2>
+  <p style="margin: 0 0 8px">Mã đăng nhập của bạn:</p>
+  <p style="font-size: 30px; font-weight: 700; letter-spacing: 6px; margin: 0 0 16px">{{ .Token }}</p>
+  <p style="margin: 0 0 8px">Nhập mã này vào trang đăng nhập. Hoặc bấm nút dưới đây, trên chính máy vừa yêu cầu đăng nhập:</p>
+  <p style="margin: 0 0 16px">
+    <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: #1800AD; color: #ffffff; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: 700">Đăng nhập</a>
+  </p>
+  <p style="margin: 0; color: #5D5B80; font-size: 13px">Mã và nút hết hạn sau 1 giờ. Nếu bạn không yêu cầu đăng nhập, hãy bỏ qua email này.</p>
+</div>

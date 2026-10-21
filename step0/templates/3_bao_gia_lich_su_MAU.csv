@@ -1,0 +1,4 @@
+﻿quote_code,client_alias,service_group,requested_at,sent_at,item_name,unit,qty,unit_price,discount_pct
+BG-0701,Khách 001,Social Media,2026-07-06 09:00,2026-07-06 15:30,Video TikTok ngắn (≤ 60s),video,12,1500000,5
+BG-0701,Khách 001,Social Media,2026-07-06 09:00,2026-07-06 15:30,Bài đăng Facebook (thiết kế + caption),bài,8,600000,5
+BG-0708,Khách 002,Influencer,2026-07-08 14:00,2026-07-10 10:00,Booking micro-KOC,booking,3,3500000,0
