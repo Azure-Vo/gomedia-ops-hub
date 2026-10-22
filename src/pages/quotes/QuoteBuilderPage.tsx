@@ -20,6 +20,7 @@ import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
 import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadPeople, normLine, normQuote, personName, QUOTE_COLS, QuoteRow } from './data';
+import { LibraryPicker } from './LibraryPicker';
 import { BandReasons, downloadQuotePdf, PriceTag, QuotePdf, StatusBadge } from './parts';
 
 interface EditLine {
@@ -83,7 +84,6 @@ export function QuoteBuilderPage() {
   const [saveState, setSaveState] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   const [busy, setBusy] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [search, setSearch] = useState('');
   const [decision, setDecision] = useState<{ kind: 'approve' | 'changes'; comment: string } | null>(null);
   const [confirmReopen, setConfirmReopen] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -263,11 +263,13 @@ export function QuoteBuilderPage() {
   const setLine = (key: string, patch: Partial<EditLine>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
 
   function addItem(item: LibraryItem) {
-    setLines((ls) => [...ls, { key: newKey(), library_item_id: item.id, item_name: item.name, unit: item.unit, qty: 1, unit_price: item.unit_price, override_reason: null }]);
+    // Picking an item that is already on the quote adds 1 to its quantity instead of a duplicate line.
+    setLines((ls) => {
+      const at = ls.findIndex((l) => l.library_item_id === item.id);
+      if (at >= 0) return ls.map((l, i) => (i === at ? { ...l, qty: l.qty + 1 } : l));
+      return [...ls, { key: newKey(), library_item_id: item.id, item_name: item.name, unit: item.unit, qty: 1, unit_price: item.unit_price, override_reason: null }];
+    });
     if (!header?.service_group) setH({ service_group: item.service_group });
-    setPickerOpen(false);
-    setSearch('');
-    toast(`Đã thêm ${item.name} với giá thư viện ${fmtVnd(item.unit_price)}`, 'info');
   }
 
   function copyFrom(src: ArchiveEntry) {
@@ -355,7 +357,8 @@ export function QuoteBuilderPage() {
       nav(`/quotes/${q.id}`);
     });
 
-  const pickList = library.filter((i) => i.active && (!search.trim() || `${i.name} ${i.service_group}`.toLowerCase().includes(search.trim().toLowerCase())));
+  const usage = new Map<string, number>();
+  for (const a of archive) for (const id of new Set(a.quote_lines.map((l) => l.library_item_id))) if (id) usage.set(id, (usage.get(id) ?? 0) + 1);
   const similar = rankSimilar(
     { serviceGroup: header.service_group, itemIds: lines.map((l) => l.library_item_id).filter((x): x is string => !!x), excludeId: quote.id },
     archive.map((a) => ({ id: a.id, serviceGroup: a.service_group, itemIds: a.quote_lines.map((l) => l.library_item_id).filter((x): x is string => !!x), sentAt: Date.parse(a.sent_at) })),
@@ -512,21 +515,7 @@ export function QuoteBuilderPage() {
                 Thêm hạng mục từ Thư viện giá
               </Button>
               {pickerOpen && (
-                <div className="mt-3 rounded-xl border border-line bg-[#FBFAFE] p-3">
-                  <Input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm hạng mục…" aria-label="Tìm hạng mục" />
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {pickList.map((i) => (
-                      <button key={i.id} type="button" onClick={() => addItem(i)} className="min-h-[56px] rounded-[10px] border border-line bg-white px-3 py-2 text-left text-sm hover:border-brand">
-                        <b className="text-ink">{i.name}</b>
-                        <br />
-                        <span className="text-ink-3">
-                          {fmtVnd(i.unit_price)} / {i.unit} · {i.service_group}
-                        </span>
-                      </button>
-                    ))}
-                    {!pickList.length && <p className="p-2 text-sm text-ink-3">Không có hạng mục phù hợp. Nhờ PM thêm vào Thư viện giá.</p>}
-                  </div>
-                </div>
+                <LibraryPicker library={library} lines={lines} usage={usage} preferredGroup={header.service_group} onAdd={addItem} onClose={() => setPickerOpen(false)} />
               )}
             </div>
           )}

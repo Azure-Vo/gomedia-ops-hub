@@ -33,6 +33,8 @@ const PEOPLE = [
   { key: 'intern-d', name: 'Thực tập sinh D (mẫu)', role: 'staff' },
 ] as const;
 
+// Synthetic prices for demonstration only (not Go Media's price list). The first ten codes are used by the
+// baseline and pilot-period sample quotes below, so keep them stable.
 const LIBRARY = [
   ['DEMO-SOC-01', 'Video TikTok ngắn (≤ 60s)', 'video', 'Social Media', 1_500_000],
   ['DEMO-SOC-02', 'Bài đăng Facebook (thiết kế + caption)', 'bài', 'Social Media', 600_000],
@@ -44,6 +46,56 @@ const LIBRARY = [
   ['DEMO-MED-01', 'Chụp ảnh sản phẩm (nửa ngày)', 'buổi', 'Media Production', 5_000_000],
   ['DEMO-MED-02', 'Quay dựng video sản phẩm', 'video', 'Media Production', 2_500_000],
   ['DEMO-PER-01', 'Phí quản lý quảng cáo', 'tháng', 'Performance', 3_000_000],
+  // Social Media
+  ['DEMO-SOC-04', 'Quản trị fanpage trọn gói', 'tháng', 'Social Media', 6_000_000],
+  ['DEMO-SOC-05', 'Bài đăng Instagram (ảnh + caption)', 'bài', 'Social Media', 500_000],
+  ['DEMO-SOC-06', 'Bài carousel 5–10 ảnh', 'bài', 'Social Media', 900_000],
+  ['DEMO-SOC-07', 'Thiết kế ảnh bìa + avatar fanpage', 'bộ', 'Social Media', 800_000],
+  ['DEMO-SOC-08', 'Trực bình luận và tin nhắn fanpage', 'tháng', 'Social Media', 3_000_000],
+  ['DEMO-SOC-09', 'Video Reels/Shorts dựng từ tư liệu khách', 'video', 'Social Media', 800_000],
+  ['DEMO-SOC-10', 'Báo cáo hiệu quả kênh mạng xã hội', 'tháng', 'Social Media', 1_000_000],
+  ['DEMO-SOC-11', 'Minigame / giveaway trên fanpage', 'chương trình', 'Social Media', 2_500_000],
+  // Influencer
+  ['DEMO-INF-02', 'Booking nano-KOC (dưới 10k follower)', 'booking', 'Influencer', 1_200_000],
+  ['DEMO-INF-03', 'Booking KOL tầm trung (100k–500k follower)', 'booking', 'Influencer', 15_000_000],
+  ['DEMO-INF-04', 'Video review sản phẩm của KOC', 'video', 'Influencer', 2_500_000],
+  ['DEMO-INF-05', 'Livestream cùng KOC', 'buổi', 'Influencer', 8_000_000],
+  ['DEMO-INF-06', 'Quản lý chiến dịch KOC (phí agency)', 'chiến dịch', 'Influencer', 5_000_000],
+  // E-commerce
+  ['DEMO-ECO-04', 'Thiết lập gian hàng Shopee', 'gian hàng', 'E-commerce', 3_000_000],
+  ['DEMO-ECO-05', 'Thiết lập gian hàng TikTok Shop', 'gian hàng', 'E-commerce', 3_000_000],
+  ['DEMO-ECO-06', 'Vận hành gian hàng sàn trọn gói', 'tháng', 'E-commerce', 8_000_000],
+  ['DEMO-ECO-07', 'Đăng sản phẩm lên sàn (ảnh + mô tả)', 'sản phẩm', 'E-commerce', 80_000],
+  ['DEMO-ECO-08', 'Thiết kế ảnh sản phẩm chuẩn sàn', 'ảnh', 'E-commerce', 60_000],
+  ['DEMO-ECO-09', 'Setup flash sale / chương trình khuyến mãi sàn', 'chương trình', 'E-commerce', 1_500_000],
+  ['DEMO-ECO-10', 'Quản lý Shopee Ads', 'tháng', 'E-commerce', 2_500_000],
+  // Media Production
+  ['DEMO-MED-03', 'Chụp ảnh sản phẩm (cả ngày)', 'buổi', 'Media Production', 9_000_000],
+  ['DEMO-MED-04', 'Chụp ảnh lookbook có người mẫu', 'buổi', 'Media Production', 7_000_000],
+  ['DEMO-MED-05', 'Thuê người mẫu (nửa ngày)', 'người', 'Media Production', 1_500_000],
+  ['DEMO-MED-06', 'Chụp ảnh món ăn / menu F&B', 'món', 'Media Production', 150_000],
+  ['DEMO-MED-07', 'Quay TVC ngắn (≤ 30s)', 'video', 'Media Production', 18_000_000],
+  ['DEMO-MED-08', 'Quay flycam', 'buổi', 'Media Production', 3_000_000],
+  ['DEMO-MED-09', 'Dựng lại video từ tư liệu khách', 'video', 'Media Production', 700_000],
+  ['DEMO-MED-10', 'Motion graphic (≤ 30s)', 'video', 'Media Production', 3_500_000],
+  // Performance
+  ['DEMO-PER-02', 'Setup tài khoản + pixel Facebook Ads', 'lần', 'Performance', 1_500_000],
+  ['DEMO-PER-03', 'Quản lý Google Ads (tìm kiếm)', 'tháng', 'Performance', 3_500_000],
+  ['DEMO-PER-04', 'Quản lý TikTok Ads', 'tháng', 'Performance', 3_000_000],
+  ['DEMO-PER-05', 'Bộ creative quảng cáo (5 mẫu)', 'bộ', 'Performance', 1_500_000],
+  ['DEMO-PER-06', 'Landing page chạy quảng cáo', 'trang', 'Performance', 4_000_000],
+  // Branding & Design
+  ['DEMO-BRD-01', 'Thiết kế logo (3 phương án)', 'bộ', 'Branding & Design', 5_000_000],
+  ['DEMO-BRD-02', 'Bộ nhận diện thương hiệu cơ bản', 'bộ', 'Branding & Design', 12_000_000],
+  ['DEMO-BRD-03', 'Thiết kế menu nhà hàng / quán', 'bộ', 'Branding & Design', 2_000_000],
+  ['DEMO-BRD-04', 'Thiết kế poster / standee', 'mẫu', 'Branding & Design', 600_000],
+  ['DEMO-BRD-05', 'Thiết kế bao bì sản phẩm', 'mẫu', 'Branding & Design', 4_000_000],
+  ['DEMO-BRD-06', 'Hồ sơ năng lực công ty (≤ 12 trang)', 'bộ', 'Branding & Design', 4_500_000],
+  // Website
+  ['DEMO-WEB-01', 'Website giới thiệu (≤ 5 trang)', 'website', 'Website', 12_000_000],
+  ['DEMO-WEB-02', 'Bài viết chuẩn SEO (≤ 1.000 chữ)', 'bài', 'Website', 400_000],
+  ['DEMO-WEB-03', 'Chăm sóc website trọn gói', 'tháng', 'Website', 2_000_000],
+  ['DEMO-WEB-04', 'Thiết lập Google Business Profile', 'lần', 'Website', 1_000_000],
 ] as const;
 
 /** 19 synthetic baseline quotes: 9 with a reference (avg 7.0 h, 2 late) and 10 recalculated (avg 10.15 h, 8 late). */
