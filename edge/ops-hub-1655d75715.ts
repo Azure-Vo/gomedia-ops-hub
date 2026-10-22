@@ -1006,7 +1006,57 @@ var LIBRARY = [
   ["DEMO-ECO-03", "T\u1ED1i \u01B0u SEO trang s\u1EA3n ph\u1EA9m", "trang", "E-commerce", 25e4],
   ["DEMO-MED-01", "Ch\u1EE5p \u1EA3nh s\u1EA3n ph\u1EA9m (n\u1EEDa ng\xE0y)", "bu\u1ED5i", "Media Production", 5e6],
   ["DEMO-MED-02", "Quay d\u1EF1ng video s\u1EA3n ph\u1EA9m", "video", "Media Production", 25e5],
-  ["DEMO-PER-01", "Ph\xED qu\u1EA3n l\xFD qu\u1EA3ng c\xE1o", "th\xE1ng", "Performance", 3e6]
+  ["DEMO-PER-01", "Ph\xED qu\u1EA3n l\xFD qu\u1EA3ng c\xE1o", "th\xE1ng", "Performance", 3e6],
+  // Social Media
+  ["DEMO-SOC-04", "Qu\u1EA3n tr\u1ECB fanpage tr\u1ECDn g\xF3i", "th\xE1ng", "Social Media", 6e6],
+  ["DEMO-SOC-05", "B\xE0i \u0111\u0103ng Instagram (\u1EA3nh + caption)", "b\xE0i", "Social Media", 5e5],
+  ["DEMO-SOC-06", "B\xE0i carousel 5\u201310 \u1EA3nh", "b\xE0i", "Social Media", 9e5],
+  ["DEMO-SOC-07", "Thi\u1EBFt k\u1EBF \u1EA3nh b\xECa + avatar fanpage", "b\u1ED9", "Social Media", 8e5],
+  ["DEMO-SOC-08", "Tr\u1EF1c b\xECnh lu\u1EADn v\xE0 tin nh\u1EAFn fanpage", "th\xE1ng", "Social Media", 3e6],
+  ["DEMO-SOC-09", "Video Reels/Shorts d\u1EF1ng t\u1EEB t\u01B0 li\u1EC7u kh\xE1ch", "video", "Social Media", 8e5],
+  ["DEMO-SOC-10", "B\xE1o c\xE1o hi\u1EC7u qu\u1EA3 k\xEAnh m\u1EA1ng x\xE3 h\u1ED9i", "th\xE1ng", "Social Media", 1e6],
+  ["DEMO-SOC-11", "Minigame / giveaway tr\xEAn fanpage", "ch\u01B0\u01A1ng tr\xECnh", "Social Media", 25e5],
+  // Influencer
+  ["DEMO-INF-02", "Booking nano-KOC (d\u01B0\u1EDBi 10k follower)", "booking", "Influencer", 12e5],
+  ["DEMO-INF-03", "Booking KOL t\u1EA7m trung (100k\u2013500k follower)", "booking", "Influencer", 15e6],
+  ["DEMO-INF-04", "Video review s\u1EA3n ph\u1EA9m c\u1EE7a KOC", "video", "Influencer", 25e5],
+  ["DEMO-INF-05", "Livestream c\xF9ng KOC", "bu\u1ED5i", "Influencer", 8e6],
+  ["DEMO-INF-06", "Qu\u1EA3n l\xFD chi\u1EBFn d\u1ECBch KOC (ph\xED agency)", "chi\u1EBFn d\u1ECBch", "Influencer", 5e6],
+  // E-commerce
+  ["DEMO-ECO-04", "Thi\u1EBFt l\u1EADp gian h\xE0ng Shopee", "gian h\xE0ng", "E-commerce", 3e6],
+  ["DEMO-ECO-05", "Thi\u1EBFt l\u1EADp gian h\xE0ng TikTok Shop", "gian h\xE0ng", "E-commerce", 3e6],
+  ["DEMO-ECO-06", "V\u1EADn h\xE0nh gian h\xE0ng s\xE0n tr\u1ECDn g\xF3i", "th\xE1ng", "E-commerce", 8e6],
+  ["DEMO-ECO-07", "\u0110\u0103ng s\u1EA3n ph\u1EA9m l\xEAn s\xE0n (\u1EA3nh + m\xF4 t\u1EA3)", "s\u1EA3n ph\u1EA9m", "E-commerce", 8e4],
+  ["DEMO-ECO-08", "Thi\u1EBFt k\u1EBF \u1EA3nh s\u1EA3n ph\u1EA9m chu\u1EA9n s\xE0n", "\u1EA3nh", "E-commerce", 6e4],
+  ["DEMO-ECO-09", "Setup flash sale / ch\u01B0\u01A1ng tr\xECnh khuy\u1EBFn m\xE3i s\xE0n", "ch\u01B0\u01A1ng tr\xECnh", "E-commerce", 15e5],
+  ["DEMO-ECO-10", "Qu\u1EA3n l\xFD Shopee Ads", "th\xE1ng", "E-commerce", 25e5],
+  // Media Production
+  ["DEMO-MED-03", "Ch\u1EE5p \u1EA3nh s\u1EA3n ph\u1EA9m (c\u1EA3 ng\xE0y)", "bu\u1ED5i", "Media Production", 9e6],
+  ["DEMO-MED-04", "Ch\u1EE5p \u1EA3nh lookbook c\xF3 ng\u01B0\u1EDDi m\u1EABu", "bu\u1ED5i", "Media Production", 7e6],
+  ["DEMO-MED-05", "Thu\xEA ng\u01B0\u1EDDi m\u1EABu (n\u1EEDa ng\xE0y)", "ng\u01B0\u1EDDi", "Media Production", 15e5],
+  ["DEMO-MED-06", "Ch\u1EE5p \u1EA3nh m\xF3n \u0103n / menu F&B", "m\xF3n", "Media Production", 15e4],
+  ["DEMO-MED-07", "Quay TVC ng\u1EAFn (\u2264 30s)", "video", "Media Production", 18e6],
+  ["DEMO-MED-08", "Quay flycam", "bu\u1ED5i", "Media Production", 3e6],
+  ["DEMO-MED-09", "D\u1EF1ng l\u1EA1i video t\u1EEB t\u01B0 li\u1EC7u kh\xE1ch", "video", "Media Production", 7e5],
+  ["DEMO-MED-10", "Motion graphic (\u2264 30s)", "video", "Media Production", 35e5],
+  // Performance
+  ["DEMO-PER-02", "Setup t\xE0i kho\u1EA3n + pixel Facebook Ads", "l\u1EA7n", "Performance", 15e5],
+  ["DEMO-PER-03", "Qu\u1EA3n l\xFD Google Ads (t\xECm ki\u1EBFm)", "th\xE1ng", "Performance", 35e5],
+  ["DEMO-PER-04", "Qu\u1EA3n l\xFD TikTok Ads", "th\xE1ng", "Performance", 3e6],
+  ["DEMO-PER-05", "B\u1ED9 creative qu\u1EA3ng c\xE1o (5 m\u1EABu)", "b\u1ED9", "Performance", 15e5],
+  ["DEMO-PER-06", "Landing page ch\u1EA1y qu\u1EA3ng c\xE1o", "trang", "Performance", 4e6],
+  // Branding & Design
+  ["DEMO-BRD-01", "Thi\u1EBFt k\u1EBF logo (3 ph\u01B0\u01A1ng \xE1n)", "b\u1ED9", "Branding & Design", 5e6],
+  ["DEMO-BRD-02", "B\u1ED9 nh\u1EADn di\u1EC7n th\u01B0\u01A1ng hi\u1EC7u c\u01A1 b\u1EA3n", "b\u1ED9", "Branding & Design", 12e6],
+  ["DEMO-BRD-03", "Thi\u1EBFt k\u1EBF menu nh\xE0 h\xE0ng / qu\xE1n", "b\u1ED9", "Branding & Design", 2e6],
+  ["DEMO-BRD-04", "Thi\u1EBFt k\u1EBF poster / standee", "m\u1EABu", "Branding & Design", 6e5],
+  ["DEMO-BRD-05", "Thi\u1EBFt k\u1EBF bao b\xEC s\u1EA3n ph\u1EA9m", "m\u1EABu", "Branding & Design", 4e6],
+  ["DEMO-BRD-06", "H\u1ED3 s\u01A1 n\u0103ng l\u1EF1c c\xF4ng ty (\u2264 12 trang)", "b\u1ED9", "Branding & Design", 45e5],
+  // Website
+  ["DEMO-WEB-01", "Website gi\u1EDBi thi\u1EC7u (\u2264 5 trang)", "website", "Website", 12e6],
+  ["DEMO-WEB-02", "B\xE0i vi\u1EBFt chu\u1EA9n SEO (\u2264 1.000 ch\u1EEF)", "b\xE0i", "Website", 4e5],
+  ["DEMO-WEB-03", "Ch\u0103m s\xF3c website tr\u1ECDn g\xF3i", "th\xE1ng", "Website", 2e6],
+  ["DEMO-WEB-04", "Thi\u1EBFt l\u1EADp Google Business Profile", "l\u1EA7n", "Website", 1e6]
 ];
 var BASELINE_HOURS = [4, 5, 6, 6.5, 7, 7.5, 8, 9.5, 9.5, 6, 7.5, 9, 9.5, 10, 11, 11.5, 12, 12.5, 12.5];
 function requireDemo(ctx, user) {
