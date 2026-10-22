@@ -371,7 +371,7 @@ export function QuoteBuilderPage() {
             <Icon name="chevronRight" className="rotate-180" />
           </Link>
           <div className="min-w-0">
-            <div className="text-[13px] font-bold uppercase tracking-wide text-accent">Báo giá · S3 Quotation Builder</div>
+            <div className="text-[13px] font-bold uppercase tracking-wide text-accent">Báo giá · S2 Quotation Builder</div>
             <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold text-ink">
               {quote.code} <StatusBadge status={quote.status} />
               {quote.source === 'import' && <Badge tone="neutral">Lịch sử (import)</Badge>}

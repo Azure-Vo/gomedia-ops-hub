@@ -85,7 +85,7 @@ export function TaskDetailPage() {
             <Icon name="chevronRight" className="rotate-180" />
           </Link>
           <div className="min-w-0">
-            <div className="text-[13px] font-bold uppercase tracking-wide text-accent">Task · S2 Checkpoint</div>
+            <div className="text-[13px] font-bold uppercase tracking-wide text-accent">Task · S1 Checkpoint</div>
             <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold text-ink">
               {t.name} <TaskStatusBadge status={t.status} waiting={!!live} />
               {t.closed_as && <Badge tone={t.closed_as === 'on_time' ? 'ok' : 'bad'}>{t.closed_as === 'on_time' ? 'Đúng hạn' : 'Trễ hạn'}</Badge>}

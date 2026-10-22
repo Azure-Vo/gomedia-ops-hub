@@ -231,7 +231,7 @@ await step('UAT 6 · copy items from a similar quote uses today\'s library price
   await shot(account, '08-copy-similar');
 });
 
-// --------------------------------------------------------------- tasks (S2) ----
+// --------------------------------------------------------------- tasks (S1) ----
 function vn(dayOffsetFromNextMonday, hm) {
   const [h, m] = hm.split(':').map(Number);
   const now = new Date(Date.now() + 7 * 3600e3);

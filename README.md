@@ -2,8 +2,8 @@
 
 Internal web app for Go Media's 4–6 week pilot (BC26 Team 6 capstone):
 
-- **Quotation Builder (S3 Option A)**: Pricing Library, price-band check (send now / PM / CEO), approvals, Reference Archive, PDF.
-- **Task Checkpoint Bot (S2 Option A)**: 4 verifiable milestones per task, check-ins at 25/50/75/99% of working time over Telegram or the web, alerts for Behind / Blocked / No reply / Overdue, closing at the deadline.
+- **Quotation Builder (S2 Option A)**: Pricing Library, price-band check (send now / PM / CEO), approvals, Reference Archive, PDF.
+- **Task Checkpoint Bot (S1 Option A)**: 4 verifiable milestones per task, check-ins at 25/50/75/99% of working time over Telegram or the web, alerts for Behind / Blocked / No reply / Overdue, closing at the deadline.
 - **KPI dashboard**: every figure computed from stored timestamps in working hours, with CSV export.
 
 UI in Vietnamese. Requirements and decisions: the "Go Media Ops Hub — PRD & Build Guide" doc (PRD wins over the Build Guide). Deployment, step by step in Vietnamese: its tab **Hướng dẫn triển khai (b)**.

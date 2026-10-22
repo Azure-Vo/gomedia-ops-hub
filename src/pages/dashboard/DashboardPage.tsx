@@ -189,9 +189,59 @@ export function DashboardPage() {
       ) : (
         k && (
           <>
+            {seeTasks && (
+              <Card
+                title="Task e-commerce (S1)"
+                subtitle={`${data!.tasks.length} task có deadline trong khoảng · ${k.response.sent} checkpoint đã gửi`}
+                actions={
+                  <>
+                    <Button size="sm" variant="secondary" icon="download" onClick={exportCheckpoints}>
+                      CSV checkpoint
+                    </Button>
+                    <Button size="sm" variant="secondary" icon="download" onClick={exportTasks}>
+                      CSV task
+                    </Button>
+                  </>
+                }
+              >
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Tile
+                    label="Tỷ lệ task trễ hạn"
+                    value={k.overdue.rate === null ? '–' : `${fmtNum(k.overdue.rate, 1)}%`}
+                    base={`${fmtNum(base.task_overdue_pct, 1)}%`}
+                    target={`< ${fmtNum(tgt.overdue_pct, 0)}%`}
+                    good={k.overdue.rate === null ? null : k.overdue.rate < tgt.overdue_pct}
+                  >
+                    <div className="text-[13px] text-ink-3">
+                      {k.overdue.overdue}/{k.overdue.closed} task đã chốt
+                    </div>
+                  </Tile>
+                  <Tile
+                    label="Tỷ lệ trả lời checkpoint"
+                    value={k.response.rate === null ? '–' : `${fmtNum(k.response.rate, 1)}%`}
+                    target={`≥ ${fmtNum(tgt.response_rate, 0)}%`}
+                    good={k.response.rate === null ? null : k.response.rate >= tgt.response_rate}
+                  >
+                    <div className="text-[13px] text-ink-3">
+                      {k.response.answered}/{k.response.sent} checkpoint
+                    </div>
+                  </Tile>
+                  <Tile
+                    label="Tỷ lệ rủi ro được cảnh báo sớm"
+                    value={k.early.rate === null ? '–' : `${fmtNum(k.early.rate, 1)}%`}
+                    target={`≥ ${fmtNum(tgt.early_warning, 0)}%`}
+                    good={k.early.rate === null ? null : k.early.rate >= tgt.early_warning}
+                  >
+                    <div className="text-[13px] text-ink-3">
+                      {k.early.early}/{k.early.risky} task có rủi ro được báo trước deadline
+                    </div>
+                  </Tile>
+                </div>
+              </Card>
+            )}
             {seeQuotes && (
               <Card
-                title="Báo giá (S3)"
+                title="Báo giá (S2)"
                 subtitle={`${k.quote.count} báo giá gửi trong khoảng đã chọn · thời gian = giờ làm việc từ lúc khách yêu cầu đến lúc gửi`}
                 actions={
                   <>
@@ -206,13 +256,6 @@ export function DashboardPage() {
               >
                 <div className="grid gap-3 md:grid-cols-3">
                   <Tile
-                    label="Thời gian báo giá trung bình"
-                    value={k.quote.avgHours === null ? '–' : `${fmtNum(k.quote.avgHours, 2)} h`}
-                    base={`${fmtNum(base.quote_avg_hours, 2)} h`}
-                    target={`≤ ${fmtNum(tgt.quote_avg_hours, 2)} h`}
-                    good={k.quote.avgHours === null ? null : k.quote.avgHours <= tgt.quote_avg_hours}
-                  />
-                  <Tile
                     label={`Tỷ lệ báo giá quá ${late} giờ`}
                     value={k.quote.latePct === null ? '–' : `${fmtNum(k.quote.latePct, 1)}%`}
                     base={`${fmtNum(base.quote_late_pct, 1)}%`}
@@ -223,6 +266,13 @@ export function DashboardPage() {
                       {k.quote.lateCount}/{k.quote.count} báo giá
                     </div>
                   </Tile>
+                  <Tile
+                    label="Thời gian báo giá trung bình"
+                    value={k.quote.avgHours === null ? '–' : `${fmtNum(k.quote.avgHours, 2)} h`}
+                    base={`${fmtNum(base.quote_avg_hours, 2)} h`}
+                    target={`≤ ${fmtNum(tgt.quote_avg_hours, 2)} h`}
+                    good={k.quote.avgHours === null ? null : k.quote.avgHours <= tgt.quote_avg_hours}
+                  />
                   <div className="rounded-xl bg-canvas p-4">
                     <div className="text-[13px] font-semibold text-ink-2">Theo kết quả khung giá</div>
                     <ul className="mt-2 flex flex-col gap-1.5 text-[14px]">
@@ -265,56 +315,6 @@ export function DashboardPage() {
                 ) : (
                   <WeeklyChart points={k.weekly} baseline={base.quote_avg_hours} target={tgt.quote_avg_hours} lateHours={late} />
                 )}
-              </Card>
-            )}
-            {seeTasks && (
-              <Card
-                title="Task e-commerce (S2)"
-                subtitle={`${data!.tasks.length} task có deadline trong khoảng · ${k.response.sent} checkpoint đã gửi`}
-                actions={
-                  <>
-                    <Button size="sm" variant="secondary" icon="download" onClick={exportCheckpoints}>
-                      CSV checkpoint
-                    </Button>
-                    <Button size="sm" variant="secondary" icon="download" onClick={exportTasks}>
-                      CSV task
-                    </Button>
-                  </>
-                }
-              >
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Tile
-                    label="Tỷ lệ trả lời checkpoint"
-                    value={k.response.rate === null ? '–' : `${fmtNum(k.response.rate, 1)}%`}
-                    target={`≥ ${fmtNum(tgt.response_rate, 0)}%`}
-                    good={k.response.rate === null ? null : k.response.rate >= tgt.response_rate}
-                  >
-                    <div className="text-[13px] text-ink-3">
-                      {k.response.answered}/{k.response.sent} checkpoint
-                    </div>
-                  </Tile>
-                  <Tile
-                    label="Tỷ lệ rủi ro được cảnh báo sớm"
-                    value={k.early.rate === null ? '–' : `${fmtNum(k.early.rate, 1)}%`}
-                    target={`≥ ${fmtNum(tgt.early_warning, 0)}%`}
-                    good={k.early.rate === null ? null : k.early.rate >= tgt.early_warning}
-                  >
-                    <div className="text-[13px] text-ink-3">
-                      {k.early.early}/{k.early.risky} task có rủi ro được báo trước deadline
-                    </div>
-                  </Tile>
-                  <Tile
-                    label="Tỷ lệ task trễ hạn"
-                    value={k.overdue.rate === null ? '–' : `${fmtNum(k.overdue.rate, 1)}%`}
-                    base={`${fmtNum(base.task_overdue_pct, 1)}%`}
-                    target={`< ${fmtNum(tgt.overdue_pct, 0)}%`}
-                    good={k.overdue.rate === null ? null : k.overdue.rate < tgt.overdue_pct}
-                  >
-                    <div className="text-[13px] text-ink-3">
-                      {k.overdue.overdue}/{k.overdue.closed} task đã chốt
-                    </div>
-                  </Tile>
-                </div>
               </Card>
             )}
           </>
