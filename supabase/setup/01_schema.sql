@@ -225,6 +225,7 @@ create table if not exists public.events (
 create index if not exists events_entity_idx on public.events(entity, entity_id);
 create index if not exists events_created_idx on public.events(created_at);
 
+-- Every function in this file pins search_path, so a caller's search_path cannot change what a name refers to.
 -- ------------------------------------------------------------- role helpers ---------
 create or replace function public.app_role() returns text
 language sql stable security definer set search_path = public as $$
@@ -237,7 +238,7 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- ---------------------------------------------------------------- triggers ----------
-create or replace function public.touch_updated_at() returns trigger language plpgsql as $$
+create or replace function public.touch_updated_at() returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at := now();
   return new;
@@ -265,7 +266,7 @@ do $$ declare t text; begin
 end $$;
 
 -- Acknowledging an alert is stamped with the server time.
-create or replace function public.alerts_before_update() returns trigger language plpgsql as $$
+create or replace function public.alerts_before_update() returns trigger language plpgsql set search_path = public as $$
 begin
   if new.acknowledged_by is not null and old.acknowledged_by is null then
     new.acknowledged_at := now();
@@ -324,7 +325,7 @@ drop trigger if exists quotes_before_insert on public.quotes;
 create trigger quotes_before_insert before insert on public.quotes for each row execute function public.quotes_before_insert();
 
 -- Back to Draft = the previous band result and approver no longer apply.
-create or replace function public.quotes_before_update() returns trigger language plpgsql as $$
+create or replace function public.quotes_before_update() returns trigger language plpgsql set search_path = public as $$
 begin
   if new.status = 'draft' and old.status <> 'draft' then
     new.band_result := null;
@@ -600,7 +601,7 @@ end $$;
 
 -- ------------------------------------------- atomic writes for the Edge Function -----
 -- These apply decisions already computed by src/domain; they contain no business rule.
-create or replace function public.ops_create_task(p jsonb) returns uuid language plpgsql as $$
+create or replace function public.ops_create_task(p jsonb) returns uuid language plpgsql set search_path = public as $$
 declare v_id uuid; m jsonb; c jsonb; i int := 0;
 begin
   if jsonb_array_length(p -> 'milestones') <> 4 or jsonb_array_length(p -> 'checkpoints') <> 4 then
@@ -625,7 +626,7 @@ begin
   return v_id;
 end $$;
 
-create or replace function public.ops_update_task_plan(p jsonb) returns void language plpgsql as $$
+create or replace function public.ops_update_task_plan(p jsonb) returns void language plpgsql set search_path = public as $$
 declare v_task public.tasks; m jsonb; c jsonb; i int := 0;
 begin
   select * into v_task from public.tasks where id = (p ->> 'task_id')::uuid for update;
@@ -649,7 +650,7 @@ begin
   values (nullif(p ->> 'actor', '')::uuid, 'tasks', v_task.id::text, 'task.plan_updated', p - 'checkpoints');
 end $$;
 
-create or replace function public.ops_cancel_task(p jsonb) returns void language plpgsql as $$
+create or replace function public.ops_cancel_task(p jsonb) returns void language plpgsql set search_path = public as $$
 declare v_task public.tasks;
 begin
   select * into v_task from public.tasks where id = (p ->> 'task_id')::uuid for update;
@@ -661,7 +662,7 @@ begin
   values (nullif(p ->> 'actor', '')::uuid, 'tasks', v_task.id::text, 'task.cancelled', jsonb_build_object('reason', p ->> 'reason'));
 end $$;
 
-create or replace function public.ops_apply_answer(p jsonb) returns jsonb language plpgsql as $$
+create or replace function public.ops_apply_answer(p jsonb) returns jsonb language plpgsql set search_path = public as $$
 declare
   v_task public.tasks;
   v_cp public.checkpoints;
@@ -705,7 +706,7 @@ begin
   return jsonb_build_object('task_id', v_task.id, 'status', v_effect ->> 'status', 'alert_id', v_alert);
 end $$;
 
-create or replace function public.ops_no_reply(p jsonb) returns uuid language plpgsql as $$
+create or replace function public.ops_no_reply(p jsonb) returns uuid language plpgsql set search_path = public as $$
 declare v_cp public.checkpoints; v_task public.tasks; v_alert uuid;
 begin
   select * into v_cp from public.checkpoints where id = (p ->> 'checkpoint_id')::bigint for update;
@@ -721,7 +722,7 @@ begin
   return v_alert;
 end $$;
 
-create or replace function public.ops_close_task(p jsonb) returns jsonb language plpgsql as $$
+create or replace function public.ops_close_task(p jsonb) returns jsonb language plpgsql set search_path = public as $$
 declare v_task public.tasks; v_alert uuid;
 begin
   select * into v_task from public.tasks where id = (p ->> 'task_id')::uuid for update;
@@ -737,7 +738,7 @@ begin
 end $$;
 
 drop function if exists public.ops_quote_transition(jsonb);
-create or replace function public.ops_quote_transition(p jsonb) returns jsonb language plpgsql as $$
+create or replace function public.ops_quote_transition(p jsonb) returns jsonb language plpgsql set search_path = public as $$
 declare v_q public.quotes; f jsonb := coalesce(p -> 'fields', '{}');
 begin
   select * into v_q from public.quotes where id = (p ->> 'quote_id')::uuid for update;
@@ -766,7 +767,7 @@ begin
   return to_jsonb(v_q);
 end $$;
 
-create or replace function public.ops_import_quotes(p jsonb) returns jsonb language plpgsql as $$
+create or replace function public.ops_import_quotes(p jsonb) returns jsonb language plpgsql set search_path = public as $$
 declare q jsonb; l jsonb; v_id uuid; n_in int := 0; skipped text[] := '{}'; pos int;
 begin
   for q in select * from jsonb_array_elements(p -> 'quotes') loop
