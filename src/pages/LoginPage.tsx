@@ -51,12 +51,9 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-canvas">
       <div className="mx-auto flex max-w-md flex-col gap-6 px-4 py-16">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand text-base font-extrabold text-white">GO</div>
-          <div>
-            <div className="text-[13px] font-bold uppercase tracking-wide text-accent">Go Media</div>
-            <h1 className="text-2xl font-extrabold text-ink">Ops Hub</h1>
-          </div>
+        <div className="flex flex-col items-start gap-3">
+          <img src={`${import.meta.env.BASE_URL}brand/gomedia-logo.png`} alt="Go Media" width={526} height={200} className="h-16 w-auto" />
+          <h1 className="text-2xl font-extrabold text-ink">Ops Hub</h1>
         </div>
         <div className="rounded-2xl border border-line bg-white p-6">
           {step === 'email' ? (

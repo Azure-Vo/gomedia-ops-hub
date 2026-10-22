@@ -121,7 +121,7 @@ export function Layout() {
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-brand text-[15px] font-extrabold tracking-wide text-white">GO</div>
+      <img src={`${import.meta.env.BASE_URL}brand/gomedia-mark.png`} alt="" width={44} height={44} className="h-11 w-11 shrink-0" />
       <div className="leading-tight">
         <div className="font-extrabold text-ink">Ops Hub</div>
         <div className="text-[12px] font-semibold uppercase tracking-wide text-accent">Go Media</div>
