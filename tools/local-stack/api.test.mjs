@@ -58,10 +58,11 @@ async function api(client, body, now) {
   return data;
 }
 
-async function webhook(update, secret = WEBHOOK_SECRET) {
+/** Posts a Telegram update. `now` pins the server clock: an alert goes out at once only in working time. */
+async function webhook(update, { secret = WEBHOOK_SECRET, now } = {}) {
   const res = await fetch(`${API}/functions/v1/ops-hub/telegram-webhook`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': secret },
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': secret, ...(now ? { 'x-test-now': now } : {}) },
     body: JSON.stringify({ update_id: Date.now(), ...update }),
   });
   return res.status;
@@ -138,7 +139,7 @@ test('health, server-side rule cases and Telegram webhook connection', async () 
   const h2 = await api(C.admin, { action: 'system.health' });
   assert.equal(h2.telegram.webhookOk, true);
   assert.equal(h2.telegram.username, 'gomedia_local_bot');
-  assert.equal(await webhook({ message: { chat: { id: 1, type: 'private' }, text: 'hi' } }, 'wrong'), 401);
+  assert.equal(await webhook({ message: { chat: { id: 1, type: 'private' }, text: 'hi' } }, { secret: 'wrong' }), 401);
   assert.equal((await cron('dispatch-checkpoints', vn(0, '09:00'), 'wrong')).status, 401);
 });
 
@@ -324,7 +325,7 @@ test('UAT 8 · Behind raises an At risk alert with done, pending and priority to
   const msg = msgTo(await tgCalls(), chat.staff1).find((c) => /Checkpoint 50%/.test(c.body.text));
   const cb = msg.body.reply_markup.inline_keyboard[1][0].callback_data;
   assert.match(cb, /:b$/);
-  await webhook({ callback_query: { id: 'q4', from: { id: chat.staff1 }, data: cb, message: { message_id: 6, chat: { id: chat.staff1, type: 'private' } } } });
+  await webhook({ callback_query: { id: 'q4', from: { id: chat.staff1 }, data: cb, message: { message_id: 6, chat: { id: chat.staff1, type: 'private' } } } }, { now: vn(2, '13:35') });
   const [t] = await sql(`select status from public.tasks where id = $1`, [T1]);
   assert.equal(t.status, 'at_risk');
   const alerts = await C.exec.from('alerts').select('kind').eq('task_id', T1);
@@ -338,12 +339,13 @@ test('UAT 8 · Behind raises an At risk alert with done, pending and priority to
 
 test('UAT 9 · a blocker reported between checkpoints alerts the executive at once, with the reason', async () => {
   await tgReset();
-  await webhook({ message: { message_id: 10, chat: { id: chat.staff1, type: 'private' }, text: '/baochan' } });
+  const now = { now: vn(2, '13:40') }; // working time (lunch 12:00–13:30 is not)
+  await webhook({ message: { message_id: 10, chat: { id: chat.staff1, type: 'private' }, text: '/baochan' } }, now);
   const list = msgTo(await tgCalls(), chat.staff1).find((c) => c.body.reply_markup?.inline_keyboard);
   const cb = list.body.reply_markup.inline_keyboard[0][0].callback_data;
   assert.equal(cb, `k:${T1}`);
-  await webhook({ callback_query: { id: 'q5', from: { id: chat.staff1 }, data: cb, message: { message_id: 11, chat: { id: chat.staff1, type: 'private' } } } });
-  await webhook({ message: { message_id: 12, chat: { id: chat.staff1, type: 'private' }, text: 'Khách chưa gửi ảnh sản phẩm' } });
+  await webhook({ callback_query: { id: 'q5', from: { id: chat.staff1 }, data: cb, message: { message_id: 11, chat: { id: chat.staff1, type: 'private' } } } }, now);
+  await webhook({ message: { message_id: 12, chat: { id: chat.staff1, type: 'private' }, text: 'Khách chưa gửi ảnh sản phẩm' } }, now);
   const [t] = await sql(`select status from public.tasks where id = $1`, [T1]);
   assert.equal(t.status, 'blocked');
   const alerts = await C.exec.from('alerts').select('kind, reason').eq('task_id', T1).order('created_at');
