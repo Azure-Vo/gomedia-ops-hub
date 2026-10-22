@@ -112,9 +112,12 @@ export function UsersPage() {
                     <td className="py-2 pr-3">{u.telegram_linked ? <Badge tone="ok">Đã liên kết</Badge> : <Badge>Chưa</Badge>}</td>
                     <td className="py-2 pr-3 text-ink-3">{fmtVnDate(u.created_at, tz)}</td>
                     <td className="py-2">
-                      <Button size="sm" variant={u.active ? 'ghost' : 'secondary'} disabled={u.id === me.id} onClick={() => update(u, { active: !u.active })}>
-                        {u.active ? 'Khoá' : 'Mở khoá'}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {u.active ? <Badge tone="ok">Đang dùng</Badge> : <Badge>Đã khoá</Badge>}
+                        <Button size="sm" variant={u.active ? 'ghost' : 'secondary'} disabled={u.id === me.id} onClick={() => update(u, { active: !u.active })}>
+                          {u.active ? 'Khoá' : 'Mở khoá'}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
