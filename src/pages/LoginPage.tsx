@@ -1,5 +1,4 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { DemoBanner } from '@/components/Layout';
 import { Banner, Button, Field, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 
@@ -51,7 +50,6 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen bg-canvas">
-      <DemoBanner />
       <div className="mx-auto flex max-w-md flex-col gap-6 px-4 py-16">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand text-base font-extrabold text-white">GO</div>

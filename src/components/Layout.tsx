@@ -1,7 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ROLE_LABEL, Role } from '@/domain';
-import { config } from '@/lib/config';
 import { useSession } from '@/lib/session';
 import { cx, EmptyState, Icon } from './ui';
 
@@ -55,15 +54,6 @@ export function RequireRole({ roles, children }: { roles: Role[]; children: Reac
   return <>{children}</>;
 }
 
-export function DemoBanner() {
-  if (config.environment !== 'demo') return null;
-  return (
-    <div className="bg-accent px-4 py-1.5 text-center text-[13px] font-bold tracking-wide text-white">
-      BẢN DEMO · dữ liệu mẫu tổng hợp, không phải dữ liệu của Go Media
-    </div>
-  );
-}
-
 export function Layout() {
   const { profile, signOut } = useSession();
   const [open, setOpen] = useState(false);
@@ -100,7 +90,6 @@ export function Layout() {
   );
   return (
     <div className="min-h-screen bg-canvas">
-      <DemoBanner />
       <div className="flex">
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-white p-4 lg:flex">
           <Brand />
