@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 function friendly(msg: string): string {
   if (/signups not allowed|otp_disabled|user not found/i.test(msg)) return 'Email này chưa được Admin mời vào app. Nhờ Admin thêm bạn ở trang Người dùng.';
   if (/only request this after|rate limit|too many/i.test(msg)) return 'Bạn vừa yêu cầu email. Đợi khoảng 1 phút rồi thử lại.';
-  if (/error sending|smtp|email address not authorized/i.test(msg)) return 'Supabase chưa gửi được email. Admin cần cấu hình SMTP riêng (xem hướng dẫn triển khai, bước 3).';
+  if (/error sending|smtp|email address not authorized/i.test(msg)) return 'Supabase chưa gửi được email. Admin cần kiểm tra cài đặt SMTP riêng (tab Hướng dẫn triển khai, Bước A5).';
   if (/expired|invalid/i.test(msg)) return 'Mã không đúng hoặc đã hết hạn. Gửi lại email để lấy mã mới.';
   return msg;
 }
