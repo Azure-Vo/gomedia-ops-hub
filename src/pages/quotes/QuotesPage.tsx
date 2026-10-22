@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fmtNum, QUOTE_STATUS_LABEL, QuoteStatus, workingHoursBetween } from '@/domain';
-import { Button, Card, EmptyState, ErrorBox, Loading, PageHeader, Select, useAsync, useToast } from '@/components/ui';
+import { Banner, Button, Card, EmptyState, ErrorBox, Loading, PageHeader, Select, useAsync, useToast } from '@/components/ui';
 import { fmtVnd, fmtVnDateTime } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
@@ -42,11 +42,18 @@ export function QuotesPage() {
   }
 
   const late = settings?.quote_late_hours ?? 8;
+  // Only the Account role creates quotes (the database enforces it too), so other roles are told why there is no button.
+  const subtitle =
+    me.role === 'account'
+      ? 'Báo giá của bạn. Thời gian tính bằng giờ làm việc, từ lúc khách gửi yêu cầu đến lúc gửi báo giá.'
+      : me.role === 'pm' || me.role === 'ceo'
+        ? 'Mọi báo giá tạo trong app. Chỉ vai trò Account tạo được báo giá mới; báo giá chờ bạn duyệt nằm ở trang Duyệt báo giá.'
+        : 'Mọi báo giá tạo trong app. Chỉ vai trò Account tạo được báo giá mới.';
   return (
     <div>
       <PageHeader
         title="Báo giá"
-        subtitle={me.role === 'account' ? 'Báo giá của bạn. Thời gian tính bằng giờ làm việc, từ lúc khách gửi yêu cầu đến lúc gửi báo giá.' : 'Mọi báo giá tạo trong app.'}
+        subtitle={subtitle}
         actions={
           me.role === 'account' && (
             <Button icon="plus" busy={creating} onClick={create}>
@@ -55,6 +62,20 @@ export function QuotesPage() {
           )
         }
       />
+      {me.role === 'admin' && (
+        <Banner
+          tone="info"
+          className="mb-4"
+          title="Admin không có nút Tạo báo giá"
+          actions={
+            <Button variant="secondary" size="sm" icon="user" onClick={() => nav('/admin/users')}>
+              Mở trang Người dùng
+            </Button>
+          }
+        >
+          Muốn tạo thử, mời một email với vai trò Account ở trang Người dùng, rồi đăng nhập bằng email đó trong cửa sổ ẩn danh.
+        </Banner>
+      )}
       <Card
         title="Danh sách"
         actions={
