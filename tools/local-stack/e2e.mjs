@@ -382,13 +382,11 @@ await step('Admin: users, settings, demo seed', async () => {
   await admin.getByText('PASS · khớp baseline').waitFor({ timeout: 15000 });
   await admin.getByText('Đây là dữ liệu mẫu tổng hợp').waitFor();
   await shot(admin, '19-diagnostics-baseline');
-  // Only the Account role creates quotes: an admin is told why there is no button and where to invite an Account.
+  // Only the Account role creates quotes: an admin sees the list without a create button.
   await admin.goto(`${WEB}/quotes`);
-  await admin.getByText('Admin không có nút Tạo báo giá').waitFor();
+  await admin.getByText('Chỉ vai trò Account tạo được báo giá mới.').waitFor();
   assert.equal(await admin.getByRole('button', { name: 'Tạo báo giá' }).count(), 0);
   await shot(admin, '19b-admin-quotes');
-  await admin.getByRole('button', { name: 'Mở trang Người dùng' }).click();
-  await admin.waitForURL(/\/admin\/users$/);
 });
 
 await step('Mobile width: builder and check-ins stay usable at 390 px', async () => {
