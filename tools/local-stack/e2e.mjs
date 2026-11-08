@@ -32,6 +32,9 @@ const step = async (name, fn) => {
 // ---------------------------------------------------------------- reset data ----
 await sql(`truncate public.events, public.alerts, public.checkpoints, public.milestones, public.tasks, public.approvals,
            public.quote_lines, public.quotes, public.library_items restart identity cascade`);
+await sql(`truncate public.lark_notifications, public.lark_drafts, public.lark_events, public.lark_people`);
+await sql(`delete from public.lark_tasks`);
+await sql(`update public.settings set lark_mode = 'simulation', lark_notify_d0 = false, lark_notify_time = '09:00'`);
 await sql(`alter table public.profiles disable trigger protect_last_admin`);
 await sql(`delete from auth.users`);
 await sql(`alter table public.profiles enable trigger protect_last_admin`);
@@ -445,6 +448,55 @@ await step('Admin: users, settings, demo seed', async () => {
   await admin.getByText('Chỉ vai trò Account tạo được báo giá mới.').waitFor();
   assert.equal(await admin.getByRole('button', { name: 'Tạo báo giá' }).count(), 0);
   await shot(admin, '19b-admin-quotes');
+});
+
+await step('S1 Lark (mô phỏng) · tạo task mẹ/con trên web, mã sai bị chặn, nhắc theo mẫu CEO, Completed thì dừng', async () => {
+  const day = (n) => new Date(Date.now() + 7 * 3600e3 + n * 86400e3).toISOString().slice(0, 10);
+  await exec.goto(`${WEB}/lark`);
+  await exec.getByText('Đang ở chế độ mô phỏng').waitFor();
+  await exec.getByRole('tab', { name: 'Tạo task' }).click();
+  await exec.getByLabel('Mã task mẹ').fill('D56');
+  await exec.getByLabel('Deadline tổng').fill(day(10));
+  await exec.getByLabel('Tên task mẹ').fill('[STING] Quản lý 1600 KOC video Freecast');
+  await exec.getByLabel('Người phụ trách').selectOption({ label: 'Hà E-com' });
+  await exec.getByText(/Mã task mẹ "D56" sai format/).waitFor();
+  assert.ok(await exec.getByRole('button', { name: 'Xem trước' }).isDisabled());
+  await exec.getByLabel('Mã task mẹ').fill('DA056');
+  await exec.getByRole('button', { name: 'Xem trước' }).click();
+  await exec.getByRole('button', { name: 'Xác nhận tạo' }).click();
+  await exec.getByText('Đã tạo task mẹ DA056').waitFor();
+  await exec.getByRole('tab', { name: 'Tạo task' }).click();
+  await exec.getByRole('button', { name: 'Task con', exact: true }).click();
+  await exec.getByLabel('Mã task con').fill('DA057-04-S44');
+  await exec.getByLabel('Deadline', { exact: true }).fill(day(2));
+  await exec.getByLabel('Tên task con').fill('[STING] Push 50 KOC gửi đủ số lượng video');
+  await exec.getByLabel('Người thực hiện').selectOption({ label: 'Thực tập Minh' });
+  await exec.getByText(/không thuộc task mẹ DA056/).waitFor();
+  await exec.getByLabel('Mã task con').fill('DA056-04-S44');
+  await exec.getByRole('button', { name: 'Xem trước' }).click();
+  await shot(exec, '20-lark-create-preview');
+  await exec.getByRole('button', { name: 'Xác nhận tạo' }).click();
+  await exec.getByText('Đã tạo task con DA056-04-S44').waitFor();
+  await exec.getByRole('button', { name: 'Chạy kiểm tra ngay' }).click();
+  await exec.getByText(/Đã kiểm tra: 1 nhắc việc/).waitFor();
+  await exec.getByRole('tab', { name: 'Group Lark' }).click();
+  await exec.getByText('🔴 Task sắp đến hạn – Còn 2 ngày!').waitFor();
+  await exec.getByText('@Thực tập Minh').waitFor();
+  await exec.getByText('[DA056] [STING] Quản lý 1600 KOC video Freecast').waitFor();
+  await shot(exec, '21-lark-group');
+  await exec.getByRole('tab', { name: 'Theo dõi task' }).click();
+  await exec.getByRole('button', { name: 'Mô phỏng' }).click();
+  await exec.getByRole('button', { name: 'Đánh dấu Completed' }).click();
+  await exec.getByRole('button', { name: 'Chạy kiểm tra ngay' }).click();
+  await exec.getByText(/Đã kiểm tra: 0 nhắc việc, 1 xác nhận hoàn thành/).waitFor();
+  await exec.getByText('Hoàn thành', { exact: true }).waitFor();
+  await shot(exec, '22-lark-track');
+  await exec.getByRole('tab', { name: 'Group Lark' }).click();
+  await exec.getByText('✅ Task đã hoàn thành!').waitFor();
+  // Admin page: setup guide and the events URL
+  await admin.goto(`${WEB}/lark/setup`);
+  await admin.getByText(/\/ops-hub\/lark-events/).waitFor();
+  await shot(admin, '23-lark-setup');
 });
 
 await step('Mobile width: builder and check-ins stay usable at 390 px', async () => {

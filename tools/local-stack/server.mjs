@@ -46,6 +46,47 @@ process.on('exit', () => pgrst.kill());
 // ------------------------------------------------------------- mock Telegram ----
 const telegram = { calls: [], nextId: 1000, webhook: null };
 
+// Mock Lark Open Platform: tenant token, Task v2 (create, subtask, get) and IM v1 (send, reply).
+// /__test/lark reads the calls and lets a test change a task "on Lark" (complete, due, assignee, title)
+// or make the next sends fail.
+const LARK_APP = { id: 'cli_test_app', secret: 'lark-test-secret' };
+const lark = { calls: [], tasks: new Map(), messages: [], failSends: 0, nextId: 1 };
+function larkCall(method, path, body, auth) {
+  lark.calls.push({ method, path, body, at: Date.now() });
+  if (path === '/auth/v3/tenant_access_token/internal') {
+    if (body.app_id !== LARK_APP.id || body.app_secret !== LARK_APP.secret) return [200, { code: 10014, msg: 'app secret invalid' }];
+    return [200, { code: 0, msg: 'ok', tenant_access_token: 't-mock-token', expire: 7200 }];
+  }
+  if (auth !== 'Bearer t-mock-token') return [401, { code: 99991663, msg: 'invalid tenant access token' }];
+  const sub = path.match(/^\/task\/v2\/tasks\/([^/?]+)\/subtasks/);
+  const one = path.match(/^\/task\/v2\/tasks\/([^/?]+)(\?|$)/);
+  const make = (b, parent) => {
+    const guid = `guid-${lark.nextId++}`;
+    const t = { guid, summary: b.summary, description: b.description ?? '', due: b.due, members: b.members ?? [], completed_at: '0', parent, url: `https://applink.larksuite.com/client/todo/detail?guid=${guid}` };
+    lark.tasks.set(guid, t);
+    return t;
+  };
+  if (method === 'POST' && sub) {
+    if (!lark.tasks.has(sub[1])) return [404, { code: 1470404, msg: 'task not found' }];
+    return [200, { code: 0, data: { subtask: make(body, sub[1]) } }];
+  }
+  if (method === 'POST' && path.startsWith('/task/v2/tasks')) return [200, { code: 0, data: { task: make(body, null) } }];
+  if (method === 'GET' && one) {
+    const t = lark.tasks.get(one[1]);
+    return t ? [200, { code: 0, data: { task: t } }] : [404, { code: 1470404, msg: 'task not found' }];
+  }
+  if (method === 'POST' && (path.startsWith('/im/v1/messages?') || /\/im\/v1\/messages\/[^/]+\/reply/.test(path))) {
+    if (lark.failSends > 0 && !path.includes('/reply')) {
+      lark.failSends--;
+      return [500, { code: 230002, msg: 'mock send failure' }];
+    }
+    const m = { message_id: `om_${lark.nextId++}`, path, receive_id: body.receive_id ?? null, card: JSON.parse(body.content), at: Date.now() };
+    lark.messages.push(m);
+    return [200, { code: 0, data: { message_id: m.message_id } }];
+  }
+  return [404, { code: 404, msg: `mock lark: no route ${method} ${path}` }];
+}
+
 function telegramMethod(method, body) {
   telegram.calls.push({ method, body, at: Date.now() });
   if (method === 'getMe') return { ok: true, result: { id: 1, is_bot: true, first_name: 'Go Task Bot', username: 'gomedia_local_bot' } };
@@ -181,6 +222,7 @@ const fnEnv = {
   SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY,
   TELEGRAM_BOT_TOKEN: BOT_TOKEN,
   TELEGRAM_API_BASE: `http://127.0.0.1:${PORT}/telegram`,
+  LARK_API_BASE: `http://127.0.0.1:${PORT}/lark`,
   APP_ENV: process.env.APP_ENV ?? 'demo',
 };
 const fn = createHandler(readEnv((k) => fnEnv[k]), { allowTestClock: true });
@@ -242,6 +284,19 @@ const server = http.createServer(async (req, res) => {
       r.headers.forEach((v, k) => (h[k] = v));
       res.writeHead(r.status, h);
       return res.end(Buffer.from(await r.arrayBuffer()));
+    }
+    if (url.pathname.startsWith('/lark/open-apis/')) {
+      const [status, out] = larkCall(req.method, url.pathname.slice('/lark/open-apis'.length) + url.search, raw?.length ? json() : {}, req.headers.authorization);
+      return send(res, status, out);
+    }
+    if (url.pathname === '/__test/lark') {
+      if (req.method === 'DELETE') { Object.assign(lark, { calls: [], messages: [], failSends: 0 }); lark.tasks.clear(); }
+      if (req.method === 'POST') {
+        const b = json();
+        if (b.failSends !== undefined) lark.failSends = b.failSends;
+        if (b.guid) Object.assign(lark.tasks.get(b.guid) ?? {}, b.patch ?? {});
+      }
+      return send(res, 200, { app: LARK_APP, calls: lark.calls, messages: lark.messages, tasks: [...lark.tasks.values()] });
     }
     const tg = url.pathname.match(/^\/telegram\/bot([^/]+)\/(\w+)$/);
     if (tg) {

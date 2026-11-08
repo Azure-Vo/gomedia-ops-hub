@@ -15,10 +15,12 @@ export interface NavItem {
 const ALL: Role[] = ['account', 'pm', 'ceo', 'ecom_exec', 'staff', 'admin'];
 
 export const NAV: NavItem[] = [
-  { group: 'Task (S1)', to: '/checkins', label: 'Check-in của tôi', icon: 'clock', roles: ['staff', 'ecom_exec'] },
-  { group: 'Task (S1)', to: '/tasks', label: 'Task', icon: 'tasks', roles: ['ecom_exec', 'staff', 'admin'] },
-  { group: 'Task (S1)', to: '/alerts', label: 'Cảnh báo', icon: 'bell', roles: ['ecom_exec', 'admin'] },
-  { group: 'Task (S1)', to: '/task-types', label: 'Loại task & mốc', icon: 'list', roles: ['ecom_exec', 'admin'] },
+  { group: 'Nhắc task Lark (S1)', to: '/lark', label: 'Nhắc task Lark', icon: 'bell', roles: ['ecom_exec', 'staff', 'pm', 'ceo', 'admin'] },
+  { group: 'Nhắc task Lark (S1)', to: '/lark/setup', label: 'Kết nối Lark', icon: 'link', roles: ['admin'] },
+  { group: 'Task checkpoint (bản cũ)', to: '/checkins', label: 'Check-in của tôi', icon: 'clock', roles: ['staff', 'ecom_exec'] },
+  { group: 'Task checkpoint (bản cũ)', to: '/tasks', label: 'Task', icon: 'tasks', roles: ['ecom_exec', 'staff', 'admin'] },
+  { group: 'Task checkpoint (bản cũ)', to: '/alerts', label: 'Cảnh báo', icon: 'bell', roles: ['ecom_exec', 'admin'] },
+  { group: 'Task checkpoint (bản cũ)', to: '/task-types', label: 'Loại task & mốc', icon: 'list', roles: ['ecom_exec', 'admin'] },
   { group: 'Báo giá (S2)', to: '/quotes', label: 'Báo giá', icon: 'file', roles: ['account', 'pm', 'ceo', 'admin'] },
   { group: 'Báo giá (S2)', to: '/approvals', label: 'Duyệt báo giá', icon: 'check', roles: ['pm', 'ceo'] },
   { group: 'Báo giá (S2)', to: '/archive', label: 'Kho tham chiếu', icon: 'archive', roles: ['account', 'pm', 'ceo', 'admin'] },

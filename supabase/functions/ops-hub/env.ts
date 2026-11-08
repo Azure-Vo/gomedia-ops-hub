@@ -10,6 +10,8 @@ export interface Env {
   appEnv: 'pilot' | 'demo';
   /** Public address used by the function when it calls itself (defaults to supabaseUrl). */
   functionsBase: string;
+  /** Test override for the Lark Open Platform address (normally taken from Settings). */
+  larkApiBase: string | null;
 }
 
 /** Supabase provides SUPABASE_URL and a service key (legacy SUPABASE_SERVICE_ROLE_KEY or the new SUPABASE_SECRET_KEYS). */
@@ -36,5 +38,6 @@ export function readEnv(get: (key: string) => string | undefined): Env {
     webhookSecretOverride: get('TELEGRAM_WEBHOOK_SECRET')?.trim() || null,
     appEnv,
     functionsBase: (get('FUNCTIONS_BASE_URL') ?? `${supabaseUrl}/functions/v1`).replace(/\/$/, ''),
+    larkApiBase: get('LARK_API_BASE')?.trim().replace(/\/$/, '') || null,
   };
 }

@@ -8,6 +8,8 @@ import { DiagnosticsPage } from '@/pages/admin/DiagnosticsPage';
 import { SettingsPage } from '@/pages/admin/SettingsPage';
 import { UsersPage } from '@/pages/admin/UsersPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
+import { LarkPage } from '@/pages/lark/LarkPage';
+import { LarkSetupPage } from '@/pages/lark/LarkSetupPage';
 import { LibraryPage } from '@/pages/library/LibraryPage';
 import { PriceRulesPage } from '@/pages/library/PriceRulesPage';
 import { LoginPage, NotConfiguredPage } from '@/pages/LoginPage';
@@ -60,6 +62,8 @@ export function App() {
           <Route path="archive" element={guard(QUOTES, <ArchivePage />)} />
           <Route path="library" element={guard(['pm', 'ceo', 'admin'], <LibraryPage />)} />
           <Route path="rules" element={guard(['ceo'], <PriceRulesPage />)} />
+          <Route path="lark" element={guard(['ecom_exec', 'staff', 'pm', 'ceo', 'admin'], <LarkPage />)} />
+          <Route path="lark/setup" element={guard(['admin'], <LarkSetupPage />)} />
           <Route path="tasks" element={guard(['ecom_exec', 'staff', 'admin'], <TasksPage />)} />
           <Route path="tasks/:id" element={guard(TASKS, <TaskDetailPage />)} />
           <Route path="checkins" element={guard(['staff', 'ecom_exec', 'pm', 'ceo', 'account', 'admin'], <MyCheckinsPage />)} />

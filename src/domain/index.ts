@@ -6,6 +6,7 @@ export * from './calendar';
 export * from './band';
 export * from './quote';
 export * from './tasks';
+export * from './lark';
 export * from './kpi';
 export * from './imports';
 export * from './cases';

@@ -3,6 +3,7 @@
 //   POST /ops-hub/telegram-webhook       Telegram updates (secret-token header)
 //   POST /ops-hub/dispatch-checkpoints   pg_cron every 15 min (x-cron-secret)
 //   POST /ops-hub/close-tasks            pg_cron every 15 min (x-cron-secret)
+//   POST /ops-hub/lark-events            Lark bot events and card buttons (verification token)
 //   GET  /ops-hub/health                 liveness + domain version
 import { createClient } from '@supabase/supabase-js';
 import { DOMAIN_VERSION } from '../../../src/domain/index';
@@ -11,6 +12,7 @@ import { seedDemo, clearDemo } from './demo';
 import type { Env } from './env';
 import { ApiError, fail, json, preflight, safeEqual } from './http';
 import { closeTasks, dispatchCheckpoints } from './jobs';
+import { createLarkTaskFromWeb, ensureSimPeople, handleLarkEvent, larkAdminStatus, larkTick, runLarkNow, saveLarkConfig, simulateLark, testLark } from './lark';
 import { makeChannel, Notifier } from './notify';
 import { decideQuote, importQuotes, previewBand, reopenQuote, sendQuote, submitQuote } from './quotes';
 import { connectTelegram, inviteUser, systemHealth, testMessage } from './system';
@@ -81,6 +83,20 @@ async function handleApi(ctx: Ctx, req: Request) {
     case 'system.run_jobs':
       if (user.role !== 'admin') throw new ApiError(403, 'forbidden', 'Chỉ admin.');
       return { dispatch: await dispatchCheckpoints(ctx), close: await closeTasks(ctx) };
+    case 'lark.create':
+      return createLarkTaskFromWeb(ctx, user, body);
+    case 'lark.simulate':
+      return simulateLark(ctx, user, body);
+    case 'lark.run':
+      return runLarkNow(ctx, user);
+    case 'lark.people':
+      return ensureSimPeople(ctx);
+    case 'lark.status':
+      return larkAdminStatus(ctx, user);
+    case 'lark.config':
+      return saveLarkConfig(ctx, user, body);
+    case 'lark.test':
+      return testLark(ctx, user);
     case 'demo.seed':
       return seedDemo(ctx, user);
     case 'demo.clear':
@@ -118,16 +134,27 @@ export function createHandler(env: Env, opts: HandlerOptions = {}) {
       global: opts.fetchImpl ? { fetch: opts.fetchImpl } : undefined,
     });
     const tg = env.telegramToken ? new TelegramApi(env.telegramToken, env.telegramApiBase, opts.fetchImpl ?? fetch) : null;
-    const ctx: Ctx = { env, db, tg, notifier: new Notifier(db, makeChannel(tg)), now };
+    const ctx: Ctx = { env, db, tg, notifier: new Notifier(db, makeChannel(tg)), now, fetchImpl: opts.fetchImpl };
     try {
       switch (route) {
         case 'api':
           return json(await handleApi(ctx, req));
         case 'telegram-webhook':
           return await handleWebhook(ctx, req);
-        case 'dispatch-checkpoints':
+        case 'dispatch-checkpoints': {
           await requireCron(ctx, req);
-          return json(await dispatchCheckpoints(ctx));
+          const out = await dispatchCheckpoints(ctx);
+          // S1 on Lark rides on the same 15-minute job (no extra pg_cron schedule needed).
+          let lark: unknown;
+          try {
+            lark = await larkTick(ctx);
+          } catch (err) {
+            lark = { error: (err as Error).message };
+          }
+          return json({ ...out, lark });
+        }
+        case 'lark-events':
+          return json(await handleLarkEvent(ctx, req));
         case 'close-tasks':
           await requireCron(ctx, req);
           return json(await closeTasks(ctx));

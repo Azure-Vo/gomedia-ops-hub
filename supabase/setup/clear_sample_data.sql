@@ -10,6 +10,7 @@ begin;
 delete from public.tasks where owner_id in (select id from public.profiles where email like '%@demo.gomedia.example.com');
 delete from public.quotes where code like 'DEMO-%'
    or created_by in (select id from public.profiles where email like '%@demo.gomedia.example.com');
+delete from public.lark_tasks where name like '%(mẫu)%';
 delete from auth.users where email like '%@demo.gomedia.example.com';
 update public.settings set pilot_start = null, pilot_end = null where id = 1;
 commit;

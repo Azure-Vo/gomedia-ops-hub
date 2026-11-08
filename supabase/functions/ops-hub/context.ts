@@ -12,6 +12,8 @@ export interface Ctx {
   tg: TelegramApi | null;
   notifier: Notifier;
   now: () => number;
+  /** fetch used for outside APIs (Lark); tests inject a mock. */
+  fetchImpl?: typeof fetch;
 }
 
 export interface Profile {

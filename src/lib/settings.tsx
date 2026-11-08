@@ -24,6 +24,17 @@ export interface SettingsRow {
   company_website: string;
   signer_name: string;
   signer_title: string;
+  lark_mode: 'simulation' | 'live';
+  lark_api_base: string;
+  lark_app_id: string;
+  lark_chat_id: string;
+  lark_parent_pattern: string;
+  lark_child_pattern: string;
+  lark_parent_example: string;
+  lark_child_example: string;
+  lark_notify_d0: boolean;
+  lark_notify_time: string;
+  lark_status: Record<string, unknown> | null;
   telegram_bot_username: string | null;
   app_url: string | null;
   system_status: Record<string, { at?: string } & Record<string, unknown>>;
