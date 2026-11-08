@@ -29,6 +29,8 @@ export interface BandLine {
   /** Optional per-item self-send range (only used for the send_now level). */
   bandLow?: number | null;
   bandHigh?: number | null;
+  /** Pass-through money (e.g. an ads budget paid for the client): never checked against the band. */
+  passThrough?: boolean;
 }
 
 export type BandReason =
@@ -85,6 +87,7 @@ function failuresAt(
     out.push({ code: 'discount', level, value: discountPct, limit: rule.maxDiscountPct });
   }
   lines.forEach((line, i) => {
+    if (line.passThrough) return;
     const dev = devs[i];
     if (dev === null) {
       out.push({ code: 'no_library_price', level, line: i, name: line.name });
@@ -122,14 +125,16 @@ export function bandCheck(lines: BandLine[], discountPct: number, rules: BandRul
     if (!Number.isFinite(l.qty) || l.qty <= 0) throw new Error('Quantity must be greater than 0');
     if (!Number.isFinite(l.unitPrice) || l.unitPrice < 0) throw new Error('Unit price must be 0 or more');
   }
-  const devs = lines.map((l) => deviationPct(l.unitPrice, l.libraryPrice));
+  const devs = lines.map((l) => (l.passThrough ? null : deviationPct(l.unitPrice, l.libraryPrice)));
   const known = devs.filter((d): d is number => d !== null).map((d) => Math.abs(d));
   const maxDeviationPct = known.length ? Math.max(...known) : 0;
 
+  // Margin floor compares service lines only (the discount does not apply to pass-through money).
+  const service = lines.map((l, i) => ({ l, d: devs[i] })).filter((x) => !x.l.passThrough);
   let effectivePct: number | null = null;
-  if (lines.length && devs.every((d) => d !== null)) {
-    const libraryValue = lines.reduce((s, l) => s + l.qty * (l.libraryPrice as number), 0);
-    const quoted = lines.reduce((s, l) => s + l.qty * l.unitPrice, 0) * (1 - discountPct / 100);
+  if (service.length && service.every((x) => x.d !== null)) {
+    const libraryValue = service.reduce((s, x) => s + x.l.qty * (x.l.libraryPrice as number), 0);
+    const quoted = service.reduce((s, x) => s + x.l.qty * x.l.unitPrice, 0) * (1 - discountPct / 100);
     effectivePct = libraryValue > 0 ? (quoted * 100) / libraryValue : null;
   }
 

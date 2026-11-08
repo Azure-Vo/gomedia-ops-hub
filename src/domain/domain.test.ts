@@ -10,6 +10,10 @@ import {
   closeOutcome,
   copyLinesWithTodayPrices,
   DEFAULT_BAND_RULES,
+  DEFAULT_SECTION_TITLE,
+  groupBySection,
+  parseLineKind,
+  toRoman,
   DEFAULT_CALENDAR,
   earlyWarningRate,
   fmtLocal,
@@ -163,7 +167,47 @@ describe('quote lifecycle and maths', () => {
     expect(nextQuoteStatus('sent', 'edit').ok).toBe(false);
   });
   it('rounds to whole đồng', () => {
-    expect(quoteTotals([{ qty: 3, unitPrice: 333_333 }], 7)).toEqual({ subtotal: 999_999, discountAmount: 70_000, total: 929_999 });
+    expect(quoteTotals([{ qty: 3, unitPrice: 333_333 }], 7)).toMatchObject({ subtotal: 999_999, discountAmount: 70_000, total: 929_999, vatAmount: 0, grandTotal: 929_999 });
+  });
+  it('adds VAT after the discount (Go Media format: thuế GTGT tách riêng)', () => {
+    // CEO sample BG-01: 10.500.000 + 10.000.000 + 5.000.000, VAT 8% → 27.540.000
+    const ev = [{ qty: 1, unitPrice: 10_500_000 }, { qty: 1, unitPrice: 10_000_000 }, { qty: 1, unitPrice: 5_000_000 }];
+    expect(quoteTotals(ev, 0, { pct: 8 })).toMatchObject({ subtotal: 25_500_000, vatAmount: 2_040_000, grandTotal: 27_540_000 });
+    const lines = [{ qty: 12, unitPrice: 1_500_000 }, { qty: 8, unitPrice: 600_000 }, { qty: 3, unitPrice: 2_000_000 }];
+    expect(quoteTotals(lines, 5, { pct: 8 })).toMatchObject({ total: 27_360_000, vatAmount: 2_188_800, grandTotal: 29_548_800 });
+  });
+  it('keeps pass-through money out of the discount and, by default, out of VAT', () => {
+    const lines = [
+      { qty: 1, unitPrice: 4_000_000 },
+      { qty: 1, unitPrice: 16_000_000, kind: 'pass_through' as const },
+    ];
+    const t = quoteTotals(lines, 10, { pct: 8 });
+    expect(t).toEqual({ subtotal: 20_000_000, serviceSubtotal: 4_000_000, passThrough: 16_000_000, discountAmount: 400_000, total: 19_600_000, vatPct: 8, vatAmount: 288_000, grandTotal: 19_888_000 });
+    expect(quoteTotals(lines, 10, { pct: 8, onPassThrough: true }).vatAmount).toBe(1_568_000);
+  });
+  it('groups lines into sections in order of first appearance', () => {
+    const secs = groupBySection([
+      { section: 'Sự kiện', qty: 1, unitPrice: 100 },
+      { section: 'Quảng cáo', qty: 2, unitPrice: 50 },
+      { section: 'Sự kiện', qty: 1, unitPrice: 30 },
+      { section: '', qty: 1, unitPrice: 5 },
+    ]);
+    expect(secs.map((s) => [s.title, s.lines.map((l) => l.index), s.amount])).toEqual([
+      ['Sự kiện', [0, 2], 130],
+      ['Quảng cáo', [1], 100],
+      [DEFAULT_SECTION_TITLE, [3], 5],
+    ]);
+    expect([1, 4, 9, 14].map(toRoman)).toEqual(['I', 'IV', 'IX', 'XIV']);
+  });
+  it('never sends pass-through lines to approval', () => {
+    const r = bandCheck([
+      { qty: 1, unitPrice: 4_000_000, libraryPrice: 4_000_000 },
+      { qty: 1, unitPrice: 30_000_000, libraryPrice: 16_000_000, passThrough: true },
+      { qty: 1, unitPrice: 5_000_000, libraryPrice: null, passThrough: true },
+    ], 0);
+    expect(r.level).toBe('send_now');
+    expect(r.lineDeviationPct).toEqual([0, null, null]);
+    expect(r.effectivePct).toBe(100);
   });
   it('copies lines with today prices and skips retired items', () => {
     const library = new Map([
@@ -178,7 +222,7 @@ describe('quote lifecycle and maths', () => {
       ],
       library,
     );
-    expect(res.lines).toEqual([{ libraryItemId: 'tt', itemName: 'TikTok', unit: 'video', qty: 10, unitPrice: 1_600_000, libraryPrice: 1_600_000 }]);
+    expect(res.lines).toEqual([{ libraryItemId: 'tt', itemName: 'TikTok', unit: 'video', qty: 10, unitPrice: 1_600_000, libraryPrice: 1_600_000, kind: 'service', section: null, description: null }]);
     expect(res.skipped).toEqual(['Old', 'Custom']);
   });
   it('ranks similar quotes by service group, then shared items', () => {
@@ -397,6 +441,7 @@ describe('small rules', async () => {
       { unitPrice: 1, libraryPrice: 1 },
       { unitPrice: 2, libraryPrice: 1, overrideReason: ' ' },
       { unitPrice: 2, libraryPrice: 1, overrideReason: 'Khách VIP' },
+      { unitPrice: 2, libraryPrice: 1, kind: 'pass_through' },
     ])).toEqual([1]);
   });
 });
@@ -420,5 +465,18 @@ describe('task draft', () => {
   it('refuses a deadline that has already passed (it would count as overdue at once)', () => {
     const errs = validateTaskDraft({ ...base, startAt: mon, dueAt: fri, now: localToMs(2026, 10, 12, 9, 0, cal.timeZone) }, cal);
     expect(errs.some((e) => e.startsWith('Deadline đã qua'))).toBe(true);
+  });
+});
+
+describe('library import: description and kind', () => {
+  it('reads optional description and Chi hộ kind, refuses unknown kinds', () => {
+    const r = validateLibraryRows([
+      { item_name: 'Gói flycam', unit: 'gói', group: 'Sự kiện & sản xuất', unit_price: '5.000.000', mo_ta: 'Quay toàn cảnh từ trên cao' },
+      { item_name: 'Ngân sách Meta Ads (chi hộ)', unit: 'tháng', group: 'Quảng cáo', unit_price: '16000000', loai: 'Chi hộ' },
+      { item_name: 'X', unit: 'gói', group: 'G', unit_price: '1', kind: 'gì đó' },
+    ]);
+    expect(r.rows.map((x) => [x.kind, x.description])).toEqual([['service', 'Quay toàn cảnh từ trên cao'], ['pass_through', null]]);
+    expect(r.errors).toHaveLength(1);
+    expect(parseLineKind('DỊCH VỤ')).toBe('service');
   });
 });

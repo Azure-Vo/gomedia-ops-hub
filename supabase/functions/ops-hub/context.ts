@@ -36,6 +36,8 @@ export interface SettingsRow {
   no_reply_window_hours: number;
   quote_late_hours: number;
   company_name: string;
+  vat_pct: number;
+  vat_on_pass_through: boolean;
   telegram_bot_username: string | null;
   app_url: string | null;
   system_status: Record<string, unknown>;
@@ -44,7 +46,7 @@ export interface SettingsRow {
 export async function loadSettings(db: SupabaseClient): Promise<SettingsRow> {
   const row = must(await db.from('settings').select('*').eq('id', 1).maybeSingle(), 'load settings') as SettingsRow | null;
   if (!row) throw new Error('settings row missing: run 01_schema.sql');
-  return { ...row, no_reply_window_hours: Number(row.no_reply_window_hours), quote_late_hours: Number(row.quote_late_hours) };
+  return { ...row, no_reply_window_hours: Number(row.no_reply_window_hours), quote_late_hours: Number(row.quote_late_hours), vat_pct: Number(row.vat_pct ?? 0), vat_on_pass_through: !!row.vat_on_pass_through };
 }
 
 export function calendarOf(s: SettingsRow): WorkCalendar {

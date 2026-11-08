@@ -213,6 +213,7 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
                     <span className="font-semibold tabular-nums text-ink-2 sm:hidden">
                       {fmtVnd(i.unit_price)} / {i.unit}
                     </span>
+                    {i.kind === 'pass_through' && <span className="rounded bg-[#E6F0FF] px-1 text-[11px] font-bold text-[#1D4ED8]">CHI HỘ</span>}
                     {i.code && <span className="hidden font-mono text-[11.5px] sm:inline">{i.code}</span>}
                     {!showHeaders && <span>· {i.service_group}</span>}
                     {group === POPULAR && <span>· dùng trong {usage.get(i.id)} báo giá</span>}

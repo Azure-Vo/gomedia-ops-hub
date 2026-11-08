@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react';
-import { fmtNum, validateLibraryRows } from '@/domain';
-import { Badge, Banner, Button, Card, EmptyState, ErrorBox, Field, Input, Loading, Modal, PageHeader, Select, useAsync, useToast } from '@/components/ui';
+import { fmtNum, LINE_KIND_LABEL, LineKind, validateLibraryRows } from '@/domain';
+import { Badge, Banner, Button, Card, EmptyState, ErrorBox, Field, IconButton, Input, Loading, Modal, PageHeader, Select, Textarea, useAsync, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { downloadText, parseCsv, readFileText, toCsv } from '@/lib/csv';
 import { fmtVnd, fmtVnDate, fmtVnLong, toDateInput } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
-import { LibraryItem, loadLibrary } from '../quotes/data';
+import { LibraryItem, loadLibrary, loadTerms, QuoteTerm } from '../quotes/data';
 
-const EMPTY = { id: '', code: '', name: '', unit: '', service_group: '', unit_price: '', band_low: '', band_high: '' };
+const EMPTY = { id: '', code: '', name: '', unit: '', service_group: '', unit_price: '', band_low: '', band_high: '', description: '', kind: 'service' as LineKind };
 type Draft = typeof EMPTY;
 
 function monthsAgo(dateStr: string, months: number): boolean {
@@ -66,6 +66,8 @@ export function LibraryPage() {
         unit_price: price,
         band_low: low,
         band_high: high,
+        description: edit.description.trim() || null,
+        kind: edit.kind,
         ...(old && old.unit_price === price ? {} : { last_reviewed_at: toDateInput(Date.now(), tz) }),
       };
       if (edit.id) check(await supabase.from('library_items').update(row).eq('id', edit.id));
@@ -173,7 +175,10 @@ export function LibraryPage() {
                   return (
                     <tr key={i.id} className={`border-b border-line-soft ${i.active ? '' : 'opacity-60'}`}>
                       <td className="py-2.5 pr-3">
-                        <div className="font-semibold">{i.name}</div>
+                        <div className="font-semibold">
+                          {i.name} {i.kind === 'pass_through' && <Badge tone="brand">Chi hộ</Badge>}
+                        </div>
+                        {i.description && <div className="text-[12.5px] italic text-ink-3">{i.description}</div>}
                         {i.code && <div className="text-[12px] text-ink-3">{i.code}</div>}
                       </td>
                       <td className="py-2.5 pr-3">{i.service_group}</td>
@@ -188,7 +193,7 @@ export function LibraryPage() {
                       </td>
                       <td className="py-1.5">
                         <div className="flex flex-wrap justify-end gap-1">
-                          <Button size="sm" variant="ghost" icon="edit" onClick={() => setEdit({ id: i.id, code: i.code ?? '', name: i.name, unit: i.unit, service_group: i.service_group, unit_price: String(i.unit_price), band_low: i.band_low === null ? '' : String(i.band_low), band_high: i.band_high === null ? '' : String(i.band_high) })}>
+                          <Button size="sm" variant="ghost" icon="edit" onClick={() => setEdit({ id: i.id, code: i.code ?? '', name: i.name, unit: i.unit, service_group: i.service_group, unit_price: String(i.unit_price), band_low: i.band_low === null ? '' : String(i.band_low), band_high: i.band_high === null ? '' : String(i.band_high), description: i.description ?? '', kind: i.kind })}>
                             Sửa
                           </Button>
                           {i.active && (
@@ -251,9 +256,21 @@ export function LibraryPage() {
             <Field label="Khung tự gửi: cao nhất (đ)">
               {(id) => <Input id={id} inputMode="numeric" value={edit.band_high ? fmtVnd(num(edit.band_high), false) : ''} onChange={(e) => setEdit({ ...edit, band_high: e.target.value })} />}
             </Field>
+            <Field label="Loại" hint="Chi hộ = tiền trả hộ khách (VD ngân sách quảng cáo): không chiết khấu, không xét khung giá, không tính VAT (trừ khi Admin bật)">
+              {(id) => (
+                <Select id={id} value={edit.kind} onChange={(e) => setEdit({ ...edit, kind: e.target.value as LineKind })}>
+                  <option value="service">{LINE_KIND_LABEL.service}</option>
+                  <option value="pass_through">{LINE_KIND_LABEL.pass_through}</option>
+                </Select>
+              )}
+            </Field>
+            <Field label="Mô tả phạm vi mặc định" hint="In nghiêng dưới tên hạng mục trên báo giá; Account sửa được từng báo giá" className="sm:col-span-2">
+              {(id) => <Textarea id={id} value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} placeholder="VD: Chụp toàn bộ chương trình, bàn giao ảnh đã chỉnh màu" className="min-h-[64px]" />}
+            </Field>
           </div>
         )}
       </Modal>
+      <TermsCard canEdit={['pm', 'ceo', 'admin'].includes(me.role)} />
       <LibraryImport open={importOpen} onClose={() => setImportOpen(false)} existing={data ?? []} onDone={reload} />
       {canHistory && <HistoryImport open={historyOpen} onClose={() => setHistoryOpen(false)} />}
     </div>
@@ -282,11 +299,11 @@ function LibraryImport({ open, onClose, existing, onDone }: { open: boolean; onC
       const fresh = preview.rows.filter((r) => !byKey.has(key(r.name, r.unit)));
       const updates = preview.rows.filter((r) => byKey.has(key(r.name, r.unit)));
       if (fresh.length) {
-        check(await supabase.from('library_items').insert(fresh.map((r) => ({ code: r.code, name: r.name, unit: r.unit, service_group: r.serviceGroup, unit_price: r.unitPrice, band_low: r.bandLow, band_high: r.bandHigh, last_reviewed_at: today }))));
+        check(await supabase.from('library_items').insert(fresh.map((r) => ({ code: r.code, name: r.name, unit: r.unit, service_group: r.serviceGroup, unit_price: r.unitPrice, band_low: r.bandLow, band_high: r.bandHigh, description: r.description, kind: r.kind, last_reviewed_at: today }))));
       }
       for (const r of updates) {
         const old = byKey.get(key(r.name, r.unit))!;
-        check(await supabase.from('library_items').update({ service_group: r.serviceGroup, unit_price: r.unitPrice, band_low: r.bandLow, band_high: r.bandHigh, last_reviewed_at: today, active: true }).eq('id', old.id));
+        check(await supabase.from('library_items').update({ service_group: r.serviceGroup, unit_price: r.unitPrice, band_low: r.bandLow, band_high: r.bandHigh, kind: r.kind, ...(r.description ? { description: r.description } : {}), last_reviewed_at: today, active: true }).eq('id', old.id));
       }
       toast(`Đã nhập ${fresh.length} hạng mục mới, cập nhật ${updates.length} hạng mục`);
       setPreview(null);
@@ -304,10 +321,10 @@ function LibraryImport({ open, onClose, existing, onDone }: { open: boolean; onC
       'mau_thu_vien_gia.csv',
       toCsv(
         [
-          { item_name: 'Video TikTok ngắn (≤ 60s)', unit: 'video', group: 'Social Media', unit_price: 1500000, band_low: '', band_high: '' },
-          { item_name: 'Bài đăng Facebook (thiết kế + caption)', unit: 'bài', group: 'Social Media', unit_price: 600000, band_low: '', band_high: '' },
+          { item_name: 'Gói flycam', unit: 'gói', group: 'Sự kiện & sản xuất', unit_price: 5000000, band_low: '', band_high: '', kind: 'Dịch vụ', description: 'Quay toàn cảnh từ trên cao' },
+          { item_name: 'Ngân sách Meta Ads (chi hộ)', unit: 'tháng', group: 'Quảng cáo', unit_price: 16000000, band_low: '', band_high: '', kind: 'Chi hộ', description: '' },
         ],
-        ['item_name', 'unit', 'group', 'unit_price', 'band_low', 'band_high'],
+        ['item_name', 'unit', 'group', 'unit_price', 'band_low', 'band_high', 'kind', 'description'],
       ),
     );
 
@@ -332,7 +349,7 @@ function LibraryImport({ open, onClose, existing, onDone }: { open: boolean; onC
       }
     >
       <p className="mb-3 text-sm text-ink-2">
-        Cột: <code>item_name, unit, group, unit_price</code> (bắt buộc), <code>band_low, band_high</code> (không bắt buộc). Đơn giá là trung vị giá đã duyệt 6–12 tháng (Bước 0). Hạng mục trùng tên và đơn vị sẽ được cập nhật giá.
+        Cột: <code>item_name, unit, group, unit_price</code> (bắt buộc), <code>band_low, band_high, kind</code> (Dịch vụ / Chi hộ), <code>description</code> (mô tả phạm vi) không bắt buộc. Đơn giá là trung vị giá đã duyệt 6–12 tháng (Bước 0). Hạng mục trùng tên và đơn vị sẽ được cập nhật giá.
       </p>
       <input type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.target.files?.[0])} className="block min-h-[44px] w-full text-sm" />
       {preview && (
@@ -496,5 +513,94 @@ function HistoryImport({ open, onClose }: { open: boolean; onClose: () => void }
         </div>
       )}
     </Modal>
+  );
+}
+
+/** Standard quote terms (checklist on every quote). PM, CEO and Admin edit; new quotes start with the ones marked default. */
+function TermsCard({ canEdit }: { canEdit: boolean }) {
+  const toast = useToast();
+  const { data, error, loading, reload } = useAsync(() => loadTerms(true), []);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function run(fn: () => Promise<unknown>, done?: string) {
+    setBusy(true);
+    try {
+      await fn();
+      if (done) toast(done);
+      reload();
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  }
+  const terms = data ?? [];
+  const add = () =>
+    run(async () => {
+      check(await supabase.from('quote_terms').insert({ text: draft.trim(), position: Math.max(0, ...terms.map((t) => t.position)) + 1 }));
+      setDraft('');
+    }, 'Đã thêm điều khoản');
+  const patch = (t: QuoteTerm, p: Partial<QuoteTerm>) => run(async () => check(await supabase.from('quote_terms').update(p).eq('id', t.id)));
+  const move = (t: QuoteTerm, dir: -1 | 1) => {
+    const active = terms.filter((x) => x.active);
+    const i = active.findIndex((x) => x.id === t.id);
+    const other = active[i + dir];
+    if (!other) return;
+    run(async () => {
+      check(await supabase.from('quote_terms').update({ position: other.position }).eq('id', t.id));
+      check(await supabase.from('quote_terms').update({ position: t.position === other.position ? t.position + dir : t.position }).eq('id', other.id));
+    });
+  };
+
+  return (
+    <Card className="mt-4" title="Điều khoản mẫu trên báo giá" subtitle="Account tick chọn trên từng báo giá. Mục “Mặc định” được tick sẵn khi tạo báo giá mới.">
+      {loading ? (
+        <Loading />
+      ) : error ? (
+        <ErrorBox error={error} />
+      ) : (
+        <ul className="flex flex-col divide-y divide-line-soft">
+          {terms.map((t) => (
+            <li key={t.id} className={`flex flex-wrap items-center gap-2 py-2 ${t.active ? '' : 'opacity-50'}`}>
+              {canEdit ? (
+                <input
+                  aria-label="Nội dung điều khoản"
+                  defaultValue={t.text}
+                  onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== t.text && patch(t, { text: e.target.value.trim() })}
+                  className="min-h-[40px] min-w-[240px] flex-1 rounded-lg border border-transparent px-2 text-[14.5px] hover:border-line focus:border-brand"
+                />
+              ) : (
+                <span className="flex-1 text-[14.5px]">{t.text}</span>
+              )}
+              <label className="flex items-center gap-1.5 text-[13px] text-ink-2">
+                <input type="checkbox" className="h-4 w-4" checked={t.default_on} disabled={!canEdit || busy || !t.active} onChange={(e) => patch(t, { default_on: e.target.checked })} /> Mặc định
+              </label>
+              {canEdit && (
+                <div className="flex items-center gap-1">
+                  {t.active && (
+                    <>
+                      <IconButton icon="chevronDown" className="rotate-180" label="Đưa lên" onClick={() => move(t, -1)} disabled={busy} />
+                      <IconButton icon="chevronDown" label="Đưa xuống" onClick={() => move(t, 1)} disabled={busy} />
+                    </>
+                  )}
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => patch(t, { active: !t.active, ...(t.active ? { default_on: false } : {}) })}>
+                    {t.active ? 'Ngừng dùng' : 'Dùng lại'}
+                  </Button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canEdit && (
+        <div className="mt-3 flex gap-2">
+          <Input aria-label="Điều khoản mới" value={draft} placeholder="Thêm điều khoản mẫu" onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && draft.trim() && add()} />
+          <Button icon="plus" disabled={!draft.trim() || busy} onClick={add}>
+            Thêm
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }

@@ -53,6 +53,15 @@ export function SettingsPage() {
             pilot_end: s.pilot_end || null,
             company_name: s.company_name,
             app_url: s.app_url || null,
+            vat_pct: Math.min(100, Math.max(0, Number(s.vat_pct) || 0)),
+            vat_on_pass_through: !!s.vat_on_pass_through,
+            company_legal_name: s.company_legal_name.trim(),
+            company_tax_code: s.company_tax_code.trim(),
+            company_address: s.company_address.trim(),
+            company_phone: s.company_phone.trim(),
+            company_website: s.company_website.trim(),
+            signer_name: s.signer_name.trim(),
+            signer_title: s.signer_title.trim(),
           })
           .eq('id', 1),
       );
@@ -160,7 +169,6 @@ export function SettingsPage() {
               {numField('Báo giá trễ khi quá (giờ làm việc)', s.quote_late_hours, (n) => setS({ ...s, quote_late_hours: n }))}
               {numField('Cảnh báo im lặng sau (giờ làm việc)', s.no_reply_window_hours, (n) => setS({ ...s, no_reply_window_hours: n }))}
               {numField('Nhắc rà soát giá sau (tháng)', s.library_review_months, (n) => setS({ ...s, library_review_months: Math.max(1, Math.round(n)) }))}
-              <Field label="Tên công ty trên PDF">{(id) => <Input id={id} value={s.company_name} onChange={(e) => setS({ ...s, company_name: e.target.value })} />}</Field>
               <Field label="Địa chỉ web app" hint="Dùng cho nút mở app trong tin nhắn Telegram">
                 {(id) => (
                   <div className="flex gap-2">
@@ -172,6 +180,22 @@ export function SettingsPage() {
                 )}
               </Field>
               <Field label="Bot Telegram">{(id) => <Input id={id} disabled value={s.telegram_bot_username ? `@${s.telegram_bot_username}` : 'chưa kết nối (xem Diagnostics)'} />}</Field>
+            </div>
+          </Card>
+          <Card title="Báo giá: công ty và thuế" subtitle="In trên PDF báo giá theo mẫu Go Media. Đổi thuế suất chỉ áp cho báo giá tạo sau đó.">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Tên ngắn (chữ ký: ĐẠI DIỆN …)">{(id) => <Input id={id} value={s.company_name} onChange={(e) => setS({ ...s, company_name: e.target.value })} />}</Field>
+              <Field label="Tên pháp lý (đầu trang)">{(id) => <Input id={id} value={s.company_legal_name} onChange={(e) => setS({ ...s, company_legal_name: e.target.value })} />}</Field>
+              <Field label="Mã số thuế">{(id) => <Input id={id} value={s.company_tax_code} onChange={(e) => setS({ ...s, company_tax_code: e.target.value })} />}</Field>
+              <Field label="Địa chỉ">{(id) => <Input id={id} value={s.company_address} onChange={(e) => setS({ ...s, company_address: e.target.value })} />}</Field>
+              <Field label="Website">{(id) => <Input id={id} value={s.company_website} onChange={(e) => setS({ ...s, company_website: e.target.value })} />}</Field>
+              <Field label="Điện thoại">{(id) => <Input id={id} value={s.company_phone} onChange={(e) => setS({ ...s, company_phone: e.target.value })} />}</Field>
+              <Field label="Người ký">{(id) => <Input id={id} value={s.signer_name} onChange={(e) => setS({ ...s, signer_name: e.target.value })} />}</Field>
+              <Field label="Chức vụ người ký">{(id) => <Input id={id} value={s.signer_title} onChange={(e) => setS({ ...s, signer_title: e.target.value })} />}</Field>
+              {numField('Thuế GTGT mặc định (%)', s.vat_pct, (n) => setS({ ...s, vat_pct: n }), 'Mức 8% là mức giảm tạm thời; hỏi kế toán khi chính sách đổi')}
+              <label className="flex min-h-[44px] items-center gap-2 self-end text-[14px] text-ink-2">
+                <input type="checkbox" className="h-5 w-5" checked={s.vat_on_pass_through} onChange={(e) => setS({ ...s, vat_on_pass_through: e.target.checked })} /> Tính VAT cả trên khoản chi hộ
+              </label>
             </div>
           </Card>
           <Card title="Pilot và mục tiêu" subtitle="Dashboard mặc định hiển thị khoảng pilot. Mục tiêu đang là đề xuất của nhóm, chờ CEO xác nhận.">

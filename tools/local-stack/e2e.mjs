@@ -108,14 +108,15 @@ async function newQuote(page, client, discount, priceTikTok) {
   await page.goto(`${WEB}/quotes`);
   await page.getByRole('button', { name: 'Tạo báo giá' }).click();
   await page.waitForURL(/\/quotes\/[0-9a-f-]{36}$/);
-  await page.getByLabel('Khách hàng').fill(client);
+  await page.getByRole('textbox', { name: /^Kính gửi/ }).fill(client);
+  // The picker stays open after an add: the first item creates section I (its service group).
+  await page.getByRole('button', { name: 'Thêm hạng mục từ Thư viện giá' }).click();
   for (const [item, qty] of [
     ['Video TikTok ngắn', '12'],
     ['Bài Facebook', '8'],
     ['Kế hoạch nội dung', '3'],
   ]) {
-    await page.getByRole('button', { name: 'Thêm hạng mục từ Thư viện giá' }).click();
-    await page.getByRole('button', { name: new RegExp(item) }).first().click();
+    await page.getByRole('option', { name: new RegExp(item) }).first().click();
     await page.getByLabel(new RegExp(`Số lượng: ${item}`)).fill(qty);
   }
   if (priceTikTok) {
@@ -129,7 +130,9 @@ async function newQuote(page, client, discount, priceTikTok) {
 await step('UAT 1 · in-band quote: 27.360.000 đ, Export PDF & send, appears in archive', async () => {
   await newQuote(account, 'Chuỗi F&B mẫu', 5);
   await account.getByText('Trong khung giá · Account gửi được ngay').waitFor({ timeout: 15000 });
-  assert.ok((await account.locator('section[aria-label="Báo giá"]').innerText()).includes('27.360.000 đ'));
+  // 28.800.000 − 5% = 27.360.000 before VAT; + VAT 8% (2.188.800) = 29.548.800 to pay.
+  const text = await account.locator('section[aria-label="Báo giá"]').innerText();
+  assert.ok(text.includes('2.188.800 đ') && text.includes('29.548.800 đ'), 'VAT 8% and total to pay');
   await shot(account, '03-builder-in-band');
   const dl = account.waitForEvent('download', { timeout: 30000 });
   await account.getByRole('button', { name: 'Xuất PDF & gửi' }).click();
@@ -138,8 +141,63 @@ await step('UAT 1 · in-band quote: 27.360.000 đ, Export PDF & send, appears in
   await file.saveAs(`${SHOTS}/quote.pdf`);
   await account.getByText(/Đã lưu vào Kho tham chiếu/).waitFor({ timeout: 15000 });
   await shot(account, '04-builder-sent');
+  const [q] = await sql(`select total, vat_pct, vat_amount, grand_total from public.quotes where client = 'Chuỗi F&B mẫu'`);
+  assert.deepEqual([Number(q.total), Number(q.vat_pct), Number(q.vat_amount), Number(q.grand_total)], [27360000, 8, 2188800, 29548800]);
   await account.goto(`${WEB}/archive`);
   await account.getByText('Chuỗi F&B mẫu').first().waitFor();
+});
+
+await step('Go Media format · client block, sections, pass-through budget, VAT, terms, PDF preview', async () => {
+  await sql(`insert into public.library_items (name, unit, service_group, unit_price, kind) values ('Ngân sách Meta Ads (chi hộ)', 'tháng', 'Quảng cáo', 16000000, 'pass_through')`);
+  await account.goto(`${WEB}/quotes`);
+  await account.getByRole('button', { name: 'Tạo báo giá' }).click();
+  await account.waitForURL(/\/quotes\/[0-9a-f-]{36}$/);
+  await account.getByRole('textbox', { name: /^Kính gửi/ }).fill('Skybar mẫu');
+  await account.getByLabel('Người liên hệ').fill('Chị Lan, 0905 000 000');
+  await account.getByLabel('Dự án').fill('Chạy quảng cáo Q1');
+  await account.getByLabel('Địa điểm').fill('Đà Nẵng');
+  await account.getByRole('button', { name: 'Thêm hạng mục từ Thư viện giá' }).click();
+  await account.getByRole('option', { name: /Kế hoạch nội dung/ }).first().click();
+  await account.getByRole('button', { name: 'Thêm phần mới' }).click();
+  await account.getByLabel('Tên phần mới').fill('Ngân sách quảng cáo');
+  await account.getByRole('button', { name: 'Thêm', exact: true }).first().click();
+  await account.getByRole('option', { name: /Ngân sách Meta Ads/ }).first().click();
+  // A pass-through budget can change without a reason and never triggers approval.
+  await account.getByLabel(/Đơn giá: Ngân sách Meta Ads/).fill('20000000');
+  assert.equal(await account.getByLabel(/Lý do giá khác thư viện: Ngân sách/).count(), 0);
+  await account.getByLabel(/Phạm vi công việc: Kế hoạch nội dung/).fill('12 bài/tháng, duyệt lịch đăng mỗi thứ Hai');
+  await account.locator('#discount').fill('10');
+  // Default terms come ticked; untick one, add one for this quote only.
+  const t1 = account.getByLabel('Thanh toán 60% tạm ứng trước ngày thực hiện, 40% khi bàn giao sản phẩm.');
+  assert.ok(await t1.isChecked());
+  await t1.uncheck();
+  await account.getByLabel('Thêm điều khoản riêng').fill('Báo cáo hiệu quả gửi mỗi thứ Sáu.');
+  await account.getByLabel('Thêm điều khoản riêng').press('Enter');
+  await account.getByText('Trong khung giá · Account gửi được ngay').waitFor({ timeout: 15000 });
+  // Service 2.000.000 − 10% = 1.800.000; VAT 8% = 144.000; + budget 20.000.000 → 21.944.000.
+  const text = await account.locator('section[aria-label="Báo giá"]').innerText();
+  assert.ok(text.includes('144.000 đ') && text.includes('21.944.000 đ'), 'VAT only on services; budget added after');
+  await account.getByText('Đã lưu').waitFor({ timeout: 15000 });
+  await shot(account, '04b-builder-go-media-format');
+  await account.getByRole('button', { name: 'Xem trước báo giá (PDF)' }).click();
+  const dlg = account.getByRole('dialog');
+  await dlg.getByText('TỔNG THANH TOÁN').waitFor();
+  for (const t of ['I. Social Media', 'II. Ngân sách quảng cáo', 'Tổng phần II', 'Chị Lan, 0905 000 000', '12 bài/tháng, duyệt lịch đăng mỗi thứ Hai', 'Báo cáo hiệu quả gửi mỗi thứ Sáu.', '(không tính trên khoản chi hộ)']) {
+    await dlg.getByText(t, { exact: false }).first().waitFor();
+  }
+  await dlg.screenshot({ path: `${SHOTS}/04c-pdf-preview.png` });
+  await dlg.getByRole('button', { name: 'Đóng' }).click();
+  const dl = account.waitForEvent('download', { timeout: 30000 });
+  await account.getByRole('button', { name: 'Xuất PDF & gửi' }).click();
+  await (await dl).saveAs(`${SHOTS}/quote-go-media-format.pdf`);
+  await account.getByText(/Đã lưu vào Kho tham chiếu/).waitFor({ timeout: 15000 });
+  const [q] = await sql(`select contact, project, venue, discount_pct, total, vat_amount, grand_total, band_result, terms from public.quotes where client = 'Skybar mẫu'`);
+  assert.deepEqual([q.contact, q.project, q.venue, Number(q.total), Number(q.vat_amount), Number(q.grand_total), q.band_result], ['Chị Lan, 0905 000 000', 'Chạy quảng cáo Q1', 'Đà Nẵng', 21800000, 144000, 21944000, 'send_now']);
+  assert.equal(q.terms.length, 4);
+  assert.ok(q.terms.includes('Báo cáo hiệu quả gửi mỗi thứ Sáu.') && !q.terms.some((t) => t.startsWith('Thanh toán 60%')));
+  const lines = await sql(`select l.section, l.kind, l.description from public.quote_lines l join public.quotes q on q.id = l.quote_id where q.client = 'Skybar mẫu' order by position`);
+  assert.deepEqual(lines.map((l) => [l.section, l.kind]), [['Social Media', 'service'], ['Ngân sách quảng cáo', 'pass_through']]);
+  assert.equal(lines[0].description, '12 bài/tháng, duyệt lịch đăng mỗi thứ Hai');
 });
 
 let q2;
@@ -221,7 +279,7 @@ await step('UAT 6 · copy items from a similar quote uses today\'s library price
   await account.goto(`${WEB}/quotes`);
   await account.getByRole('button', { name: 'Tạo báo giá' }).click();
   await account.waitForURL(/\/quotes\/[0-9a-f-]{36}$/);
-  await account.getByLabel('Khách hàng').fill('Khách chép mẫu');
+  await account.getByRole('textbox', { name: /^Kính gửi/ }).fill('Khách chép mẫu');
   await account.getByLabel('Nhóm dịch vụ').selectOption('Social Media');
   await account.getByRole('button', { name: 'Chép hạng mục →' }).first().click();
   await account.getByText(/giá lấy theo thư viện hôm nay/).waitFor();

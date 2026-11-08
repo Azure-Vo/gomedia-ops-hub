@@ -5,6 +5,7 @@ import {
   BandLevel,
   BandLine,
   isWorkingTime,
+  LineKind,
   linesMissingOverrideReason,
   nextQuoteStatus,
   PublicBandReason,
@@ -28,6 +29,7 @@ interface LibRow {
   band_low: number | null;
   band_high: number | null;
   active: boolean;
+  kind: LineKind;
 }
 
 interface QuoteRow {
@@ -38,6 +40,7 @@ interface QuoteRow {
   status: QuoteStatus;
   requested_at: string;
   discount_pct: number;
+  vat_pct: number;
   created_by: string;
   approver: 'pm' | 'ceo' | null;
   band_result: BandLevel | null;
@@ -51,14 +54,15 @@ interface LineIn {
   qty: number;
   unit_price: number;
   override_reason?: string | null;
+  kind?: LineKind;
 }
 
-const QUOTE_COLS = 'id, code, client, service_group, status, requested_at, discount_pct, created_by, approver, band_result, band_detail, total';
+const QUOTE_COLS = 'id, code, client, service_group, status, requested_at, discount_pct, vat_pct, created_by, approver, band_result, band_detail, total';
 
 async function libraryMap(ctx: Ctx, ids: (string | null)[]): Promise<Map<string, LibRow>> {
   const wanted = [...new Set(ids.filter((x): x is string => !!x))];
   if (!wanted.length) return new Map();
-  const rows = must(await ctx.db.from('library_items').select('id, name, unit, service_group, unit_price, band_low, band_high, active').in('id', wanted), 'load library') as LibRow[];
+  const rows = must(await ctx.db.from('library_items').select('id, name, unit, service_group, unit_price, band_low, band_high, active, kind').in('id', wanted), 'load library') as LibRow[];
   return new Map(rows.map((r) => [r.id, { ...r, unit_price: Number(r.unit_price), band_low: r.band_low === null ? null : Number(r.band_low), band_high: r.band_high === null ? null : Number(r.band_high) }]));
 }
 
@@ -72,6 +76,8 @@ function bandLines(lines: LineIn[], lib: Map<string, LibRow>): BandLine[] {
       libraryPrice: item ? item.unit_price : null,
       bandLow: item?.band_low ?? null,
       bandHigh: item?.band_high ?? null,
+      // The library decides what is pass-through; a line without a library item keeps its own kind.
+      passThrough: (item?.kind ?? l.kind) === 'pass_through',
     };
   });
 }
@@ -83,19 +89,19 @@ function checkLinesShape(lines: unknown): LineIn[] {
     const qty = Number(x.qty);
     const price = Number(x.unit_price);
     if (!(qty > 0) || !(price >= 0) || !Number.isFinite(qty) || !Number.isFinite(price)) throw new ApiError(400, 'bad_lines', 'Số lượng phải > 0 và đơn giá ≥ 0.');
-    return { library_item_id: (x.library_item_id as string) || null, item_name: String(x.item_name ?? ''), qty, unit_price: Math.round(price), override_reason: (x.override_reason as string) ?? null };
+    return { library_item_id: (x.library_item_id as string) || null, item_name: String(x.item_name ?? ''), qty, unit_price: Math.round(price), override_reason: (x.override_reason as string) ?? null, kind: x.kind === 'pass_through' ? 'pass_through' : 'service' };
   });
 }
 
 async function loadQuote(ctx: Ctx, id: string): Promise<QuoteRow> {
   const q = must(await ctx.db.from('quotes').select(QUOTE_COLS).eq('id', id).maybeSingle(), 'load quote') as QuoteRow | null;
   if (!q) throw new ApiError(404, 'quote_not_found', 'Không tìm thấy báo giá.');
-  return { ...q, discount_pct: Number(q.discount_pct), total: Number(q.total) };
+  return { ...q, discount_pct: Number(q.discount_pct), vat_pct: Number(q.vat_pct ?? 0), total: Number(q.total) };
 }
 
 async function loadLines(ctx: Ctx, quoteId: string): Promise<LineIn[]> {
   const rows = must(
-    await ctx.db.from('quote_lines').select('library_item_id, item_name, qty, unit_price, override_reason').eq('quote_id', quoteId).order('position'),
+    await ctx.db.from('quote_lines').select('library_item_id, item_name, qty, unit_price, override_reason, kind').eq('quote_id', quoteId).order('position'),
     'load lines',
   ) as LineIn[];
   return rows.map((r) => ({ ...r, qty: Number(r.qty), unit_price: Number(r.unit_price) }));
@@ -122,17 +128,24 @@ async function readyLines(ctx: Ctx, q: QuoteRow) {
     now: ctx.now(),
     lines: lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price })),
     discountPct: q.discount_pct,
+    vatPct: q.vat_pct,
   });
+  const kindOf = (l: LineIn): LineKind => (l.library_item_id ? lib.get(l.library_item_id)?.kind : undefined) ?? l.kind ?? 'service';
   if (q.status !== 'approved') {
     const missing = linesMissingOverrideReason(
-      lines.map((l) => ({ unitPrice: l.unit_price, libraryPrice: l.library_item_id ? lib.get(l.library_item_id)?.unit_price ?? null : null, overrideReason: l.override_reason })),
+      lines.map((l) => ({ unitPrice: l.unit_price, libraryPrice: l.library_item_id ? lib.get(l.library_item_id)?.unit_price ?? null : null, overrideReason: l.override_reason, kind: kindOf(l) })),
     );
     if (missing.length) errors.push(`Ghi lý do cho đơn giá khác thư viện ở dòng ${missing.map((i) => i + 1).join(', ')}.`);
   }
   if (errors.length) throw new ApiError(400, 'invalid_quote', errors.join(' '));
-  const rules = await loadRules(ctx.db);
+  const [rules, s] = await Promise.all([loadRules(ctx.db), loadSettings(ctx.db)]);
   const band = bandCheck(bandLines(lines, lib), q.discount_pct, rules);
-  return { lines, band, totals: quoteTotals(lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price })), q.discount_pct) };
+  const totals = quoteTotals(
+    lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price, kind: kindOf(l) })),
+    q.discount_pct,
+    { pct: q.vat_pct, onPassThrough: s.vat_on_pass_through },
+  );
+  return { lines, band, totals };
 }
 
 export async function previewBand(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
@@ -196,7 +209,7 @@ export async function submitQuote(ctx: Ctx, user: Profile, quoteId: string) {
     expected_status: q.status,
     new_status: t.status,
     actor: user.id,
-    fields: { band_result: band.level, band_detail: publicBand(band), approver: band.level, approval_requested: true, subtotal: totals.subtotal, total: totals.total },
+    fields: { band_result: band.level, band_detail: publicBand(band), approver: band.level, approval_requested: true, subtotal: totals.subtotal, total: totals.total, vat_amount: totals.vatAmount, grand_total: totals.grandTotal },
     event_action: 'quote.submitted',
     event_payload: { band: band.level, total: totals.total },
   });
@@ -247,7 +260,7 @@ export async function sendQuote(ctx: Ctx, user: Profile, quoteId: string) {
   const { band, totals } = await readyLines(ctx, q);
   const t = nextQuoteStatus(q.status, 'send', q.status === 'approved' ? q.band_result ?? undefined : band.level);
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
-  const fields: Record<string, unknown> = { subtotal: totals.subtotal, total: totals.total };
+  const fields: Record<string, unknown> = { subtotal: totals.subtotal, total: totals.total, vat_amount: totals.vatAmount, grand_total: totals.grandTotal };
   if (q.status !== 'approved') Object.assign(fields, { band_result: band.level, band_detail: publicBand(band) });
   const quote = await transition(ctx, {
     quote_id: q.id,
@@ -256,7 +269,7 @@ export async function sendQuote(ctx: Ctx, user: Profile, quoteId: string) {
     actor: user.id,
     fields,
     event_action: 'quote.sent',
-    event_payload: { total: totals.total, band: q.status === 'approved' ? q.band_result : band.level },
+    event_payload: { total: totals.total, grand_total: totals.grandTotal, band: q.status === 'approved' ? q.band_result : band.level },
   });
   return { quote };
 }
@@ -267,12 +280,13 @@ export async function importQuotes(ctx: Ctx, user: Profile, body: Record<string,
   if (!Array.isArray(rows) || rows.length > 5000) throw new ApiError(400, 'bad_rows', 'File không hợp lệ hoặc quá lớn (tối đa 5000 dòng).');
   const s = await loadSettings(ctx.db);
   const { quotes, errors } = validateQuoteHistoryRows(rows as Record<string, string>[], s.timezone);
-  const lib = must(await ctx.db.from('library_items').select('id, name, unit, unit_price'), 'load library') as { id: string; name: string; unit: string; unit_price: number }[];
+  const lib = must(await ctx.db.from('library_items').select('id, name, unit, unit_price, kind'), 'load library') as { id: string; name: string; unit: string; unit_price: number; kind: LineKind }[];
   const byNameUnit = new Map(lib.map((i) => [`${i.name.trim().toLowerCase()}|${i.unit.trim().toLowerCase()}`, i]));
   const byName = new Map(lib.map((i) => [i.name.trim().toLowerCase(), i]));
   const unmatched = new Set<string>();
   const payload = quotes.map((q) => {
-    const totals = quoteTotals(q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice })), q.discountPct);
+    const matched = q.lines.map((l) => byNameUnit.get(`${l.itemName.toLowerCase()}|${l.unit.toLowerCase()}`) ?? byName.get(l.itemName.toLowerCase()));
+    const totals = quoteTotals(q.lines.map((l, i) => ({ qty: l.qty, unitPrice: l.unitPrice, kind: matched[i]?.kind })), q.discountPct);
     return {
       code: q.code,
       client: q.client,
@@ -282,10 +296,10 @@ export async function importQuotes(ctx: Ctx, user: Profile, body: Record<string,
       discount_pct: q.discountPct,
       subtotal: totals.subtotal,
       total: totals.total,
-      lines: q.lines.map((l) => {
-        const item = byNameUnit.get(`${l.itemName.toLowerCase()}|${l.unit.toLowerCase()}`) ?? byName.get(l.itemName.toLowerCase());
+      lines: q.lines.map((l, i) => {
+        const item = matched[i];
         if (!item) unmatched.add(l.itemName);
-        return { library_item_id: item?.id ?? null, item_name: l.itemName, unit: l.unit, qty: l.qty, unit_price: l.unitPrice, library_price: item ? Number(item.unit_price) : null };
+        return { library_item_id: item?.id ?? null, item_name: l.itemName, unit: l.unit, qty: l.qty, unit_price: l.unitPrice, library_price: item ? Number(item.unit_price) : null, kind: item?.kind ?? 'service' };
       }),
     };
   });

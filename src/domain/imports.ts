@@ -55,6 +55,18 @@ export interface LibraryImportRow {
   bandLow: number | null;
   bandHigh: number | null;
   code: string | null;
+  /** Default scope text copied onto a quote line (optional column `description` / `mo_ta`). */
+  description: string | null;
+  /** 'service' unless the optional `kind` / `loai` column says pass-through ("Chi hộ"). */
+  kind: 'service' | 'pass_through';
+}
+
+/** Reads the optional kind column: Dịch vụ / service, or Chi hộ / pass_through. Null when not recognised. */
+export function parseLineKind(raw: string): 'service' | 'pass_through' | null {
+  const v = raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  if (!v || v === 'service' || v === 'dich vu') return 'service';
+  if (v === 'pass_through' || v === 'pass-through' || v === 'chi ho') return 'pass_through';
+  return null;
 }
 
 export function validateLibraryRows(rows: Row[]): { rows: LibraryImportRow[]; errors: RowError[] } {
@@ -71,7 +83,10 @@ export function validateLibraryRows(rows: Row[]): { rows: LibraryImportRow[]; er
     const highRaw = pick(r, 'band_high');
     const bandLow = lowRaw ? parseVnd(lowRaw) : null;
     const bandHigh = highRaw ? parseVnd(highRaw) : null;
+    const kindRaw = pick(r, 'kind', 'loai');
+    const kind = parseLineKind(kindRaw);
     const problems: string[] = [];
+    if (kind === null) problems.push(`loại "${kindRaw}" không hợp lệ (dùng Dịch vụ hoặc Chi hộ)`);
     if (!name) problems.push('thiếu tên hạng mục');
     if (!unit) problems.push('thiếu đơn vị');
     if (!serviceGroup) problems.push('thiếu nhóm dịch vụ');
@@ -85,7 +100,7 @@ export function validateLibraryRows(rows: Row[]): { rows: LibraryImportRow[]; er
     if (name && seen.has(key)) problems.push('trùng hạng mục (cùng tên và đơn vị) trong file');
     seen.add(key);
     if (problems.length) errors.push({ row: n, message: problems.join('; ') });
-    else out.push({ name, unit, serviceGroup, unitPrice: price as number, bandLow, bandHigh, code: pick(r, 'code', 'item_code') || null });
+    else out.push({ name, unit, serviceGroup, unitPrice: price as number, bandLow, bandHigh, code: pick(r, 'code', 'item_code') || null, description: pick(r, 'description', 'mo_ta') || null, kind: kind ?? 'service' });
   });
   return { rows: out, errors };
 }

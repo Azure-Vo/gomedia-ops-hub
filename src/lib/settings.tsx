@@ -15,6 +15,15 @@ export interface SettingsRow {
   pilot_start: string | null;
   pilot_end: string | null;
   company_name: string;
+  vat_pct: number;
+  vat_on_pass_through: boolean;
+  company_legal_name: string;
+  company_tax_code: string;
+  company_address: string;
+  company_phone: string;
+  company_website: string;
+  signer_name: string;
+  signer_title: string;
   telegram_bot_username: string | null;
   app_url: string | null;
   system_status: Record<string, { at?: string } & Record<string, unknown>>;
@@ -53,6 +62,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       if (row) {
         row.no_reply_window_hours = Number(row.no_reply_window_hours);
         row.quote_late_hours = Number(row.quote_late_hours);
+        row.vat_pct = Number(row.vat_pct ?? 0);
       }
       setSettings(row);
       setError(row ? null : 'Chưa có bảng settings: hãy chạy file 01_schema.sql.');

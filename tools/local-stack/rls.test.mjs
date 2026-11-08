@@ -248,3 +248,20 @@ test('quote transitions check the expected status and record approvals', async (
   assert.ok(sent.q.sent_at);
   assert.equal((await sql(`select count(*)::int n from public.approvals where quote_id = $1`, [U.q1]))[0].n, 1);
 });
+
+test('quote terms: everyone active reads, only PM/CEO/Admin edit; new quotes take VAT and default terms', async () => {
+  const terms = await as(U.acc1, ({ q }) => q(`select text, default_on from public.quote_terms where active order by position`));
+  assert.ok(terms.length >= 1);
+  await denied(as(U.acc1, ({ q }) => q(`insert into public.quote_terms (text) values ('Account tự thêm')`)));
+  await as(U.pm, ({ q }) => q(`insert into public.quote_terms (text, position) values ('PM thêm', 99)`));
+  const [q] = await as(U.acc1, ({ q }) => q(`insert into public.quotes (client) values ('VAT test') returning vat_pct, terms`));
+  const [s] = await sql(`select vat_pct from public.settings`);
+  assert.equal(Number(q.vat_pct), Number(s.vat_pct));
+  assert.deepEqual(q.terms, terms.filter((t) => t.default_on).map((t) => t.text));
+  // The account may edit the client block, VAT and terms of its own draft, and the line section/scope.
+  await as(U.acc1, async ({ q: run }) => {
+    const [row] = await run(`insert into public.quotes (client) values ('Edit test') returning id`);
+    await run(`update public.quotes set contact = 'Chị Lan', vat_pct = 10, vat_amount = 1, grand_total = 2, terms = '["x"]' where id = $1`, [row.id]);
+    await run(`insert into public.quote_lines (quote_id, item_name, qty, unit_price, section, description, kind) values ($1, 'Ngân sách', 1, 1, 'Quảng cáo', 'mô tả', 'pass_through')`, [row.id]);
+  });
+});

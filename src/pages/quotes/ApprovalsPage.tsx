@@ -7,7 +7,7 @@ import { fmtVnd, fmtVnDateTime } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
-import { LINE_COLS, LineRow, loadLibrary, loadPeople, normLine, normQuote, personName, QUOTE_COLS, QuoteRow } from './data';
+import { LINE_COLS, LineRow, loadLibrary, loadPeople, normLine, normQuote, payable, personName, QUOTE_COLS, QuoteRow } from './data';
 import { BandReasons, PriceTag } from './parts';
 
 export function ApprovalsPage() {
@@ -122,7 +122,7 @@ export function ApprovalsPage() {
                 </div>
                 <div className="mt-3 flex flex-wrap justify-end gap-6 text-[15px]">
                   <span>Chiết khấu: <b>{fmtNum(q.discount_pct, 1)}%</b></span>
-                  <span>Tổng: <b>{fmtVnd(q.total)}</b></span>
+                  <span>Tổng trước VAT: <b>{fmtVnd(q.total)}</b> · thanh toán {fmtVnd(payable(q))}</span>
                 </div>
               </Card>
             );

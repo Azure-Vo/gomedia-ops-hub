@@ -6,7 +6,7 @@ import { fmtVnd, fmtVnDateTime } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
-import { loadPeople, normQuote, personName, QUOTE_COLS, QuoteRow } from './data';
+import { loadPeople, normQuote, payable, personName, QUOTE_COLS, QuoteRow } from './data';
 import { BandBadge, StatusBadge } from './parts';
 
 export function QuotesPage() {
@@ -115,7 +115,7 @@ export function QuotesPage() {
                       <td className="hidden py-2.5 pr-3 sm:table-cell">
                         <BandBadge level={q.band_result} />
                       </td>
-                      <td className="hidden py-2.5 pr-3 text-right tabular-nums sm:table-cell">{fmtVnd(q.total)}</td>
+                      <td className="hidden py-2.5 pr-3 text-right tabular-nums sm:table-cell">{fmtVnd(payable(q))}</td>
                       <td className="hidden py-2.5 pr-3 text-ink-2 sm:table-cell">{fmtVnDateTime(q.requested_at, tz)}</td>
                       <td className={`py-2.5 text-right font-semibold tabular-nums ${h > late ? 'text-bad' : 'text-ink'}`}>
                         {fmtNum(h, 2)}

@@ -1,5 +1,5 @@
 // Demo workspace seed (only when the function runs with APP_ENV=demo).
-// Every record is synthetic and marked DEMO; nothing here comes from Go Media.
+// People, quotes and tasks are synthetic and marked DEMO. The price library uses the CEO's sample (see LIBRARY).
 import {
   addDays,
   addWorkingHours,
@@ -33,70 +33,41 @@ const PEOPLE = [
   { key: 'intern-d', name: 'Thực tập sinh D (mẫu)', role: 'staff' },
 ] as const;
 
-// Synthetic prices for demonstration only (not Go Media's price list). The first ten codes are used by the
-// baseline and pilot-period sample quotes below, so keep them stable.
-const LIBRARY = [
-  ['DEMO-SOC-01', 'Video TikTok ngắn (≤ 60s)', 'video', 'Social Media', 1_500_000],
-  ['DEMO-SOC-02', 'Bài đăng Facebook (thiết kế + caption)', 'bài', 'Social Media', 600_000],
-  ['DEMO-SOC-03', 'Kế hoạch nội dung tháng', 'tháng', 'Social Media', 2_000_000],
-  ['DEMO-INF-01', 'Booking micro-KOC', 'booking', 'Influencer', 3_500_000],
-  ['DEMO-ECO-01', 'Livestream bán hàng (2 giờ)', 'buổi', 'E-commerce', 4_000_000],
-  ['DEMO-ECO-02', 'Bộ banner gian hàng sàn TMĐT', 'bộ', 'E-commerce', 1_200_000],
-  ['DEMO-ECO-03', 'Tối ưu SEO trang sản phẩm', 'trang', 'E-commerce', 250_000],
-  ['DEMO-MED-01', 'Chụp ảnh sản phẩm (nửa ngày)', 'buổi', 'Media Production', 5_000_000],
-  ['DEMO-MED-02', 'Quay dựng video sản phẩm', 'video', 'Media Production', 2_500_000],
-  ['DEMO-PER-01', 'Phí quản lý quảng cáo', 'tháng', 'Performance', 3_000_000],
-  // Social Media
-  ['DEMO-SOC-04', 'Quản trị fanpage trọn gói', 'tháng', 'Social Media', 6_000_000],
-  ['DEMO-SOC-05', 'Bài đăng Instagram (ảnh + caption)', 'bài', 'Social Media', 500_000],
-  ['DEMO-SOC-06', 'Bài carousel 5–10 ảnh', 'bài', 'Social Media', 900_000],
-  ['DEMO-SOC-07', 'Thiết kế ảnh bìa + avatar fanpage', 'bộ', 'Social Media', 800_000],
-  ['DEMO-SOC-08', 'Trực bình luận và tin nhắn fanpage', 'tháng', 'Social Media', 3_000_000],
-  ['DEMO-SOC-09', 'Video Reels/Shorts dựng từ tư liệu khách', 'video', 'Social Media', 800_000],
-  ['DEMO-SOC-10', 'Báo cáo hiệu quả kênh mạng xã hội', 'tháng', 'Social Media', 1_000_000],
-  ['DEMO-SOC-11', 'Minigame / giveaway trên fanpage', 'chương trình', 'Social Media', 2_500_000],
-  // Influencer
-  ['DEMO-INF-02', 'Booking nano-KOC (dưới 10k follower)', 'booking', 'Influencer', 1_200_000],
-  ['DEMO-INF-03', 'Booking KOL tầm trung (100k–500k follower)', 'booking', 'Influencer', 15_000_000],
-  ['DEMO-INF-04', 'Video review sản phẩm của KOC', 'video', 'Influencer', 2_500_000],
-  ['DEMO-INF-05', 'Livestream cùng KOC', 'buổi', 'Influencer', 8_000_000],
-  ['DEMO-INF-06', 'Quản lý chiến dịch KOC (phí agency)', 'chiến dịch', 'Influencer', 5_000_000],
-  // E-commerce
-  ['DEMO-ECO-04', 'Thiết lập gian hàng Shopee', 'gian hàng', 'E-commerce', 3_000_000],
-  ['DEMO-ECO-05', 'Thiết lập gian hàng TikTok Shop', 'gian hàng', 'E-commerce', 3_000_000],
-  ['DEMO-ECO-06', 'Vận hành gian hàng sàn trọn gói', 'tháng', 'E-commerce', 8_000_000],
-  ['DEMO-ECO-07', 'Đăng sản phẩm lên sàn (ảnh + mô tả)', 'sản phẩm', 'E-commerce', 80_000],
-  ['DEMO-ECO-08', 'Thiết kế ảnh sản phẩm chuẩn sàn', 'ảnh', 'E-commerce', 60_000],
-  ['DEMO-ECO-09', 'Setup flash sale / chương trình khuyến mãi sàn', 'chương trình', 'E-commerce', 1_500_000],
-  ['DEMO-ECO-10', 'Quản lý Shopee Ads', 'tháng', 'E-commerce', 2_500_000],
-  // Media Production
-  ['DEMO-MED-03', 'Chụp ảnh sản phẩm (cả ngày)', 'buổi', 'Media Production', 9_000_000],
-  ['DEMO-MED-04', 'Chụp ảnh lookbook có người mẫu', 'buổi', 'Media Production', 7_000_000],
-  ['DEMO-MED-05', 'Thuê người mẫu (nửa ngày)', 'người', 'Media Production', 1_500_000],
-  ['DEMO-MED-06', 'Chụp ảnh món ăn / menu F&B', 'món', 'Media Production', 150_000],
-  ['DEMO-MED-07', 'Quay TVC ngắn (≤ 30s)', 'video', 'Media Production', 18_000_000],
-  ['DEMO-MED-08', 'Quay flycam', 'buổi', 'Media Production', 3_000_000],
-  ['DEMO-MED-09', 'Dựng lại video từ tư liệu khách', 'video', 'Media Production', 700_000],
-  ['DEMO-MED-10', 'Motion graphic (≤ 30s)', 'video', 'Media Production', 3_500_000],
-  // Performance
-  ['DEMO-PER-02', 'Setup tài khoản + pixel Facebook Ads', 'lần', 'Performance', 1_500_000],
-  ['DEMO-PER-03', 'Quản lý Google Ads (tìm kiếm)', 'tháng', 'Performance', 3_500_000],
-  ['DEMO-PER-04', 'Quản lý TikTok Ads', 'tháng', 'Performance', 3_000_000],
-  ['DEMO-PER-05', 'Bộ creative quảng cáo (5 mẫu)', 'bộ', 'Performance', 1_500_000],
-  ['DEMO-PER-06', 'Landing page chạy quảng cáo', 'trang', 'Performance', 4_000_000],
-  // Branding & Design
-  ['DEMO-BRD-01', 'Thiết kế logo (3 phương án)', 'bộ', 'Branding & Design', 5_000_000],
-  ['DEMO-BRD-02', 'Bộ nhận diện thương hiệu cơ bản', 'bộ', 'Branding & Design', 12_000_000],
-  ['DEMO-BRD-03', 'Thiết kế menu nhà hàng / quán', 'bộ', 'Branding & Design', 2_000_000],
-  ['DEMO-BRD-04', 'Thiết kế poster / standee', 'mẫu', 'Branding & Design', 600_000],
-  ['DEMO-BRD-05', 'Thiết kế bao bì sản phẩm', 'mẫu', 'Branding & Design', 4_000_000],
-  ['DEMO-BRD-06', 'Hồ sơ năng lực công ty (≤ 12 trang)', 'bộ', 'Branding & Design', 4_500_000],
-  // Website
-  ['DEMO-WEB-01', 'Website giới thiệu (≤ 5 trang)', 'website', 'Website', 12_000_000],
-  ['DEMO-WEB-02', 'Bài viết chuẩn SEO (≤ 1.000 chữ)', 'bài', 'Website', 400_000],
-  ['DEMO-WEB-03', 'Chăm sóc website trọn gói', 'tháng', 'Website', 2_000_000],
-  ['DEMO-WEB-04', 'Thiết lập Google Business Profile', 'lần', 'Website', 1_000_000],
-] as const;
+// Demo price library: the 23 items, prices and units of the CEO's "Go Quote AI" sample (Nov 2026), each traced
+// to the sample quote it came from (BG-xx). Still to be confirmed by the PM/CEO before it is used for real
+// (label A in reports). Kind 'pass_through' = money paid for the client (ads budgets): no discount, no band, no VAT.
+// Scope text is filled only where the CEO sample shows one. The baseline and pilot-period sample quotes below use
+// these codes, so keep them stable.
+type LibSeed = readonly [code: string, name: string, unit: string, group: string, price: number, kind: 'service' | 'pass_through', description: string | null];
+const G_EVENT = 'Sự kiện & sản xuất';
+const G_WEB = 'Website & SEO';
+const G_ADS = 'Quảng cáo';
+const G_CONTENT = 'Kênh nội dung & social';
+const LIBRARY: readonly LibSeed[] = [
+  ['DEMO-SK-01', 'Gói chụp hình sự kiện', 'gói', G_EVENT, 10_500_000, 'service', 'Chụp toàn bộ chương trình, bàn giao ảnh đã chỉnh màu'],
+  ['DEMO-SK-02', 'Gói quay sự kiện', 'gói', G_EVENT, 10_000_000, 'service', 'Quay đa góc, dựng clip tổng hợp'],
+  ['DEMO-SK-03', 'Gói flycam', 'gói', G_EVENT, 5_000_000, 'service', 'Quay toàn cảnh từ trên cao'],
+  ['DEMO-SK-04', 'Thuê camera', 'cam/ngày', G_EVENT, 2_700_000, 'service', null],
+  ['DEMO-SK-05', 'Thuê mic không dây', 'mic/ngày', G_EVENT, 450_000, 'service', null],
+  ['DEMO-SK-06', 'Camera operator', 'người/ngày', G_EVENT, 700_000, 'service', null],
+  ['DEMO-SK-07', 'AI concept photography', 'concept', G_EVENT, 3_000_000, 'service', null],
+  ['DEMO-WS-01', 'Thiết kế website WordPress (Professional)', 'trọn gói', G_WEB, 28_000_000, 'service', null],
+  ['DEMO-WS-02', 'Landing page', 'trang', G_WEB, 5_000_000, 'service', null],
+  ['DEMO-WS-03', 'Chăm sóc website và SEO (Growth)', 'tháng', G_WEB, 8_500_000, 'service', null],
+  ['DEMO-WS-04', 'SEO Google Maps', 'tháng', G_WEB, 9_500_000, 'service', null],
+  ['DEMO-WS-05', 'SEO website tổng thể (khoảng 170 bài)', 'tháng', G_WEB, 10_500_000, 'service', null],
+  ['DEMO-QC-01', 'Phí quản lý Meta Ads', 'tháng', G_ADS, 4_000_000, 'service', null],
+  ['DEMO-QC-02', 'Phí quản lý Yandex Ads', 'tháng', G_ADS, 4_500_000, 'service', null],
+  ['DEMO-QC-03', 'Phí quản lý Google Ads', 'tháng', G_ADS, 4_500_000, 'service', null],
+  ['DEMO-QC-04', 'Ngân sách Meta Ads (chi hộ)', 'tháng', G_ADS, 16_000_000, 'pass_through', null],
+  ['DEMO-QC-05', 'Ngân sách Yandex Ads (chi hộ)', 'tháng', G_ADS, 25_000_000, 'pass_through', null],
+  ['DEMO-QC-06', 'Ngân sách Google Ads (chi hộ)', 'tháng', G_ADS, 15_000_000, 'pass_through', null],
+  ['DEMO-KN-01', 'Quản trị fanpage và nội dung social', 'tháng', G_CONTENT, 10_000_000, 'service', null],
+  ['DEMO-KN-02', 'Sản xuất video TikTok', 'video', G_CONTENT, 3_000_000, 'service', null],
+  ['DEMO-KN-03', 'Setup kênh YouTube', 'gói', G_CONTENT, 7_000_000, 'service', null],
+  ['DEMO-KN-04', 'Vận hành kênh YouTube', 'tháng', G_CONTENT, 9_000_000, 'service', null],
+  ['DEMO-KN-05', 'Bài content Telegram', 'bài', G_CONTENT, 250_000, 'service', null],
+];
 
 /** 19 synthetic baseline quotes: 9 with a reference (avg 7.0 h, 2 late) and 10 recalculated (avg 10.15 h, 8 late). */
 const BASELINE_HOURS = [4, 5, 6, 6.5, 7, 7.5, 8, 9.5, 9.5, 6, 7.5, 9, 9.5, 10, 11, 11.5, 12, 12.5, 12.5];
@@ -160,8 +131,9 @@ export async function seedDemo(ctx: Ctx, user: Profile) {
   }
 
   // Library: reuse items that already exist with the same name and unit (e.g. added by the PM).
-  type Lib = { id: string; code: string | null; name: string; unit: string; service_group: string; unit_price: number };
-  const existing = must(await ctx.db.from('library_items').select('id, code, name, unit, service_group, unit_price'), 'load library') as Lib[];
+  type Lib = { id: string; code: string | null; name: string; unit: string; service_group: string; unit_price: number; kind: 'service' | 'pass_through'; description: string | null };
+  const LIB_SELECT = 'id, code, name, unit, service_group, unit_price, kind, description';
+  const existing = must(await ctx.db.from('library_items').select(LIB_SELECT), 'load library') as Lib[];
   const key = (name: string, unit: string) => `${name.trim().toLowerCase()}|${unit.trim().toLowerCase()}`;
   const have = new Map(existing.map((l) => [key(l.name, l.unit), l]));
   const missing = LIBRARY.filter(([, name, unit]) => !have.has(key(name, unit)));
@@ -169,8 +141,8 @@ export async function seedDemo(ctx: Ctx, user: Profile) {
     ? (must(
         await ctx.db
           .from('library_items')
-          .insert(missing.map(([code, name, unit, group, price]) => ({ code, name, unit, service_group: group, unit_price: price })))
-          .select('id, code, name, unit, service_group, unit_price'),
+          .insert(missing.map(([code, name, unit, group, price, kind, description]) => ({ code, name, unit, service_group: group, unit_price: price, kind, description })))
+          .select(LIB_SELECT),
         'insert library',
       ) as Lib[])
     : [];
@@ -188,10 +160,11 @@ export async function seedDemo(ctx: Ctx, user: Profile) {
     while (isoWeekday(day.year, day.month, day.day) > 5) day = addDays(day.year, day.month, day.day, 1);
     const requested = at(cal, day, i % 2 ? '09:00' : '14:00');
     const sent = addWorkingHours(requested, h, cal).getTime();
-    const scope = i % 3 === 0 ? ['DEMO-SOC-01', 'DEMO-SOC-02', 'DEMO-SOC-03'] : i % 3 === 1 ? ['DEMO-INF-01', 'DEMO-SOC-01'] : ['DEMO-ECO-01', 'DEMO-ECO-02', 'DEMO-PER-01'];
+    const scope = i % 3 === 0 ? ['DEMO-KN-02', 'DEMO-KN-05', 'DEMO-KN-01'] : i % 3 === 1 ? ['DEMO-SK-04', 'DEMO-SK-06'] : ['DEMO-QC-01', 'DEMO-QC-04', 'DEMO-WS-04'];
     const lines = scope.map((code, k) => ({ item: item(code), qty: k === 0 ? 6 + (i % 7) : 2 + (i % 3) }));
     const discount = [0, 5, 8, 10][i % 4];
-    const totals = quoteTotals(lines.map((l) => ({ qty: l.qty, unitPrice: l.item.unit_price })), discount);
+    // History carries no VAT (as in the real import files).
+    const totals = quoteTotals(lines.map((l) => ({ qty: l.qty, unitPrice: l.item.unit_price, kind: l.item.kind })), discount);
     return {
       code: `DEMO-H-${String(i + 1).padStart(2, '0')}`,
       client: `Khách mẫu ${String(i + 1).padStart(2, '0')}`,
@@ -201,7 +174,7 @@ export async function seedDemo(ctx: Ctx, user: Profile) {
       discount_pct: discount,
       subtotal: totals.subtotal,
       total: totals.total,
-      lines: lines.map((l) => ({ library_item_id: l.item.id, item_name: l.item.name, unit: l.item.unit, qty: l.qty, unit_price: l.item.unit_price, library_price: l.item.unit_price })),
+      lines: lines.map((l) => ({ library_item_id: l.item.id, item_name: l.item.name, unit: l.item.unit, qty: l.qty, unit_price: l.item.unit_price, library_price: l.item.unit_price, kind: l.item.kind })),
     };
   });
   must(await ctx.db.rpc('ops_import_quotes', { p: { actor: who['acc-a'], quotes: baseline } }), 'import baseline');
@@ -209,11 +182,11 @@ export async function seedDemo(ctx: Ctx, user: Profile) {
   // Pilot-period quotes made in the app (last week and this week)
   const { thisMon, lastMon } = weeks(now, cal);
   const pilotQuotes = [
-    { by: 'acc-a', day: lastMon, at: '09:00', hours: 2.5, lines: [['DEMO-SOC-01', 12, 0], ['DEMO-SOC-02', 8, 0], ['DEMO-SOC-03', 3, 0]], disc: 5 },
-    { by: 'acc-b', day: addDays(lastMon.year, lastMon.month, lastMon.day, 1), at: '10:30', hours: 3, lines: [['DEMO-INF-01', 4, 0], ['DEMO-SOC-01', 6, 0]], disc: 0 },
-    { by: 'acc-a', day: addDays(lastMon.year, lastMon.month, lastMon.day, 2), at: '14:00', hours: 6.5, lines: [['DEMO-ECO-01', 4, 0], ['DEMO-ECO-02', 2, 0]], disc: 15 },
-    { by: 'acc-b', day: addDays(lastMon.year, lastMon.month, lastMon.day, 3), at: '08:30', hours: 9, lines: [['DEMO-MED-01', 2, 0.25], ['DEMO-MED-02', 3, 0]], disc: 5 },
-    { by: 'acc-a', day: thisMon, at: '09:30', hours: 1.5, lines: [['DEMO-SOC-01', 10, 0], ['DEMO-SOC-03', 3, 0]], disc: 8 },
+    { by: 'acc-a', day: lastMon, at: '09:00', hours: 2.5, lines: [['DEMO-KN-02', 12, 0], ['DEMO-KN-05', 8, 0], ['DEMO-KN-01', 3, 0]], disc: 5 },
+    { by: 'acc-b', day: addDays(lastMon.year, lastMon.month, lastMon.day, 1), at: '10:30', hours: 3, lines: [['DEMO-SK-04', 4, 0], ['DEMO-SK-06', 6, 0]], disc: 0 },
+    { by: 'acc-a', day: addDays(lastMon.year, lastMon.month, lastMon.day, 2), at: '14:00', hours: 6.5, lines: [['DEMO-QC-01', 4, 0], ['DEMO-QC-04', 2, 0]], disc: 15 },
+    { by: 'acc-b', day: addDays(lastMon.year, lastMon.month, lastMon.day, 3), at: '08:30', hours: 9, lines: [['DEMO-SK-01', 2, 0.25], ['DEMO-SK-02', 3, 0]], disc: 5 },
+    { by: 'acc-a', day: thisMon, at: '09:30', hours: 1.5, lines: [['DEMO-KN-02', 10, 0], ['DEMO-KN-01', 3, 0]], disc: 8 },
   ];
   for (const [i, q] of pilotQuotes.entries()) {
     const requested = at(cal, q.day, q.at);
@@ -223,8 +196,8 @@ export async function seedDemo(ctx: Ctx, user: Profile) {
       const it = item(code as string);
       return { it, qty: qty as number, price: Math.round(it.unit_price * (1 + (dev as number))) };
     });
-    const band = bandCheck(lines.map((l) => ({ name: l.it.name, qty: l.qty, unitPrice: l.price, libraryPrice: l.it.unit_price })), q.disc, rules);
-    const totals = quoteTotals(lines.map((l) => ({ qty: l.qty, unitPrice: l.price })), q.disc);
+    const band = bandCheck(lines.map((l) => ({ name: l.it.name, qty: l.qty, unitPrice: l.price, libraryPrice: l.it.unit_price, passThrough: l.it.kind === 'pass_through' })), q.disc, rules);
+    const totals = quoteTotals(lines.map((l) => ({ qty: l.qty, unitPrice: l.price, kind: l.it.kind })), q.disc, { pct: s.vat_pct, onPassThrough: s.vat_on_pass_through });
     const quote = must(
       await ctx.db
         .from('quotes')
@@ -238,6 +211,9 @@ export async function seedDemo(ctx: Ctx, user: Profile) {
           discount_pct: q.disc,
           subtotal: totals.subtotal,
           total: totals.total,
+          vat_pct: s.vat_pct,
+          vat_amount: totals.vatAmount,
+          grand_total: totals.grandTotal,
           band_result: band.level,
           approver: band.level === 'send_now' ? null : band.level,
           created_by: who[q.by],
@@ -257,6 +233,9 @@ export async function seedDemo(ctx: Ctx, user: Profile) {
         unit_price: l.price,
         library_price: l.it.unit_price,
         override_reason: l.price !== l.it.unit_price ? 'Phạm vi đặc thù (mẫu)' : null,
+        section: l.it.service_group,
+        description: l.it.description,
+        kind: l.it.kind,
       })),
     );
     if (band.level !== 'send_now') {

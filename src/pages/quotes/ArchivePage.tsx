@@ -5,6 +5,7 @@ import { Badge, Card, EmptyState, ErrorBox, Input, Loading, PageHeader, Select, 
 import { fmtVnd, fmtVnDate } from '@/lib/format';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
+import { payable } from './data';
 
 interface ArchiveRow {
   id: string;
@@ -14,6 +15,7 @@ interface ArchiveRow {
   requested_at: string;
   sent_at: string;
   total: number;
+  grand_total: number;
   discount_pct: number;
   source: 'app' | 'import';
   quote_lines: { item_name: string; qty: number; library_item_id: string | null }[];
@@ -27,12 +29,12 @@ export function ArchivePage() {
     const rows = check(
       await supabase
         .from('quotes')
-        .select('id, code, client, service_group, requested_at, sent_at, total, discount_pct, source, quote_lines(item_name, qty, library_item_id)')
+        .select('id, code, client, service_group, requested_at, sent_at, total, grand_total, discount_pct, source, quote_lines(item_name, qty, library_item_id)')
         .eq('status', 'sent')
         .order('sent_at', { ascending: false })
         .limit(1000),
     ) as ArchiveRow[];
-    return rows.map((r) => ({ ...r, total: Number(r.total) }));
+    return rows.map((r) => ({ ...r, total: Number(r.total), grand_total: Number(r.grand_total ?? 0) }));
   }, []);
 
   const groups = useMemo(() => [...new Set((data ?? []).map((r) => r.service_group).filter(Boolean) as string[])].sort(), [data]);
@@ -83,7 +85,7 @@ export function ArchivePage() {
                   </div>
                 </div>
                 <div className="text-right text-[14px]">
-                  <div className="font-semibold">{fmtVnd(r.total)}</div>
+                  <div className="font-semibold">{fmtVnd(payable(r))}</div>
                   <div className="text-ink-3">
                     {fmtVnDate(r.sent_at, tz)} · {fmtNum(workingHoursBetween(r.requested_at, r.sent_at, calendar), 1)} giờ
                   </div>

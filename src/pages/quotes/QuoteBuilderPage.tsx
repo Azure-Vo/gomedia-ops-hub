@@ -3,13 +3,17 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   BAND_LABEL,
   copyLinesWithTodayPrices,
+  DEFAULT_SECTION_TITLE,
   fmtNum,
+  groupBySection,
   isDirectlyEditable,
+  LineKind,
   linesMissingOverrideReason,
   PublicBand,
   quoteTotals,
   rankSimilar,
   ROLE_LABEL,
+  toRoman,
   validateQuote,
   workingHoursBetween,
 } from '@/domain';
@@ -19,9 +23,9 @@ import { fmtVnd, fmtVnDate, fmtVnDateTime, fmtVnLong, fromLocalInput, toLocalInp
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
-import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadPeople, normLine, normQuote, personName, QUOTE_COLS, QuoteRow } from './data';
+import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadPeople, loadTerms, normLine, normQuote, personName, QUOTE_COLS, QuoteRow, QuoteTerm } from './data';
 import { LibraryPicker } from './LibraryPicker';
-import { BandReasons, downloadQuotePdf, PriceTag, QuotePdf, StatusBadge } from './parts';
+import { BandReasons, companyFromSettings, downloadQuotePdf, PriceTag, QuotePdf, StatusBadge } from './parts';
 
 interface EditLine {
   key: string;
@@ -32,15 +36,27 @@ interface EditLine {
   qty: number;
   unit_price: number;
   override_reason: string | null;
+  section: string;
+  description: string | null;
+  kind: LineKind;
 }
 
 interface Header {
   client: string;
+  contact: string;
+  project: string;
+  venue: string;
   service_group: string | null;
   requested_at: number;
   discount_pct: number;
+  vat_pct: number;
+  terms: string[];
   copied_from: string | null;
 }
+
+/** Picker target meaning "put the item in a section named after its service group". */
+const AUTO_SECTION = '__auto__';
+const sectionOf = (l: { section?: string | null }) => (l.section ?? '').trim() || DEFAULT_SECTION_TITLE;
 
 interface ArchiveEntry {
   id: string;
@@ -49,7 +65,7 @@ interface ArchiveEntry {
   service_group: string | null;
   sent_at: string;
   total: number;
-  quote_lines: { library_item_id: string | null; item_name: string; qty: number }[];
+  quote_lines: { library_item_id: string | null; item_name: string; qty: number; section: string | null; description: string | null }[];
 }
 
 const newKey = () => Math.random().toString(36).slice(2);
@@ -83,7 +99,12 @@ export function QuoteBuilderPage() {
   const [bandError, setBandError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   const [busy, setBusy] = useState<string | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [extraSections, setExtraSections] = useState<string[]>([]);
+  const [newSection, setNewSection] = useState<string | null>(null);
+  const [customTerm, setCustomTerm] = useState('');
+  const [termLib, setTermLib] = useState<QuoteTerm[]>([]);
+  const [preview, setPreview] = useState(false);
   const [decision, setDecision] = useState<{ kind: 'approve' | 'changes'; comment: string } | null>(null);
   const [confirmReopen, setConfirmReopen] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -97,20 +118,45 @@ export function QuoteBuilderPage() {
 
   const load = useCallback(async () => {
     try {
-      const [q, ls, ap, lib, ppl, arc] = await Promise.all([
+      const [q, ls, ap, lib, ppl, arc, terms] = await Promise.all([
         supabase.from('quotes').select(QUOTE_COLS).eq('id', id).maybeSingle(),
         supabase.from('quote_lines').select(LINE_COLS).eq('quote_id', id).order('position'),
         supabase.from('approvals').select('id, level, approver_id, decision, comment, decided_at').eq('quote_id', id).order('decided_at', { ascending: false }),
         loadLibrary(true),
         loadPeople(),
-        supabase.from('quotes').select('id, code, client, service_group, sent_at, total, quote_lines(library_item_id, item_name, qty)').eq('status', 'sent').neq('id', id).order('sent_at', { ascending: false }).limit(400),
+        supabase.from('quotes').select('id, code, client, service_group, sent_at, total, quote_lines(library_item_id, item_name, qty, section, description)').eq('status', 'sent').neq('id', id).order('sent_at', { ascending: false }).limit(400),
+        loadTerms(true),
       ]);
       const qr = check(q) as QuoteRow | null;
       if (!qr) throw new Error('Không tìm thấy báo giá, hoặc bạn không có quyền xem.');
       const quoteRow = normQuote(qr);
       const lineRows = (check(ls) as LineRow[]).map(normLine);
-      const edit = lineRows.map((l) => ({ key: newKey(), id: l.id, library_item_id: l.library_item_id, item_name: l.item_name, unit: l.unit, qty: l.qty, unit_price: l.unit_price, override_reason: l.override_reason }));
-      const h: Header = { client: quoteRow.client, service_group: quoteRow.service_group, requested_at: Date.parse(quoteRow.requested_at), discount_pct: quoteRow.discount_pct, copied_from: quoteRow.copied_from };
+      const edit: EditLine[] = lineRows.map((l) => ({
+        key: newKey(),
+        id: l.id,
+        library_item_id: l.library_item_id,
+        item_name: l.item_name,
+        unit: l.unit,
+        qty: l.qty,
+        unit_price: l.unit_price,
+        override_reason: l.override_reason,
+        section: l.section,
+        description: l.description,
+        kind: l.kind,
+      }));
+      const h: Header = {
+        client: quoteRow.client,
+        contact: quoteRow.contact,
+        project: quoteRow.project,
+        venue: quoteRow.venue,
+        service_group: quoteRow.service_group,
+        requested_at: Date.parse(quoteRow.requested_at),
+        discount_pct: quoteRow.discount_pct,
+        vat_pct: quoteRow.vat_pct,
+        terms: quoteRow.terms,
+        copied_from: quoteRow.copied_from,
+      };
+      setTermLib(terms);
       setQuote(quoteRow);
       setHeader(h);
       setLines(edit);
@@ -136,6 +182,10 @@ export function QuoteBuilderPage() {
   }, []);
 
   const libMap = useMemo(() => new Map(library.map((i) => [i.id, i])), [library]);
+  const libForCopy = useMemo(
+    () => new Map(library.map((i) => [i.id, { id: i.id, name: i.name, unit: i.unit, unitPrice: i.unit_price, active: i.active, kind: i.kind, description: i.description }])),
+    [library],
+  );
   const isOwner = !!quote && quote.created_by === me.id && me.role === 'account';
   const editable = !!quote && isOwner && isDirectlyEditable(quote.status);
   const libPrice = (l: EditLine) => (l.library_item_id ? libMap.get(l.library_item_id)?.unit_price ?? null : null);
@@ -155,11 +205,31 @@ export function QuoteBuilderPage() {
     const run = (async () => {
       setSaveState('saving');
       try {
-        const totals = quoteTotals(ls.map((l) => ({ qty: l.qty, unitPrice: l.unit_price })), h.discount_pct);
+        const totals = quoteTotals(
+          ls.map((l) => ({ qty: l.qty, unitPrice: l.unit_price, kind: l.kind })),
+          h.discount_pct,
+          { pct: h.vat_pct, onPassThrough: !!settings?.vat_on_pass_through },
+        );
         const upd = check(
           await supabase
             .from('quotes')
-            .update({ client: h.client, service_group: h.service_group, requested_at: new Date(h.requested_at).toISOString(), discount_pct: h.discount_pct, subtotal: totals.subtotal, total: totals.total, status: 'draft', copied_from: h.copied_from })
+            .update({
+              client: h.client,
+              contact: h.contact,
+              project: h.project,
+              venue: h.venue,
+              service_group: h.service_group,
+              requested_at: new Date(h.requested_at).toISOString(),
+              discount_pct: h.discount_pct,
+              vat_pct: h.vat_pct,
+              terms: h.terms,
+              subtotal: totals.subtotal,
+              total: totals.total,
+              vat_amount: totals.vatAmount,
+              grand_total: totals.grandTotal,
+              status: 'draft',
+              copied_from: h.copied_from,
+            })
             .eq('id', quote.id)
             .select(QUOTE_COLS),
         ) as QuoteRow[];
@@ -170,13 +240,31 @@ export function QuoteBuilderPage() {
         if (removed.length) check(await supabase.from('quote_lines').delete().in('id', removed));
         const assigned = new Map<string, string>();
         for (const [i, l] of ls.entries()) {
-          const row = { position: i + 1, qty: l.qty, unit_price: l.unit_price, library_price: libPrice(l), override_reason: l.override_reason?.trim() || null };
+          const row = {
+            position: i + 1,
+            qty: l.qty,
+            unit_price: l.unit_price,
+            library_price: libPrice(l),
+            override_reason: l.override_reason?.trim() || null,
+            section: sectionOf(l),
+            description: l.description?.trim() || null,
+          };
           if (!l.id) {
-            const ins = check(await supabase.from('quote_lines').insert({ ...row, quote_id: quote.id, library_item_id: l.library_item_id, item_name: l.item_name, unit: l.unit }).select('id').single()) as { id: string };
+            const ins = check(
+              await supabase.from('quote_lines').insert({ ...row, quote_id: quote.id, library_item_id: l.library_item_id, item_name: l.item_name, unit: l.unit, kind: l.kind }).select('id').single(),
+            ) as { id: string };
             assigned.set(l.key, ins.id);
           } else {
             const p = prev.get(l.id);
-            if (!p || p.qty !== l.qty || p.unit_price !== l.unit_price || (p.override_reason ?? '') !== (l.override_reason ?? '') || ls.indexOf(l) !== [...prev.values()].indexOf(p)) {
+            if (
+              !p ||
+              p.qty !== l.qty ||
+              p.unit_price !== l.unit_price ||
+              (p.override_reason ?? '') !== (l.override_reason ?? '') ||
+              sectionOf(p) !== sectionOf(l) ||
+              (p.description ?? '') !== (l.description ?? '') ||
+              ls.indexOf(l) !== [...prev.values()].indexOf(p)
+            ) {
               check(await supabase.from('quote_lines').update(row).eq('id', l.id));
             }
           }
@@ -197,7 +285,7 @@ export function QuoteBuilderPage() {
     await run;
     inflight.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quote, libMap, toast]);
+  }, [quote, libMap, toast, settings?.vat_on_pass_through]);
 
   useEffect(() => {
     if (!editable || !header) return;
@@ -218,7 +306,7 @@ export function QuoteBuilderPage() {
   }
 
   // ------------------------------------------------------------ band check ----
-  const bandInput = JSON.stringify({ l: lines.map((l) => [l.library_item_id, l.qty, l.unit_price]), d: header?.discount_pct });
+  const bandInput = JSON.stringify({ l: lines.map((l) => [l.library_item_id, l.qty, l.unit_price, l.kind]), d: header?.discount_pct });
   useEffect(() => {
     if (!quote || !header || !lines.length || !['draft', 'changes_requested'].includes(quote.status)) {
       setBand(null);
@@ -229,7 +317,7 @@ export function QuoteBuilderPage() {
       setBandBusy(true);
       try {
         const r = await callApi<{ band: PublicBand }>('quote.band', {
-          lines: lines.map((l) => ({ library_item_id: l.library_item_id, item_name: l.item_name, qty: l.qty, unit_price: l.unit_price })),
+          lines: lines.map((l) => ({ library_item_id: l.library_item_id, item_name: l.item_name, qty: l.qty, unit_price: l.unit_price, kind: l.kind })),
           discount_pct: header.discount_pct,
         });
         setBand(r.band);
@@ -247,12 +335,13 @@ export function QuoteBuilderPage() {
   if (loadError) return <ErrorBox error={loadError} />;
   if (!quote || !header) return <Loading />;
 
-  const totals = quoteTotals(lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price })), header.discount_pct);
+  const vatOnPassThrough = !!settings?.vat_on_pass_through;
+  const totals = quoteTotals(lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price, kind: l.kind })), header.discount_pct, { pct: header.vat_pct, onPassThrough: vatOnPassThrough });
   const elapsed = workingHoursBetween(header.requested_at, quote.sent_at ? Date.parse(quote.sent_at) : now, calendar);
   const groups = [...new Set(library.map((i) => i.service_group))].sort();
-  const missing = linesMissingOverrideReason(lines.map((l) => ({ unitPrice: l.unit_price, libraryPrice: libPrice(l), overrideReason: l.override_reason })));
+  const missing = linesMissingOverrideReason(lines.map((l) => ({ unitPrice: l.unit_price, libraryPrice: libPrice(l), overrideReason: l.override_reason, kind: l.kind })));
   const problems = [
-    ...validateQuote({ client: header.client, requestedAt: header.requested_at, now: Date.now(), lines: lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price })), discountPct: header.discount_pct }),
+    ...validateQuote({ client: header.client, requestedAt: header.requested_at, now: Date.now(), lines: lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price })), discountPct: header.discount_pct, vatPct: header.vat_pct }),
     ...(missing.length ? [`Ghi lý do cho đơn giá khác thư viện ở dòng ${missing.map((i) => i + 1).join(', ')}.`] : []),
   ];
   const lastDecision = approvals[0];
@@ -262,23 +351,112 @@ export function QuoteBuilderPage() {
   const setH = (patch: Partial<Header>) => setHeader((h) => (h ? { ...h, ...patch } : h));
   const setLine = (key: string, patch: Partial<EditLine>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
 
-  function addItem(item: LibraryItem) {
-    // Picking an item that is already on the quote adds 1 to its quantity instead of a duplicate line.
+  // ------------------------------------------------------------ sections ----
+  const grouped = groupBySection(lines.map((l) => ({ ...l, unitPrice: l.unit_price })));
+  const sectionTitles = [...grouped.map((g) => g.title), ...extraSections.filter((t) => !grouped.some((g) => g.title === t))];
+
+  function addItem(item: LibraryItem, target: string) {
+    const section = target === AUTO_SECTION ? item.service_group : target;
+    // Picking an item already in this section adds 1 to its quantity instead of a duplicate line.
     setLines((ls) => {
-      const at = ls.findIndex((l) => l.library_item_id === item.id);
+      const at = ls.findIndex((l) => l.library_item_id === item.id && sectionOf(l) === section);
       if (at >= 0) return ls.map((l, i) => (i === at ? { ...l, qty: l.qty + 1 } : l));
-      return [...ls, { key: newKey(), library_item_id: item.id, item_name: item.name, unit: item.unit, qty: 1, unit_price: item.unit_price, override_reason: null }];
+      const line: EditLine = {
+        key: newKey(),
+        library_item_id: item.id,
+        item_name: item.name,
+        unit: item.unit,
+        qty: 1,
+        unit_price: item.unit_price,
+        override_reason: null,
+        section,
+        description: item.description,
+        kind: item.kind,
+      };
+      const last = ls.map((l) => sectionOf(l)).lastIndexOf(section);
+      return last < 0 ? [...ls, line] : [...ls.slice(0, last + 1), line, ...ls.slice(last + 1)];
     });
+    if (target === AUTO_SECTION) setPickerFor(section);
     if (!header?.service_group) setH({ service_group: item.service_group });
+  }
+
+  function moveLine(key: string, to: string) {
+    setLines((ls) => {
+      const line = ls.find((l) => l.key === key);
+      if (!line) return ls;
+      const rest = ls.filter((l) => l.key !== key);
+      const moved = { ...line, section: to };
+      const last = rest.map((l) => sectionOf(l)).lastIndexOf(to);
+      return last < 0 ? [...rest, moved] : [...rest.slice(0, last + 1), moved, ...rest.slice(last + 1)];
+    });
+  }
+
+  function renameSection(from: string, to: string) {
+    const name = to.trim();
+    if (!name || name === from) return;
+    if (sectionTitles.includes(name)) {
+      toast(`Đã có phần "${name}".`, 'bad');
+      return;
+    }
+    setLines((ls) => ls.map((l) => (sectionOf(l) === from ? { ...l, section: name } : l)));
+    setExtraSections((xs) => xs.map((x) => (x === from ? name : x)));
+    if (pickerFor === from) setPickerFor(name);
+  }
+
+  function removeSection(title: string) {
+    const n = lines.filter((l) => sectionOf(l) === title).length;
+    if (n && !window.confirm(`Xoá phần "${title}" cùng ${n} hạng mục trong đó?`)) return;
+    setLines((ls) => ls.filter((l) => sectionOf(l) !== title));
+    setExtraSections((xs) => xs.filter((x) => x !== title));
+    if (pickerFor === title) setPickerFor(null);
+  }
+
+  function addSection() {
+    const name = (newSection ?? '').trim();
+    if (!name) return;
+    if (sectionTitles.includes(name)) {
+      toast(`Đã có phần "${name}".`, 'bad');
+      return;
+    }
+    setExtraSections((xs) => [...xs, name]);
+    setNewSection(null);
+    setPickerFor(name);
+  }
+
+  // --------------------------------------------------------------- terms ----
+  function toggleTerm(text: string, on: boolean) {
+    if (!header) return;
+    const chosen = new Set(header.terms);
+    if (on) chosen.add(text);
+    else chosen.delete(text);
+    // Library terms keep the PM's order; custom terms follow in the order they were added.
+    const lib = termLib.filter((t) => chosen.has(t.text)).map((t) => t.text);
+    const custom = header.terms.filter((t) => chosen.has(t) && !lib.includes(t));
+    if (on && !lib.includes(text) && !custom.includes(text)) custom.push(text);
+    setH({ terms: [...lib, ...custom] });
   }
 
   function copyFrom(src: ArchiveEntry) {
     if (lines.length && !window.confirm(`Thay ${lines.length} dòng hiện tại bằng các hạng mục của ${src.code}?`)) return;
     const res = copyLinesWithTodayPrices(
-      src.quote_lines.map((l) => ({ libraryItemId: l.library_item_id, itemName: l.item_name, qty: Number(l.qty) })),
-      new Map(library.map((i) => [i.id, { id: i.id, name: i.name, unit: i.unit, unitPrice: i.unit_price, active: i.active }])),
+      src.quote_lines.map((l) => ({ libraryItemId: l.library_item_id, itemName: l.item_name, qty: Number(l.qty), section: l.section, description: l.description })),
+      libForCopy,
     );
-    setLines(res.lines.map((l) => ({ key: newKey(), library_item_id: l.libraryItemId, item_name: l.itemName, unit: l.unit, qty: l.qty, unit_price: l.unitPrice, override_reason: null })));
+    setLines(
+      res.lines.map((l) => ({
+        key: newKey(),
+        library_item_id: l.libraryItemId,
+        item_name: l.itemName,
+        unit: l.unit,
+        qty: l.qty,
+        unit_price: l.unitPrice,
+        override_reason: null,
+        section: l.section || libMap.get(l.libraryItemId)?.service_group || DEFAULT_SECTION_TITLE,
+        description: l.description,
+        kind: l.kind,
+      })),
+    );
+    setExtraSections([]);
     setH({ copied_from: src.id, service_group: header?.service_group ?? src.service_group });
     toast(`Đã chép ${res.lines.length} hạng mục từ ${src.code}, giá lấy theo thư viện hôm nay${res.skipped.length ? `. Bỏ qua: ${res.skipped.join(', ')} (không còn trong thư viện)` : ''}`);
   }
@@ -341,15 +519,34 @@ export function QuoteBuilderPage() {
 
   const duplicate = () =>
     run('dup', async () => {
-      const q = check(await supabase.from('quotes').insert({ client: quote.client, service_group: quote.service_group, requested_at: new Date().toISOString(), copied_from: quote.id }).select('id').single()) as { id: string };
+      // VAT comes from today's setting (database default); client block and terms are copied.
+      const q = check(
+        await supabase
+          .from('quotes')
+          .insert({ client: quote.client, contact: quote.contact, project: quote.project, venue: quote.venue, terms: quote.terms, service_group: quote.service_group, requested_at: new Date().toISOString(), copied_from: quote.id })
+          .select('id')
+          .single(),
+      ) as { id: string };
       const res = copyLinesWithTodayPrices(
-        lines.map((l) => ({ libraryItemId: l.library_item_id, itemName: l.item_name, qty: l.qty })),
-        new Map(library.map((i) => [i.id, { id: i.id, name: i.name, unit: i.unit, unitPrice: i.unit_price, active: i.active }])),
+        lines.map((l) => ({ libraryItemId: l.library_item_id, itemName: l.item_name, qty: l.qty, section: sectionOf(l), description: l.description })),
+        libForCopy,
       );
       if (res.lines.length) {
         check(
           await supabase.from('quote_lines').insert(
-            res.lines.map((l, i) => ({ quote_id: q.id, position: i + 1, library_item_id: l.libraryItemId, item_name: l.itemName, unit: l.unit, qty: l.qty, unit_price: l.unitPrice, library_price: l.libraryPrice })),
+            res.lines.map((l, i) => ({
+              quote_id: q.id,
+              position: i + 1,
+              library_item_id: l.libraryItemId,
+              item_name: l.itemName,
+              unit: l.unit,
+              qty: l.qty,
+              unit_price: l.unitPrice,
+              library_price: l.libraryPrice,
+              section: l.section ?? '',
+              description: l.description,
+              kind: l.kind,
+            })),
           ),
         );
       }
@@ -364,7 +561,25 @@ export function QuoteBuilderPage() {
     archive.map((a) => ({ id: a.id, serviceGroup: a.service_group, itemIds: a.quote_lines.map((l) => l.library_item_id).filter((x): x is string => !!x), sentAt: Date.parse(a.sent_at) })),
   ).map((r) => ({ ...r, q: archive.find((a) => a.id === r.id)! }));
 
-  const pdfLines: LineRow[] = lines.map((l, i) => ({ id: l.id ?? l.key, quote_id: quote.id, position: i + 1, library_item_id: l.library_item_id, item_name: l.item_name, unit: l.unit, qty: l.qty, unit_price: l.unit_price, library_price: libPrice(l), override_reason: l.override_reason }));
+  const pdfLines: LineRow[] = lines.map((l, i) => ({
+    id: l.id ?? l.key,
+    quote_id: quote.id,
+    position: i + 1,
+    library_item_id: l.library_item_id,
+    item_name: l.item_name,
+    unit: l.unit,
+    qty: l.qty,
+    unit_price: l.unit_price,
+    library_price: libPrice(l),
+    override_reason: l.override_reason,
+    section: sectionOf(l),
+    description: l.description,
+    kind: l.kind,
+  }));
+  const pdfQuote: QuoteRow = { ...quote, ...header, requested_at: quote.requested_at };
+  const company = companyFromSettings(settings);
+  const libraryTerms = termLib.filter((t) => t.active || header.terms.includes(t.text));
+  const customTerms = header.terms.filter((t) => !termLib.some((x) => x.text === t));
 
   return (
     <div className="flex flex-col gap-4">
@@ -398,8 +613,11 @@ export function QuoteBuilderPage() {
 
       <div className="flex flex-wrap items-start gap-4">
         <section aria-label="Báo giá" className="flex min-w-0 flex-[999_1_640px] flex-col gap-4 rounded-2xl border border-line bg-white p-5">
-          <div className="grid gap-3 md:grid-cols-3">
-            <Field label="Khách hàng">{(fid) => <Input id={fid} value={header.client} disabled={!editable} onChange={(e) => setH({ client: e.target.value })} placeholder="Tên khách / thương hiệu" />}</Field>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <Field label="Kính gửi (khách hàng)">{(fid) => <Input id={fid} value={header.client} disabled={!editable} onChange={(e) => setH({ client: e.target.value })} placeholder="Tên khách / thương hiệu" />}</Field>
+            <Field label="Người liên hệ">{(fid) => <Input id={fid} value={header.contact} disabled={!editable} onChange={(e) => setH({ contact: e.target.value })} placeholder="Họ tên, SĐT" />}</Field>
+            <Field label="Dự án">{(fid) => <Input id={fid} value={header.project} disabled={!editable} onChange={(e) => setH({ project: e.target.value })} placeholder="VD: Lễ khai giảng 2026" />}</Field>
+            <Field label="Địa điểm">{(fid) => <Input id={fid} value={header.venue} disabled={!editable} onChange={(e) => setH({ venue: e.target.value })} placeholder="VD: Khách sạn 5 sao, Đà Nẵng" />}</Field>
             <Field label="Khách gửi yêu cầu lúc" hint={`Mốc bắt đầu tính thời gian báo giá · đang chọn ${fmtVnLong(header.requested_at, tz)}`}>
               {(fid) => (
                 <Input
@@ -429,10 +647,11 @@ export function QuoteBuilderPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-separate border-spacing-0 text-[15px]">
+            <table className="w-full min-w-[760px] border-separate border-spacing-0 text-[15px]">
               <thead>
                 <tr className="whitespace-nowrap bg-ink text-left text-sm font-semibold text-white">
-                  <th className="rounded-tl-[10px] px-3 py-3">Hạng mục</th>
+                  <th className="w-12 rounded-tl-[10px] px-3 py-3 text-center">STT</th>
+                  <th className="min-w-[280px] px-3 py-3">Hạng mục / phạm vi</th>
                   <th className="px-3 py-3">Đơn vị</th>
                   <th className="w-24 px-3 py-3 text-center">SL</th>
                   <th className="px-3 py-3 text-right">Đơn giá (đ)</th>
@@ -442,93 +661,211 @@ export function QuoteBuilderPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody>
-                {!lines.length && (
+              {!sectionTitles.length && (
+                <tbody>
                   <tr>
-                    <td colSpan={6} className="border-b border-line-soft px-3 py-6 text-ink-3">
-                      Chưa có hạng mục. Thêm từ Thư viện giá, hoặc chép từ một báo giá tương tự bên phải.
+                    <td colSpan={7} className="border-b border-line-soft px-3 py-6 text-ink-3">
+                      Chưa có hạng mục. Thêm từ Thư viện giá (mỗi nhóm dịch vụ thành một phần), hoặc chép từ một báo giá tương tự bên phải.
+                      {editable && (
+                        <div className="mt-3">
+                          <Button variant="accent" icon="plus" onClick={() => setPickerFor(pickerFor === AUTO_SECTION ? null : AUTO_SECTION)} aria-expanded={pickerFor === AUTO_SECTION}>
+                            Thêm hạng mục từ Thư viện giá
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
-                )}
-                {lines.map((l) => {
-                  const lp = libPrice(l);
-                  const custom = lp !== null && l.unit_price !== lp;
-                  return (
-                    <tr key={l.key} className="align-top">
-                      <td className="border-b border-line-soft px-3 py-2.5">
-                        <div className="font-semibold">{l.item_name}</div>
-                        <div className="text-[12.5px] text-ink-3">
-                          {l.library_item_id ? libMap.get(l.library_item_id)?.service_group : 'Không thuộc thư viện'}
-                          {lp !== null && custom && ` · giá thư viện ${fmtVnd(lp)}`}
-                        </div>
-                        {(custom || l.override_reason) && (
-                          <Input
-                            aria-label={`Lý do giá khác thư viện: ${l.item_name}`}
-                            className="mt-2 min-h-[40px] text-sm"
-                            value={l.override_reason ?? ''}
-                            disabled={!editable}
-                            placeholder="Lý do giá khác thư viện (bắt buộc)"
-                            onChange={(e) => setLine(l.key, { override_reason: e.target.value })}
-                          />
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap border-b border-line-soft px-3 py-2.5 text-ink-2">{l.unit}</td>
-                      <td className="border-b border-line-soft px-3 py-2.5">
-                        <input
-                          type="number"
-                          min={0.5}
-                          step={0.5}
-                          aria-label={`Số lượng: ${l.item_name}`}
-                          value={l.qty}
-                          disabled={!editable}
-                          onChange={(e) => setLine(l.key, { qty: Math.max(0, Number(e.target.value) || 0) })}
-                          className="h-10 w-full rounded-lg border-[1.5px] border-[#F5C99A] bg-[#FFF8EC] text-center font-bold disabled:border-line disabled:bg-canvas"
-                        />
-                      </td>
-                      <td className="border-b border-line-soft px-3 py-2.5">
-                        <div className="flex items-center justify-end gap-2">
-                          <PriceTag unitPrice={l.unit_price} libraryPrice={lp} />
-                          <input
-                            inputMode="numeric"
-                            aria-label={`Đơn giá: ${l.item_name}`}
-                            value={fmtVnd(l.unit_price, false)}
-                            disabled={!editable}
-                            onChange={(e) => setLine(l.key, { unit_price: parseMoney(e.target.value) })}
-                            className="h-10 w-32 rounded-lg border-[1.5px] border-line px-2 text-right tabular-nums disabled:bg-canvas"
-                          />
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap border-b border-line-soft px-3 py-2.5 text-right font-semibold tabular-nums">{fmtVnd(Math.round(l.qty * l.unit_price), false)}</td>
-                      <td className="border-b border-line-soft px-1 py-1.5">
-                        {editable && <IconButton icon="x" label={`Xoá dòng ${l.item_name}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} />}
+                  {editable && pickerFor === AUTO_SECTION && (
+                    <tr>
+                      <td colSpan={7} className="border-b border-line-soft px-3 pb-4">
+                        <LibraryPicker library={library} lines={lines} usage={usage} preferredGroup={header.service_group} onAdd={(it) => addItem(it, AUTO_SECTION)} onClose={() => setPickerFor(null)} />
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
+                  )}
+                </tbody>
+              )}
+              {sectionTitles.map((title, si) => {
+                const sec = grouped.find((g) => g.title === title);
+                const rows = sec ? sec.lines : [];
+                const before = grouped.slice(0, grouped.findIndex((g) => g.title === title)).reduce((n, g) => n + g.lines.length, 0);
+                return (
+                  <tbody key={title}>
+                    <tr className="bg-[#FFF4E5]">
+                      <td colSpan={5} className="border-b border-line-soft px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <b className="shrink-0 text-ink">{toRoman(si + 1)}.</b>
+                          {editable ? (
+                            <input
+                              aria-label={`Tên phần ${toRoman(si + 1)}`}
+                              defaultValue={title}
+                              key={title}
+                              onBlur={(e) => {
+                                if (e.target.value.trim() && e.target.value.trim() !== title) renameSection(title, e.target.value);
+                                else e.target.value = title;
+                              }}
+                              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                              className="h-9 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 font-bold text-ink hover:border-line focus:border-brand focus:bg-white"
+                            />
+                          ) : (
+                            <b className="text-ink">{title}</b>
+                          )}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap border-b border-line-soft px-3 py-2 text-right font-bold tabular-nums">{fmtVnd(sec?.amount ?? 0, false)}</td>
+                      <td className="border-b border-line-soft px-1 py-1">{editable && <IconButton icon="trash" label={`Xoá phần ${title}`} onClick={() => removeSection(title)} />}</td>
+                    </tr>
+                    {rows.map(({ line: l }, k) => {
+                      const lp = libPrice(l);
+                      const pass = l.kind === 'pass_through';
+                      const custom = !pass && lp !== null && l.unit_price !== lp;
+                      return (
+                        <tr key={l.key} className="align-top">
+                          <td className="border-b border-line-soft px-3 py-3 text-center text-ink-3">{before + k + 1}</td>
+                          <td className="border-b border-line-soft px-3 py-2.5">
+                            <div className="font-semibold">{l.item_name}</div>
+                            <div className="text-[12.5px] text-ink-3">
+                              {l.library_item_id ? libMap.get(l.library_item_id)?.service_group : 'Không thuộc thư viện'}
+                              {pass && ' · chi hộ: không chiết khấu, không xét khung giá'}
+                              {lp !== null && custom && ` · giá thư viện ${fmtVnd(lp)}`}
+                            </div>
+                            {(editable || l.description) && (
+                              <textarea
+                                aria-label={`Phạm vi công việc: ${l.item_name}`}
+                                rows={2}
+                                value={l.description ?? ''}
+                                disabled={!editable}
+                                placeholder="Mô tả phạm vi (in nghiêng dưới tên hạng mục)"
+                                onChange={(e) => setLine(l.key, { description: e.target.value })}
+                                className="mt-1.5 w-full resize-y rounded-lg border border-line-soft bg-canvas/40 px-2 py-1.5 text-[13.5px] italic text-ink-2 disabled:border-transparent disabled:bg-transparent"
+                              />
+                            )}
+                            {(custom || l.override_reason) && (
+                              <Input
+                                aria-label={`Lý do giá khác thư viện: ${l.item_name}`}
+                                className="mt-2 min-h-[40px] text-sm"
+                                value={l.override_reason ?? ''}
+                                disabled={!editable}
+                                placeholder="Lý do giá khác thư viện (bắt buộc)"
+                                onChange={(e) => setLine(l.key, { override_reason: e.target.value })}
+                              />
+                            )}
+                            {editable && sectionTitles.length > 1 && (
+                              <select
+                                aria-label={`Chuyển ${l.item_name} sang phần khác`}
+                                value=""
+                                onChange={(e) => e.target.value && moveLine(l.key, e.target.value)}
+                                className="mt-1.5 h-8 rounded-md border border-line-soft bg-white px-1.5 text-[12.5px] text-ink-3"
+                              >
+                                <option value="">Chuyển sang phần…</option>
+                                {sectionTitles
+                                  .filter((t) => t !== title)
+                                  .map((t) => (
+                                    <option key={t} value={t}>
+                                      {t}
+                                    </option>
+                                  ))}
+                              </select>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap border-b border-line-soft px-3 py-2.5 text-ink-2">{l.unit}</td>
+                          <td className="border-b border-line-soft px-3 py-2.5">
+                            <input
+                              type="number"
+                              min={0.5}
+                              step={0.5}
+                              aria-label={`Số lượng: ${l.item_name}`}
+                              value={l.qty}
+                              disabled={!editable}
+                              onChange={(e) => setLine(l.key, { qty: Math.max(0, Number(e.target.value) || 0) })}
+                              className="h-10 w-full rounded-lg border-[1.5px] border-[#F5C99A] bg-[#FFF8EC] text-center font-bold disabled:border-line disabled:bg-canvas"
+                            />
+                          </td>
+                          <td className="border-b border-line-soft px-3 py-2.5">
+                            <div className="flex items-center justify-end gap-2">
+                              <PriceTag unitPrice={l.unit_price} libraryPrice={lp} kind={l.kind} />
+                              <input
+                                inputMode="numeric"
+                                aria-label={`Đơn giá: ${l.item_name}`}
+                                value={fmtVnd(l.unit_price, false)}
+                                disabled={!editable}
+                                onChange={(e) => setLine(l.key, { unit_price: parseMoney(e.target.value) })}
+                                className="h-10 w-32 rounded-lg border-[1.5px] border-line px-2 text-right tabular-nums disabled:bg-canvas"
+                              />
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap border-b border-line-soft px-3 py-2.5 text-right font-semibold tabular-nums">{fmtVnd(Math.round(l.qty * l.unit_price), false)}</td>
+                          <td className="border-b border-line-soft px-1 py-1.5">
+                            {editable && <IconButton icon="x" label={`Xoá dòng ${l.item_name}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} />}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {editable && (
+                      <tr>
+                        <td colSpan={7} className="border-b border-line-soft px-3 py-2">
+                          {pickerFor === title ? (
+                            <LibraryPicker
+                              library={library}
+                              lines={lines.filter((l) => sectionOf(l) === title)}
+                              usage={usage}
+                              preferredGroup={header.service_group}
+                              onAdd={(it) => addItem(it, title)}
+                              onClose={() => setPickerFor(null)}
+                            />
+                          ) : (
+                            <button type="button" onClick={() => setPickerFor(title)} className="flex min-h-[40px] items-center gap-1.5 rounded-lg px-2 text-[14px] font-bold text-accent hover:bg-accent-soft">
+                              <Icon name="plus" size={16} /> Thêm hạng mục vào phần {toRoman(si + 1)}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                );
+              })}
             </table>
           </div>
 
           {editable && (
-            <div>
-              <Button variant="accent" icon="plus" onClick={() => setPickerOpen((v) => !v)} aria-expanded={pickerOpen}>
-                Thêm hạng mục từ Thư viện giá
-              </Button>
-              {pickerOpen && (
-                <LibraryPicker library={library} lines={lines} usage={usage} preferredGroup={header.service_group} onAdd={addItem} onClose={() => setPickerOpen(false)} />
+            <div className="flex flex-wrap items-center gap-2">
+              {newSection === null ? (
+                <Button variant="accent" icon="plus" onClick={() => setNewSection('')}>
+                  Thêm phần mới
+                </Button>
+              ) : (
+                <>
+                  <Input
+                    aria-label="Tên phần mới"
+                    autoFocus
+                    value={newSection}
+                    placeholder="VD: Dịch vụ quảng cáo"
+                    onChange={(e) => setNewSection(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') addSection();
+                      if (e.key === 'Escape') setNewSection(null);
+                    }}
+                    className="max-w-xs"
+                  />
+                  <Button onClick={addSection} disabled={!newSection.trim()}>
+                    Thêm
+                  </Button>
+                  <Button variant="ghost" onClick={() => setNewSection(null)}>
+                    Huỷ
+                  </Button>
+                </>
               )}
             </div>
           )}
 
           <div className="flex justify-end">
-            <div className="flex w-full max-w-[420px] flex-col gap-2 text-[15px]">
+            <div className="flex w-full max-w-[460px] flex-col gap-2 text-[15px]">
               <div className="flex justify-between">
-                <span className="text-ink-2">Cộng</span>
+                <span className="text-ink-2">Cộng tiền hàng</span>
                 <b className="tabular-nums">{fmtVnd(totals.subtotal)}</b>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <label htmlFor="discount" className="text-ink-2">
-                  Chiết khấu (%)
+                  Chiết khấu (%){totals.passThrough > 0 && <span className="block text-[12px] text-ink-3">không áp cho khoản chi hộ</span>}
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -542,14 +879,80 @@ export function QuoteBuilderPage() {
                     onChange={(e) => setH({ discount_pct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
                     className="h-10 w-20 rounded-lg border-[1.5px] border-[#F5C99A] bg-[#FFF8EC] text-center font-bold disabled:border-line disabled:bg-canvas"
                   />
-                  <span className="min-w-[110px] text-right tabular-nums">− {fmtVnd(totals.discountAmount)}</span>
+                  <span className="min-w-[120px] text-right tabular-nums">− {fmtVnd(totals.discountAmount)}</span>
                 </div>
               </div>
-              <div className="flex justify-between border-t-2 border-ink pt-2 text-xl">
-                <b>Tổng</b>
-                <b className="tabular-nums">{fmtVnd(totals.total)}</b>
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="vat" className="text-ink-2">
+                  Thuế GTGT (%)
+                  {totals.passThrough > 0 && !vatOnPassThrough && <span className="block text-[12px] text-ink-3">không tính trên khoản chi hộ</span>}
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="vat"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={header.vat_pct}
+                    disabled={!editable}
+                    onChange={(e) => setH({ vat_pct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+                    className="h-10 w-20 rounded-lg border-[1.5px] border-line text-center font-bold disabled:bg-canvas"
+                  />
+                  <span className="min-w-[120px] text-right tabular-nums">{fmtVnd(totals.vatAmount)}</span>
+                </div>
               </div>
+              <div className="flex justify-between rounded-lg bg-[#D9822B] px-3 py-2 text-xl text-white">
+                <b>Tổng thanh toán</b>
+                <b className="tabular-nums">{fmtVnd(totals.grandTotal)}</b>
+              </div>
+              <Button variant="secondary" icon="file" onClick={() => setPreview(true)} disabled={!lines.length}>
+                Xem trước báo giá (PDF)
+              </Button>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-line p-4">
+            <h2 className="font-extrabold text-ink">Điều khoản và ghi chú</h2>
+            <p className="mt-0.5 text-[13px] text-ink-3">Tick để đưa vào báo giá. Điều khoản mẫu do PM quản lý ở trang Thư viện giá.</p>
+            <ul className="mt-3 flex flex-col gap-1.5">
+              {libraryTerms.map((t) => (
+                <li key={t.id}>
+                  <label className="flex items-start gap-2.5 text-[14.5px]">
+                    <input type="checkbox" className="mt-1 h-4 w-4 accent-[#1800AD]" checked={header.terms.includes(t.text)} disabled={!editable} onChange={(e) => toggleTerm(t.text, e.target.checked)} />
+                    <span>{t.text}</span>
+                  </label>
+                </li>
+              ))}
+              {customTerms.map((t) => (
+                <li key={t} className="flex items-start gap-2.5 text-[14.5px]">
+                  <input type="checkbox" className="mt-1 h-4 w-4 accent-[#1800AD]" checked disabled={!editable} onChange={() => toggleTerm(t, false)} aria-label={`Bỏ điều khoản: ${t}`} />
+                  <span>
+                    {t} <span className="text-[12px] text-ink-3">(riêng báo giá này)</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {editable && (
+              <div className="mt-3 flex gap-2">
+                <Input aria-label="Thêm điều khoản riêng" value={customTerm} placeholder="Thêm điều khoản riêng cho báo giá này" onChange={(e) => setCustomTerm(e.target.value)} onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customTerm.trim()) {
+                    toggleTerm(customTerm.trim(), true);
+                    setCustomTerm('');
+                  }
+                }} />
+                <Button
+                  variant="secondary"
+                  disabled={!customTerm.trim()}
+                  onClick={() => {
+                    toggleTerm(customTerm.trim(), true);
+                    setCustomTerm('');
+                  }}
+                >
+                  Thêm
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* ---------------- status panels ---------------- */}
@@ -709,8 +1112,16 @@ export function QuoteBuilderPage() {
       </div>
 
       <div aria-hidden="true" style={{ position: 'fixed', left: '-10000px', top: 0 }}>
-        <QuotePdf ref={pdfRef} quote={{ ...quote, discount_pct: header.discount_pct, client: header.client }} lines={pdfLines} company={settings?.company_name ?? 'Go Media'} preparedBy={accountName} tz={tz} />
+        <QuotePdf ref={pdfRef} quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} />
       </div>
+
+      <Modal open={preview} onClose={() => setPreview(false)} title={`Xem trước ${quote.code}`} wide>
+        <div className="overflow-x-auto">
+          <div className="mx-auto w-[190mm] shadow-sm ring-1 ring-line-soft">
+            <QuotePdf quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} />
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={!!decision}
