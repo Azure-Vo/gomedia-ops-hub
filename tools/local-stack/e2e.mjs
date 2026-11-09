@@ -453,7 +453,7 @@ await step('Admin: users, settings, demo seed', async () => {
 await step('S1 Lark (mô phỏng) · tạo task mẹ/con trên web, mã sai bị chặn, nhắc theo mẫu CEO, Completed thì dừng', async () => {
   const day = (n) => new Date(Date.now() + 7 * 3600e3 + n * 86400e3).toISOString().slice(0, 10);
   await exec.goto(`${WEB}/lark`);
-  await exec.getByText('Đang ở chế độ mô phỏng').waitFor();
+  await exec.getByRole('tab', { name: 'Theo dõi task' }).waitFor();
   await exec.getByRole('tab', { name: 'Tạo task' }).click();
   await exec.getByLabel('Mã task mẹ').fill('D56');
   await exec.getByLabel('Deadline tổng').fill(day(10));
@@ -485,7 +485,7 @@ await step('S1 Lark (mô phỏng) · tạo task mẹ/con trên web, mã sai bị
   await exec.getByText('[DA056] [STING] Quản lý 1600 KOC video Freecast').waitFor();
   await shot(exec, '21-lark-group');
   await exec.getByRole('tab', { name: 'Theo dõi task' }).click();
-  await exec.getByRole('button', { name: 'Mô phỏng' }).click();
+  await exec.getByRole('button', { name: 'Cập nhật', exact: true }).click();
   await exec.getByRole('button', { name: 'Đánh dấu Completed' }).click();
   await exec.getByRole('button', { name: 'Chạy kiểm tra ngay' }).click();
   await exec.getByText(/Đã kiểm tra: 0 nhắc việc, 1 xác nhận hoàn thành/).waitFor();

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   daysUntil,
   draftPreviewMessage,
@@ -85,17 +84,7 @@ export function LarkPage() {
           )
         }
       />
-      {mode === 'simulation' ? (
-        <Banner tone="warn" title="Đang ở chế độ mô phỏng" className="mb-4">
-          Chưa gọi Lark: task chỉ lưu trên Ops Hub, tin nhắc hiện ở tab “Group Lark”. Thao tác “Mô phỏng” thay cho việc nhân viên cập nhật trên Lark Tasks.
-          {me.role === 'admin' && (
-            <>
-              {' '}
-              Khi có Lark App, vào <Link className="font-bold underline" to="/lark/setup">Kết nối Lark</Link>.
-            </>
-          )}
-        </Banner>
-      ) : (
+      {mode === 'live' && (
         <Banner tone="ok" title="Đang kết nối Lark" className="mb-4">
           Task tạo qua bot hoặc ở đây được lưu trên Lark Tasks; hệ thống đồng bộ mỗi 15 phút.
         </Banner>
@@ -204,7 +193,7 @@ function TrackTab({
                 {p.name}
               </span>
             }
-            subtitle={`Phụ trách: ${p.assignee_name ?? '—'} · Deadline tổng ${fmtDueDate(p.due_date)} · ${kids.length} task con${p.mode === 'live' ? ' · trên Lark' : ' · mô phỏng'}`}
+            subtitle={`Phụ trách: ${p.assignee_name ?? '—'} · Deadline tổng ${fmtDueDate(p.due_date)} · ${kids.length} task con${p.mode === 'live' ? ' · trên Lark' : ''}`}
             actions={p.lark_url ? <a className="text-[13px] font-bold text-brand underline" href={p.lark_url} target="_blank" rel="noreferrer">Mở trên Lark</a> : undefined}
           >
             {!kids.length ? (
@@ -263,7 +252,7 @@ function TrackTab({
                               </a>
                             ) : canSimulate && k.mode === 'simulation' && (own || MANAGERS.includes(me.role)) ? (
                               <Button size="sm" variant="secondary" onClick={() => onSimulate(k)}>
-                                Mô phỏng
+                                Cập nhật
                               </Button>
                             ) : null}
                           </td>
@@ -303,7 +292,7 @@ function GroupTab({ notifs, tasks }: { notifs: LarkNotificationRow[]; tasks: Lar
                   <div key={n.id}>
                     <BotCard message={n.message} time={n.sent_at ? new Date(n.sent_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : undefined} />
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 px-1 text-[12px] text-ink-3">
-                      {n.status === 'sent' ? <Badge tone="ok">Đã gửi lên Lark</Badge> : n.status === 'simulated' ? <Badge tone="warn">Mô phỏng</Badge> : <Badge tone="bad">Lỗi gửi · lần {n.attempts}</Badge>}
+                      {n.status === 'sent' ? <Badge tone="ok">Đã gửi lên Lark</Badge> : n.status === 'failed' ? <Badge tone="bad">Lỗi gửi · lần {n.attempts}</Badge> : null}
                       {t && <span className="font-mono">{t.code}</span>}
                       {n.last_error && n.status === 'failed' && <span className="text-bad">{n.last_error}</span>}
                     </div>
@@ -494,8 +483,8 @@ function SimulateModal({ task, people, onClose, onDone }: { task: LarkTaskRow; p
     }
   }
   return (
-    <Modal open onClose={onClose} title={`Mô phỏng thay đổi trên Lark · ${task.code}`}>
-      <p className="mb-3 text-[14px] text-ink-2">Thay cho việc nhân viên cập nhật task trên Lark Tasks. Lần kiểm tra kế tiếp (hoặc “Chạy kiểm tra ngay”) sẽ dùng dữ liệu mới.</p>
+    <Modal open onClose={onClose} title={`Cập nhật task · ${task.code}`}>
+      <p className="mb-3 text-[14px] text-ink-2">Cập nhật trạng thái, deadline, người thực hiện hoặc mã của task. Lần kiểm tra kế tiếp (hoặc “Chạy kiểm tra ngay”) sẽ dùng dữ liệu mới.</p>
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap gap-2">
           {task.completed_at ? (
@@ -533,7 +522,7 @@ function SimulateModal({ task, people, onClose, onDone }: { task: LarkTaskRow; p
           </Button>
         </div>
         <div className="flex items-end gap-2">
-          <Field label="Sửa mã trên tiêu đề (thử kiểm tra mã)" className="flex-1">
+          <Field label="Sửa mã trên tiêu đề" className="flex-1">
             {(id) => <Input id={id} value={code} className="font-mono" onChange={(e) => setCode(e.target.value)} />}
           </Field>
           <Button variant="secondary" busy={busy === 'set_code'} disabled={code === task.code} onClick={() => act('set_code', { code })}>
