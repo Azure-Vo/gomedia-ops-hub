@@ -15,6 +15,7 @@ import { closeTasks, dispatchCheckpoints } from './jobs';
 import { createLarkTaskFromWeb, ensureSimPeople, handleLarkEvent, larkAdminStatus, larkTick, runLarkNow, saveLarkConfig, simulateLark, testLark } from './lark';
 import { makeChannel, Notifier } from './notify';
 import { decideQuote, importQuotes, previewBand, reopenQuote, sendQuote, submitQuote } from './quotes';
+import { addComment, resolveComment } from './review';
 import { connectTelegram, inviteUser, systemHealth, testMessage } from './system';
 import { deriveWebhookSecret, TelegramApi } from './telegram';
 import { handleTelegramUpdate } from './telegram-webhook';
@@ -58,6 +59,10 @@ async function handleApi(ctx: Ctx, req: Request) {
       return decideQuote(ctx, user, body);
     case 'quote.send':
       return sendQuote(ctx, user, id);
+    case 'quote.comment':
+      return addComment(ctx, user, body);
+    case 'quote.comment_resolve':
+      return resolveComment(ctx, user, body);
     case 'quote.import':
       return importQuotes(ctx, user, body);
     case 'task.create':

@@ -243,6 +243,72 @@ test('UAT 4 · changes requested: the account sees the comment and the quote ret
   assert.equal(sent.quote.status, 'sent');
 });
 
+test('review on the quote: comments on a line gate approving and sending until they are handled', async () => {
+  const q = await newQuote(C.acc1, 15);
+  await api(C.acc1, { action: 'quote.submit', quote_id: q.id });
+  const { data: lines } = await C.pm.from('quote_lines').select('id, item_name, position').eq('quote_id', q.id).order('position');
+  await tgReset();
+  // Only the PM, the CEO and the owning Account take part.
+  for (const who of ['acc2', 'staff1', 'admin']) {
+    await assert.rejects(api(C[who], { action: 'quote.comment', quote_id: q.id, body: 'x' }), /forbidden/);
+  }
+  await assert.rejects(api(C.pm, { action: 'quote.comment', quote_id: q.id, body: '   ' }), /bad_comment/);
+  const other = await newQuote(C.acc1, 0);
+  const { data: otherLines } = await C.pm.from('quote_lines').select('id').eq('quote_id', other.id);
+  await assert.rejects(api(C.pm, { action: 'quote.comment', quote_id: q.id, anchor: 'line', line_id: otherLines[0].id, body: 'x' }), /bad_line/);
+
+  const c1 = await api(C.pm, { action: 'quote.comment', quote_id: q.id, anchor: 'line', line_id: lines[0].id, body: 'Giá video thấp hơn mặt bằng, kiểm tra lại' }, vn(0, '10:00'));
+  assert.equal(c1.comment.anchor_label, 'Dòng 1 · Video TikTok');
+  assert.equal(c1.comment.author_id, U.pm);
+  const c2 = await api(C.pm, { action: 'quote.comment', quote_id: q.id, anchor: 'totals', body: 'Chiết khấu 15% là quá cao với khách mới' }, vn(0, '10:02'));
+  assert.equal(c2.comment.anchor_label, 'Chiết khấu, thuế và tổng tiền');
+  // One Telegram message to the Account for the burst of comments, with a link to the quote itself.
+  const toAcc = msgTo(await tgCalls(), chat.acc1);
+  assert.equal(toAcc.length, 1);
+  assert.match(toAcc[0].body.text, /Góp ý mới/);
+  assert.ok(JSON.stringify(toAcc[0].body.reply_markup).includes(`/quotes/${q.id}`));
+
+  // Readers: the owner and the PM, not another Account.
+  assert.equal((await C.acc1.from('quote_comments').select('id').eq('quote_id', q.id)).data.length, 2);
+  assert.equal((await C.acc2.from('quote_comments').select('id').eq('quote_id', q.id)).data.length, 0);
+  assert.ok((await C.acc1.from('quote_comments').insert({ quote_id: q.id, author_id: U.acc1, body: 'x' })).error);
+
+  // Approving with open comments is refused; asking for changes needs no extra note.
+  await assert.rejects(api(C.pm, { action: 'quote.decide', quote_id: q.id, decision: 'approve' }), /open_comments/);
+  const back = await api(C.pm, { action: 'quote.decide', quote_id: q.id, decision: 'changes', comment: '' });
+  assert.equal(back.quote.status, 'changes_requested');
+  const { data: ap } = await C.acc1.from('approvals').select('decision, comment').eq('quote_id', q.id);
+  assert.deepEqual(ap, [{ decision: 'changes', comment: '2 góp ý trên báo giá' }]);
+
+  // The Account fixes, replies and marks one done; the quote cannot go out while one is open.
+  await C.acc1.from('quotes').update({ discount_pct: 10, status: 'draft' }).eq('id', q.id);
+  const reply = await api(C.acc1, { action: 'quote.comment', quote_id: q.id, parent_id: c2.comment.id, body: 'Đã giảm về 10%' }, vn(0, '11:00'));
+  assert.equal(reply.comment.parent_id, c2.comment.id);
+  assert.equal(reply.comment.anchor, 'totals');
+  assert.ok(msgTo(await tgCalls(), chat.pm).some((c) => /Trả lời góp ý/.test(c.body.text)));
+  await assert.rejects(api(C.acc1, { action: 'quote.comment', quote_id: q.id, parent_id: reply.comment.id, body: 'x' }), /bad_parent/);
+  await assert.rejects(api(C.acc1, { action: 'quote.comment_resolve', comment_id: reply.comment.id }), /not_a_thread/);
+  const done = await api(C.acc1, { action: 'quote.comment_resolve', comment_id: c2.comment.id });
+  assert.equal(done.comment.resolved_by, U.acc1);
+  await assert.rejects(api(C.acc1, { action: 'quote.send', quote_id: q.id }), /open_comments/);
+  await api(C.acc1, { action: 'quote.comment_resolve', comment_id: c1.comment.id });
+  // A reply on a handled comment opens it again.
+  const again = await api(C.pm, { action: 'quote.comment', quote_id: q.id, parent_id: c1.comment.id, body: 'Vẫn chưa thấy đổi giá' });
+  assert.equal(again.reopened, true);
+  await assert.rejects(api(C.acc1, { action: 'quote.send', quote_id: q.id }), /open_comments/);
+  await api(C.pm, { action: 'quote.comment_resolve', comment_id: c1.comment.id });
+  const reopened = await api(C.pm, { action: 'quote.comment_resolve', comment_id: c1.comment.id, resolved: false });
+  assert.equal(reopened.comment.resolved_at, null);
+  await api(C.pm, { action: 'quote.comment_resolve', comment_id: c1.comment.id });
+  const sent = await api(C.acc1, { action: 'quote.send', quote_id: q.id });
+  assert.equal(sent.quote.status, 'sent');
+  // A sent quote is history.
+  await assert.rejects(api(C.pm, { action: 'quote.comment', quote_id: q.id, body: 'muộn rồi' }), /quote_sent/);
+  await assert.rejects(api(C.pm, { action: 'quote.comment_resolve', comment_id: c1.comment.id, resolved: false }), /quote_sent/);
+  const log = await sql(`select action from public.events where entity = 'quotes' and entity_id = $1 and action like 'quote.comment%' order by id`, [q.id]);
+  assert.ok(log.filter((e) => e.action === 'quote.commented').length === 2 && log.some((e) => e.action === 'quote.comment_resolved'));
+});
+
 test('UAT 5 · editing an approved quote sends it back to Draft and needs approval again', async () => {
   const q = await newQuote(C.acc1, 15);
   await api(C.acc1, { action: 'quote.submit', quote_id: q.id });

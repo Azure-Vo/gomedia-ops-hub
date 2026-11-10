@@ -9,16 +9,21 @@ import {
   linesMissingOverrideReason,
   nextQuoteStatus,
   PublicBandReason,
+  approveGate,
+  changesSummary,
   publicBand,
   QuoteStatus,
   quoteTotals,
+  requestChangesGate,
   ROLE_LABEL,
+  sendGate,
   validateQuote,
   validateQuoteHistoryRows,
 } from '../../../src/domain/index';
 import { appLink, calendarOf, Ctx, loadRules, loadSettings, Profile, requireRole } from './context';
 import { ApiError, must } from './http';
 import { approvalRequestText, decisionText, linkButton } from './messages';
+import { openThreadCount } from './review';
 
 interface LibRow {
   id: string;
@@ -187,7 +192,8 @@ export async function notifyApproval(ctx: Ctx, quoteId: string): Promise<boolean
     accountName: account?.full_name || account?.email || '',
     reasons: q.band_detail?.reasons ?? [],
   });
-  await ctx.notifier.sendToRoles([q.approver], text, linkButton('Mở hàng chờ duyệt', appLink(s, '/approvals')));
+  // The button opens the quote itself: the approver reads it, comments on the lines and decides there.
+  await ctx.notifier.sendToRoles([q.approver], text, linkButton('Mở báo giá để duyệt', appLink(s, `/quotes/${q.id}`)));
   return true;
 }
 
@@ -234,8 +240,17 @@ export async function decideQuote(ctx: Ctx, user: Profile, body: Record<string, 
   if (q.approver !== user.role) throw new ApiError(403, 'wrong_approver', `Báo giá này chờ ${ROLE_LABEL[q.approver ?? 'ceo']} duyệt.`);
   const decision = body.decision === 'approve' ? 'approve' : body.decision === 'changes' ? 'changes' : null;
   if (!decision) throw new ApiError(400, 'bad_decision', 'Chọn Duyệt hoặc Yêu cầu sửa.');
-  const comment = String(body.comment ?? '').trim();
-  if (decision === 'changes' && !comment) throw new ApiError(400, 'comment_required', 'Hãy ghi nhận xét để Account biết cần sửa gì.');
+  const note = String(body.comment ?? '').trim();
+  // Comments left on the quote count: approving needs none open, asking for changes needs a note or one open.
+  const open = await openThreadCount(ctx, q.id);
+  if (decision === 'approve') {
+    const gate = approveGate(open);
+    if (!gate.ok) throw new ApiError(409, 'open_comments', gate.error);
+  } else {
+    const gate = requestChangesGate(note, open);
+    if (!gate.ok) throw new ApiError(400, 'comment_required', gate.error);
+  }
+  const comment = decision === 'changes' ? changesSummary(note, open) : note;
   const t = nextQuoteStatus(q.status, decision === 'approve' ? 'approve' : 'request_changes');
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
   const quote = await transition(ctx, {
@@ -245,7 +260,7 @@ export async function decideQuote(ctx: Ctx, user: Profile, body: Record<string, 
     actor: user.id,
     approval: { level: q.approver, approver_id: user.id, decision, comment },
     event_action: decision === 'approve' ? 'quote.approved' : 'quote.changes_requested',
-    event_payload: { comment },
+    event_payload: { comment, open_comments: open },
   });
   const s = await loadSettings(ctx.db);
   if (isWorkingTime(ctx.now(), calendarOf(s))) {
@@ -257,6 +272,8 @@ export async function decideQuote(ctx: Ctx, user: Profile, body: Record<string, 
 export async function sendQuote(ctx: Ctx, user: Profile, quoteId: string) {
   const q = await loadQuote(ctx, quoteId);
   own(user, q);
+  const gate = sendGate(await openThreadCount(ctx, q.id));
+  if (!gate.ok) throw new ApiError(409, 'open_comments', gate.error);
   const { band, totals } = await readyLines(ctx, q);
   const t = nextQuoteStatus(q.status, 'send', q.status === 'approved' ? q.band_result ?? undefined : band.level);
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);

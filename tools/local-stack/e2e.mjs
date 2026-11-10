@@ -53,7 +53,8 @@ await sql(`insert into public.library_items (name, unit, service_group, unit_pri
   ('Kế hoạch nội dung tháng', 'tháng', 'Social Media', 2000000),
   ('Booking micro-KOC', 'booking', 'Influencer', 3500000)`);
 
-const browser = await chromium.launch();
+// CHROME_BIN points at an installed Chromium when Playwright's own download is not available.
+const browser = await chromium.launch(process.env.CHROME_BIN ? { executablePath: process.env.CHROME_BIN } : {});
 async function login(key) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true, locale: 'vi-VN', timezoneId: 'Asia/Ho_Chi_Minh' });
   const page = await ctx.newPage();
@@ -259,6 +260,81 @@ await step('UAT 4 · PM requests changes: account sees the comment; editing retu
   await account.getByText('Đã lưu').waitFor({ timeout: 15000 });
   const [row] = await sql(`select status from public.quotes where client = 'Khách cần sửa'`);
   assert.equal(row.status, 'draft');
+});
+
+await step('Review by link: PM comments on a line, Account fixes and marks done, then the PDF goes out', async () => {
+  const id = await newQuote(account, 'Khách duyệt qua link', 15);
+  await account.getByRole('button', { name: 'Gửi PM duyệt' }).click();
+  await account.getByText('Đang chờ PM duyệt').waitFor();
+  await account.getByRole('button', { name: 'Sao chép link báo giá' }).waitFor();
+  // The PM opens the link in a browser that is not signed in: after the code, they land on the quote itself.
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'vi-VN', timezoneId: 'Asia/Ho_Chi_Minh' });
+  const reviewer = await ctx.newPage();
+  pages.add(reviewer);
+  reviewer.on('pageerror', (e) => console.log(`  [reviewer pageerror] ${e.message}`));
+  await reviewer.goto(`${WEB}/quotes/${id}`);
+  await reviewer.getByLabel('Email').fill('pm@go.vn');
+  await reviewer.getByRole('button', { name: 'Gửi email đăng nhập' }).click();
+  await reviewer.getByText('Kiểm tra hộp thư').waitFor();
+  const { code } = await (await fetch(`${API}/__test/otp?email=pm@go.vn`)).json();
+  await reviewer.getByLabel('Mã trong email').fill(code);
+  await reviewer.getByRole('button', { name: 'Đăng nhập' }).click();
+  await reviewer.getByText('Quyết định của bạn').waitFor({ timeout: 15000 });
+  assert.ok(reviewer.url().endsWith(`/quotes/${id}`));
+  // Comment on line 1 and on the totals.
+  await reviewer.getByRole('button', { name: /^Góp ý: Dòng 1 · Video TikTok/ }).click();
+  await reviewer.getByLabel(/^Góp ý cho: Dòng 1 · Video TikTok/).fill('12 video là nhiều so với ngân sách khách, giảm còn 8');
+  await reviewer.getByRole('button', { name: 'Gửi góp ý' }).first().click();
+  await reviewer.getByText('12 video là nhiều so với ngân sách khách, giảm còn 8').first().waitFor();
+  await reviewer.getByRole('button', { name: /^Góp ý: Chiết khấu, thuế và tổng tiền/ }).click();
+  await reviewer.getByLabel('Góp ý cho: Chiết khấu, thuế và tổng tiền').fill('Chiết khấu tối đa 10% cho khách mới');
+  await reviewer.getByLabel('Góp ý cho: Chiết khấu, thuế và tổng tiền').press('Control+Enter');
+  await reviewer.getByText('2 cần xử lý').waitFor();
+  await shot(reviewer, '07b-review-pm-comments');
+  // Approving is closed while comments are open; asking for changes needs no extra note.
+  assert.ok(await reviewer.getByRole('button', { name: 'Duyệt', exact: true }).isDisabled());
+  await reviewer.getByRole('button', { name: 'Yêu cầu sửa', exact: true }).click();
+  await reviewer.getByRole('dialog').getByText(/Account sẽ thấy 2 góp ý/).waitFor();
+  await reviewer.getByRole('dialog').getByRole('button', { name: 'Gửi yêu cầu sửa' }).click();
+  await reviewer.getByText('Đã gửi yêu cầu sửa cho Account').waitFor();
+
+  // The Account sees each comment at its line, fixes, answers and marks them done.
+  await account.goto(`${WEB}/quotes`);
+  await account.getByText('2 góp ý').first().waitFor();
+  await account.goto(`${WEB}/quotes/${id}`);
+  await account.getByText(/Còn 2 góp ý đang mở/).waitFor();
+  await account.getByText('12 video là nhiều so với ngân sách khách, giảm còn 8').first().waitFor();
+  await shot(account, '07c-review-account-sees');
+  await account.getByLabel(/Số lượng: Video TikTok/).fill('8');
+  await account.locator('#discount').fill('10');
+  await account.getByText('Trong khung giá · Account gửi được ngay').waitFor({ timeout: 15000 });
+  await account.getByText(/Còn 2 góp ý chưa xử lý trên báo giá/).waitFor();
+  assert.ok(await account.getByRole('button', { name: 'Xuất PDF & gửi' }).isDisabled());
+  const totalsThread = account.locator('#cmt-totals');
+  await totalsThread.getByRole('button', { name: 'Trả lời' }).click();
+  await totalsThread.getByLabel(/^Trả lời góp ý/).fill('Đã giảm về 10%');
+  await totalsThread.getByRole('button', { name: 'Gửi trả lời' }).click();
+  await totalsThread.getByText('Đã giảm về 10%').waitFor();
+  await totalsThread.getByRole('button', { name: 'Đã xử lý' }).click();
+  await account.getByText('1 cần xử lý').waitFor();
+  await account.getByRole('button', { name: 'Đã xử lý' }).first().click();
+  await account.getByText('Đã xử lý hết').waitFor();
+  await shot(account, '07d-review-all-done');
+  await account.getByText('Đã lưu').waitFor({ timeout: 15000 });
+  const dl = account.waitForEvent('download', { timeout: 30000 });
+  await account.getByRole('button', { name: 'Xuất PDF & gửi' }).click();
+  const file = await dl;
+  await file.saveAs(`${SHOTS}/quote-after-review.pdf`);
+  await account.getByText(/Đã lưu vào Kho tham chiếu/).waitFor({ timeout: 15000 });
+  const [row] = await sql(`select q.status, (select count(*)::int from public.quote_comments c where c.quote_id = q.id and c.parent_id is null and c.resolved_at is not null) done,
+                                  (select count(*)::int from public.quote_comments c where c.quote_id = q.id) total from public.quotes q where q.id = $1`, [id]);
+  assert.deepEqual(row, { status: 'sent', done: 2, total: 3 });
+  // Sent: the comments stay readable, nothing new can be added.
+  await account.reload();
+  await account.getByText(/Báo giá đã gửi khách: góp ý được giữ lại/).waitFor();
+  assert.equal(await account.getByLabel('Góp ý chung cho cả báo giá').count(), 0);
+  pages.delete(reviewer);
+  await ctx.close();
 });
 
 await step('UAT 5 · editing an approved quote sends it back to Draft', async () => {

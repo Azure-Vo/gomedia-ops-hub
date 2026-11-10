@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  ANCHOR_LABEL,
+  approveGate,
   BAND_LABEL,
+  canComment,
   copyLinesWithTodayPrices,
   DEFAULT_SECTION_TITLE,
   fmtNum,
@@ -12,7 +15,9 @@ import {
   PublicBand,
   quoteTotals,
   rankSimilar,
+  requestChangesGate,
   ROLE_LABEL,
+  sendGate,
   toRoman,
   validateQuote,
   workingHoursBetween,
@@ -26,6 +31,7 @@ import { check, supabase } from '@/lib/supabase';
 import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadPeople, loadTerms, normLine, normQuote, personName, QUOTE_COLS, QuoteRow, QuoteTerm } from './data';
 import { LibraryPicker } from './LibraryPicker';
 import { BandReasons, companyFromSettings, downloadQuotePdf, PriceTag, QuotePdf, StatusBadge } from './parts';
+import { AnchorThreads, CommentTableRow, CommentToggle, copyText, quoteLink, ReviewCard, ReviewProvider } from './review';
 
 interface EditLine {
   key: string;
@@ -108,6 +114,7 @@ export function QuoteBuilderPage() {
   const [decision, setDecision] = useState<{ kind: 'approve' | 'changes'; comment: string } | null>(null);
   const [confirmReopen, setConfirmReopen] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [openComments, setOpenComments] = useState(0);
   const pdfRef = useRef<HTMLDivElement>(null);
 
   const state = useRef<{ header: Header | null; lines: EditLine[] }>({ header: null, lines: [] });
@@ -132,7 +139,8 @@ export function QuoteBuilderPage() {
       const quoteRow = normQuote(qr);
       const lineRows = (check(ls) as LineRow[]).map(normLine);
       const edit: EditLine[] = lineRows.map((l) => ({
-        key: newKey(),
+        // Saved lines keep their id as key, so a refresh does not close an open comment box.
+        key: l.id,
         id: l.id,
         library_item_id: l.library_item_id,
         item_name: l.item_name,
@@ -189,6 +197,20 @@ export function QuoteBuilderPage() {
   const isOwner = !!quote && quote.created_by === me.id && me.role === 'account';
   const editable = !!quote && isOwner && isDirectlyEditable(quote.status);
   const libPrice = (l: EditLine) => (l.library_item_id ? libMap.get(l.library_item_id)?.unit_price ?? null : null);
+
+  // Someone reading a quote they cannot edit (the PM reviewing, or the Account while it waits for
+  // approval) gets the other side's changes without reloading: status, lines and totals.
+  const seenUpdate = quote?.updated_at;
+  useEffect(() => {
+    if (!quote || editable || quote.status === 'sent') return;
+    const t = window.setInterval(async () => {
+      if (document.visibilityState !== 'visible') return;
+      const { data } = await supabase.from('quotes').select('updated_at, status').eq('id', quote.id).maybeSingle();
+      if (data && (data.updated_at !== seenUpdate || data.status !== quote.status)) load();
+    }, 20_000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.id, quote?.status, seenUpdate, editable, load]);
 
   // ---------------------------------------------------------------- saving ----
   const save = useCallback(async (): Promise<void> => {
@@ -347,6 +369,9 @@ export function QuoteBuilderPage() {
   const lastDecision = approvals[0];
   const accountName = personName(people, quote.created_by);
   const canDecide = quote.status === 'pending' && quote.approver === me.role;
+  const canReview = canComment(me.role, quote.created_by === me.id, quote.status);
+  const sendBlock = sendGate(openComments);
+  const copyLink = async () => toast((await copyText(quoteLink(quote.id))) ? `Đã sao chép link ${quote.code}. Dán vào Lark để gửi người duyệt.` : 'Không sao chép được. Hãy chép địa chỉ trên thanh trình duyệt.', 'info');
 
   const setH = (patch: Partial<Header>) => setHeader((h) => (h ? { ...h, ...patch } : h));
   const setLine = (key: string, patch: Partial<EditLine>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -488,7 +513,7 @@ export function QuoteBuilderPage() {
       await flush();
       const r = await callApi<{ quote: QuoteRow }>('quote.submit', { quote_id: quote.id });
       setQuote(normQuote(r.quote));
-      toast(`Đã gửi ${ROLE_LABEL[(r.quote.approver as 'pm' | 'ceo') ?? 'pm']} duyệt`);
+      toast(`Đã gửi ${ROLE_LABEL[(r.quote.approver as 'pm' | 'ceo') ?? 'pm']} duyệt. Bấm "Sao chép link báo giá" để gửi link cho người duyệt.`);
       await load();
     });
 
@@ -582,6 +607,16 @@ export function QuoteBuilderPage() {
   const customTerms = header.terms.filter((t) => !termLib.some((x) => x.text === t));
 
   return (
+    <ReviewProvider
+      quoteId={quote.id}
+      canWrite={canReview}
+      lineIds={lines.filter((l) => l.id).map((l) => l.id as string)}
+      sectionTitles={sectionTitles}
+      people={people}
+      meId={me.id}
+      tz={tz}
+      onChange={setOpenComments}
+    >
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -597,6 +632,9 @@ export function QuoteBuilderPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" icon="link" onClick={copyLink}>
+            Sao chép link
+          </Button>
           <div className="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[13px] leading-tight">
             <span className="text-ink-3">Thời gian xử lý (giờ làm việc)</span>
             <br />
@@ -646,14 +684,22 @@ export function QuoteBuilderPage() {
             </Field>
           </div>
 
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-end gap-1 text-[13px] text-ink-3">
+              <span>Góp ý phần thông tin khách hàng</span>
+              <CommentToggle target={{ anchor: 'client' }} label={ANCHOR_LABEL.client} />
+            </div>
+            <AnchorThreads target={{ anchor: 'client' }} label={ANCHOR_LABEL.client} />
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-separate border-spacing-0 text-[15px]">
               <thead>
                 <tr className="whitespace-nowrap bg-ink text-left text-sm font-semibold text-white">
-                  <th className="w-12 rounded-tl-[10px] px-3 py-3 text-center">STT</th>
+                  <th className="w-14 rounded-tl-[10px] px-2 py-3 text-center">STT</th>
                   <th className="min-w-[280px] px-3 py-3">Hạng mục / phạm vi</th>
                   <th className="px-3 py-3">Đơn vị</th>
-                  <th className="w-24 px-3 py-3 text-center">SL</th>
+                  <th className="w-24 min-w-[92px] px-3 py-3 text-center">SL</th>
                   <th className="px-3 py-3 text-right">Đơn giá (đ)</th>
                   <th className="px-3 py-3 text-right">Thành tiền (đ)</th>
                   <th className="w-12 rounded-tr-[10px] px-1 py-3">
@@ -709,18 +755,28 @@ export function QuoteBuilderPage() {
                           ) : (
                             <b className="text-ink">{title}</b>
                           )}
+                          {sec && <CommentToggle target={{ anchor: 'section', sectionTitle: title }} label={`Phần ${toRoman(si + 1)} · ${title}`} className="shrink-0" />}
                         </div>
                       </td>
                       <td className="whitespace-nowrap border-b border-line-soft px-3 py-2 text-right font-bold tabular-nums">{fmtVnd(sec?.amount ?? 0, false)}</td>
-                      <td className="border-b border-line-soft px-1 py-1">{editable && <IconButton icon="trash" label={`Xoá phần ${title}`} onClick={() => removeSection(title)} />}</td>
+                      <td className="border-b border-line-soft px-1 py-1">
+                        {editable && <IconButton icon="trash" label={`Xoá phần ${title}`} onClick={() => removeSection(title)} />}
+                      </td>
                     </tr>
+                    {sec && <CommentTableRow target={{ anchor: 'section', sectionTitle: title }} label={`Phần ${toRoman(si + 1)} · ${title}`} colSpan={7} />}
                     {rows.map(({ line: l }, k) => {
                       const lp = libPrice(l);
                       const pass = l.kind === 'pass_through';
                       const custom = !pass && lp !== null && l.unit_price !== lp;
+                      const lineLabel = `Dòng ${before + k + 1} · ${l.item_name}`;
                       return (
-                        <tr key={l.key} className="align-top">
-                          <td className="border-b border-line-soft px-3 py-3 text-center text-ink-3">{before + k + 1}</td>
+                        <Fragment key={l.key}>
+                        <tr className="align-top">
+                          <td className="border-b border-line-soft px-1 py-3 text-center text-ink-3">
+                            {before + k + 1}
+                            {/* First column, so the comment button stays in view when the table scrolls sideways. */}
+                            {l.id && <CommentToggle target={{ anchor: 'line', lineId: l.id }} label={lineLabel} className="mx-auto mt-1" />}
+                          </td>
                           <td className="border-b border-line-soft px-3 py-2.5">
                             <div className="font-semibold">{l.item_name}</div>
                             <div className="text-[12.5px] text-ink-3">
@@ -798,6 +854,8 @@ export function QuoteBuilderPage() {
                             {editable && <IconButton icon="x" label={`Xoá dòng ${l.item_name}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} />}
                           </td>
                         </tr>
+                        {l.id && <CommentTableRow target={{ anchor: 'line', lineId: l.id }} label={lineLabel} colSpan={7} />}
+                        </Fragment>
                       );
                     })}
                     {editable && (
@@ -909,11 +967,19 @@ export function QuoteBuilderPage() {
               <Button variant="secondary" icon="file" onClick={() => setPreview(true)} disabled={!lines.length}>
                 Xem trước báo giá (PDF)
               </Button>
+              <div className="flex items-center justify-end gap-1 text-[13px] text-ink-3">
+                <span>Góp ý chiết khấu, thuế, tổng tiền</span>
+                <CommentToggle target={{ anchor: 'totals' }} label={ANCHOR_LABEL.totals} />
+              </div>
+              <AnchorThreads target={{ anchor: 'totals' }} label={ANCHOR_LABEL.totals} />
             </div>
           </div>
 
           <div className="rounded-xl border border-line p-4">
-            <h2 className="font-extrabold text-ink">Điều khoản và ghi chú</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-extrabold text-ink">Điều khoản và ghi chú</h2>
+              <CommentToggle target={{ anchor: 'terms' }} label={ANCHOR_LABEL.terms} />
+            </div>
             <p className="mt-0.5 text-[13px] text-ink-3">Tick để đưa vào báo giá. Điều khoản mẫu do PM quản lý ở trang Thư viện giá.</p>
             <ul className="mt-3 flex flex-col gap-1.5">
               {libraryTerms.map((t) => (
@@ -953,12 +1019,14 @@ export function QuoteBuilderPage() {
                 </Button>
               </div>
             )}
+            <AnchorThreads target={{ anchor: 'terms' }} label={ANCHOR_LABEL.terms} className="mt-3" />
           </div>
 
           {/* ---------------- status panels ---------------- */}
           {quote.status === 'changes_requested' && lastDecision?.decision === 'changes' && (
             <Banner tone="bad" title={`${ROLE_LABEL[lastDecision.level]} yêu cầu sửa`}>
-              “{lastDecision.comment}” — {personName(people, lastDecision.approver_id)}, {fmtVnDateTime(lastDecision.decided_at, tz)}. Sửa báo giá rồi gửi lại.
+              “{lastDecision.comment}” — {personName(people, lastDecision.approver_id)}, {fmtVnDateTime(lastDecision.decided_at, tz)}.
+              {openComments > 0 ? ` Còn ${openComments} góp ý đang mở, ghi ngay tại dòng cần sửa. Sửa xong, trả lời hoặc đánh dấu "Đã xử lý" rồi gửi lại.` : ' Sửa báo giá rồi gửi lại.'}
             </Banner>
           )}
           {editable && lines.length > 0 && (
@@ -971,12 +1039,13 @@ export function QuoteBuilderPage() {
                   tone="ok"
                   title="Trong khung giá · Account gửi được ngay"
                   actions={
-                    <Button variant="success" icon="send" busy={busy === 'send'} disabled={!!problems.length || saveState === 'saving'} onClick={sendNow}>
+                    <Button variant="success" icon="send" busy={busy === 'send'} disabled={!!problems.length || saveState === 'saving' || !sendBlock.ok} onClick={sendNow}>
                       Xuất PDF & gửi
                     </Button>
                   }
                 >
                   Chiết khấu {fmtNum(band.discountPct, 1)}% · đơn giá lệch thư viện nhiều nhất {fmtNum(band.maxDeviationPct, 1)}%
+                  {!sendBlock.ok && <div className="mt-1 font-semibold">{sendBlock.error}</div>}
                 </Banner>
               ) : (
                 <Banner
@@ -1007,13 +1076,21 @@ export function QuoteBuilderPage() {
               actions={isOwner && <Button variant="secondary" icon="edit" onClick={() => setConfirmReopen(true)}>Sửa báo giá</Button>}
             >
               Gửi duyệt lúc {quote.approval_requested_at ? fmtVnDateTime(quote.approval_requested_at, tz) : '–'}. Chỉ báo giá ngoài khung mới đến bước này.
+              {isOwner && ' Gửi link báo giá cho người duyệt để họ xem và góp ý ngay trên báo giá.'}
               <BandReasons band={quote.band_detail} />
             </Banner>
           )}
           {canDecide && (
-            <Card title="Quyết định của bạn" subtitle="Báo giá này đang chờ đúng cấp của bạn duyệt">
+            <Card
+              title="Quyết định của bạn"
+              subtitle={
+                openComments > 0
+                  ? `Đang có ${openComments} góp ý mở. Chọn Yêu cầu sửa để trả về Account, hoặc đánh dấu đã xử lý hết rồi Duyệt.`
+                  : 'Chỗ nào chưa ổn, bấm biểu tượng góp ý ở đúng dòng đó rồi chọn Yêu cầu sửa. Ổn hết thì Duyệt.'
+              }
+            >
               <div className="flex flex-wrap gap-2">
-                <Button icon="check" onClick={() => setDecision({ kind: 'approve', comment: '' })}>
+                <Button icon="check" disabled={openComments > 0} title={openComments > 0 ? 'Còn góp ý chưa xử lý' : undefined} onClick={() => setDecision({ kind: 'approve', comment: '' })}>
                   Duyệt
                 </Button>
                 <Button variant="secondary" icon="edit" onClick={() => setDecision({ kind: 'changes', comment: '' })}>
@@ -1032,7 +1109,7 @@ export function QuoteBuilderPage() {
                     <Button variant="secondary" icon="edit" onClick={() => setConfirmReopen(true)}>
                       Sửa (phải duyệt lại)
                     </Button>
-                    <Button variant="success" icon="send" busy={busy === 'send'} onClick={sendNow}>
+                    <Button variant="success" icon="send" busy={busy === 'send'} disabled={!sendBlock.ok} onClick={sendNow}>
                       Xuất PDF & gửi
                     </Button>
                   </>
@@ -1041,6 +1118,7 @@ export function QuoteBuilderPage() {
             >
               {lastDecision?.comment && `“${lastDecision.comment}” — `}
               {lastDecision && `${personName(people, lastDecision.approver_id)}, ${fmtVnDateTime(lastDecision.decided_at, tz)}`}
+              {!sendBlock.ok && <div className="mt-1 font-semibold">{sendBlock.error}</div>}
             </Banner>
           )}
           {quote.status === 'sent' && (
@@ -1076,7 +1154,9 @@ export function QuoteBuilderPage() {
           </p>
         </section>
 
-        <aside aria-label="Báo giá tương tự" className="flex min-w-0 flex-[1_1_320px] flex-col gap-3 rounded-2xl border border-line bg-white p-5">
+        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
+        <ReviewCard quoteId={quote.id} code={quote.code} locked={quote.status === 'sent'} />
+        <aside aria-label="Báo giá tương tự" className="flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-white p-5">
           <div>
             <h2 className="text-lg font-extrabold text-ink">Báo giá tương tự đã gửi</h2>
             <p className="mt-1 text-sm text-ink-3">Từ Kho tham chiếu · cùng nhóm dịch vụ trước, rồi theo số hạng mục trùng</p>
@@ -1109,6 +1189,7 @@ export function QuoteBuilderPage() {
             </div>
           ))}
         </aside>
+        </div>
       </div>
 
       <div aria-hidden="true" style={{ position: 'fixed', left: '-10000px', top: 0 }}>
@@ -1132,13 +1213,20 @@ export function QuoteBuilderPage() {
             <Button variant="ghost" onClick={() => setDecision(null)}>
               Huỷ
             </Button>
-            <Button busy={busy === 'decide'} disabled={decision?.kind === 'changes' && !decision.comment.trim()} onClick={decide}>
+            <Button
+              busy={busy === 'decide'}
+              disabled={decision?.kind === 'changes' ? !requestChangesGate(decision.comment, openComments).ok : !approveGate(openComments).ok}
+              onClick={decide}
+            >
               {decision?.kind === 'approve' ? 'Duyệt báo giá' : 'Gửi yêu cầu sửa'}
             </Button>
           </>
         }
       >
-        <Field label={decision?.kind === 'approve' ? 'Nhận xét (không bắt buộc)' : 'Cần sửa gì? (bắt buộc)'}>
+        {decision?.kind === 'changes' && openComments > 0 && (
+          <p className="mb-3 rounded-lg bg-[#FFFBEB] px-3 py-2 text-[14px] text-[#8A4B00]">Account sẽ thấy {openComments} góp ý bạn đã ghi trên báo giá, ngay tại dòng cần sửa.</p>
+        )}
+        <Field label={decision?.kind === 'approve' ? 'Nhận xét (không bắt buộc)' : openComments > 0 ? 'Nhận xét chung (không bắt buộc)' : 'Cần sửa gì? (bắt buộc, hoặc góp ý trực tiếp trên từng dòng)'}>
           {(fid) => <Textarea id={fid} value={decision?.comment ?? ''} onChange={(e) => setDecision((d) => (d ? { ...d, comment: e.target.value } : d))} />}
         </Field>
       </Modal>
@@ -1160,5 +1248,6 @@ export function QuoteBuilderPage() {
         <p className="text-[15px] text-ink-2">Mọi chỉnh sửa sau khi gửi duyệt hoặc đã duyệt đều đưa báo giá về Nháp. Sửa xong phải gửi duyệt lại (nếu vẫn ngoài khung giá).</p>
       </Modal>
     </div>
+    </ReviewProvider>
   );
 }

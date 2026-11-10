@@ -249,6 +249,38 @@ test('quote transitions check the expected status and record approvals', async (
   assert.equal((await sql(`select count(*)::int n from public.approvals where quote_id = $1`, [U.q1]))[0].n, 1);
 });
 
+test('review comments: readers are the PM, CEO, Admin and the quote owner; nobody writes directly', async () => {
+  const [q] = await as(U.acc1, ({ q }) => q(`insert into public.quotes (client) values ('Comment test') returning id`), { keep: true });
+  const [line] = await as(U.acc1, ({ q: run }) => run(`insert into public.quote_lines (quote_id, position, item_name, unit, qty, unit_price) values ($1, 1, 'Dòng thử', 'gói', 1, 1000) returning id`, [q.id]), { keep: true });
+  const [c] = await sql(
+    `insert into public.quote_comments (quote_id, author_id, anchor, line_id, anchor_label, body) values ($1, $2, 'line', $3, 'Dòng 1 · Dòng thử', 'Giá thấp quá') returning id`,
+    [q.id, U.pm, line.id],
+  );
+  const read = (uid) => as(uid, ({ q: run }) => run(`select id from public.quote_comments where quote_id = $1`, [q.id]));
+  assert.equal((await read(U.acc1)).length, 1);
+  assert.equal((await read(U.pm)).length, 1);
+  assert.equal((await read(U.ceo)).length, 1);
+  assert.equal((await read(U.admin)).length, 1);
+  assert.equal((await read(U.acc2)).length, 0);
+  assert.equal((await read(U.staff1)).length, 0);
+  // Once the quote is sent every Account reads the quote (the archive), but not the internal comments.
+  await sql(`update public.quotes set status = 'sent', sent_at = now() where id = $1`, [q.id]);
+  assert.equal((await as(U.acc2, ({ q: run }) => run(`select id from public.quotes where id = $1`, [q.id]))).length, 1);
+  assert.equal((await read(U.acc2)).length, 0);
+  await sql(`update public.quotes set status = 'draft', sent_at = null where id = $1`, [q.id]);
+  for (const uid of [U.acc1, U.pm, U.admin]) {
+    await denied(as(uid, ({ q: run }) => run(`insert into public.quote_comments (quote_id, author_id, body) values ($1, $2, 'x')`, [q.id, uid])));
+    await denied(as(uid, ({ q: run }) => run(`update public.quote_comments set resolved_at = now() where id = $1`, [c.id])));
+    await denied(as(uid, ({ q: run }) => run(`delete from public.quote_comments where id = $1`, [c.id])));
+  }
+  // Deleting the line keeps the comment (it falls back to the general list by its label).
+  await sql(`delete from public.quote_lines where id = $1`, [line.id]);
+  const [kept] = await sql(`select line_id, anchor_label from public.quote_comments where id = $1`, [c.id]);
+  assert.deepEqual(kept, { line_id: null, anchor_label: 'Dòng 1 · Dòng thử' });
+  await sql(`delete from public.quotes where id = $1`, [q.id]);
+  assert.equal((await sql(`select count(*)::int n from public.quote_comments where id = $1`, [c.id]))[0].n, 0);
+});
+
 test('quote terms: everyone active reads, only PM/CEO/Admin edit; new quotes take VAT and default terms', async () => {
   const terms = await as(U.acc1, ({ q }) => q(`select text, default_on from public.quote_terms where active order by position`));
   assert.ok(terms.length >= 1);

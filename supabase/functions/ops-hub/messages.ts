@@ -71,6 +71,15 @@ export function decisionText(o: { code: string; decision: 'approve' | 'changes';
   return [head, `Người duyệt: ${ROLE_LABEL[o.approverRole]}`, o.comment ? `Nhận xét: ${e(o.comment)}` : ''].filter(Boolean).join('\n');
 }
 
+export function commentText(o: { code: string; client: string; authorName: string; place: string; body: string; reply: boolean }): string {
+  const body = o.body.length > 300 ? `${o.body.slice(0, 300)}…` : o.body;
+  return [
+    `<b>${o.reply ? 'Trả lời góp ý' : 'Góp ý mới'} · ${e(o.code)}</b>`,
+    `Khách: ${e(o.client)} · ${e(o.authorName)}`,
+    `${e(o.place)}: “${e(body)}”`,
+  ].join('\n');
+}
+
 export function linkButton(text: string, url: string | null): Button[][] | undefined {
   return url ? [[{ text, url }]] : undefined;
 }

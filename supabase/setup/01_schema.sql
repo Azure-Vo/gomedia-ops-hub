@@ -188,6 +188,28 @@ create table if not exists public.approvals (
 );
 create index if not exists approvals_quote_idx on public.approvals(quote_id);
 
+-- 1.3 · Review on the quote itself: the PM / CEO opens the quote by its link and leaves comments
+-- on the exact line, section or block that needs a fix; the Account replies and marks each one done.
+-- A thread is a root comment (parent_id null) plus replies. Only roots carry the resolved state.
+-- All writes go through the Edge Function (service role); signed-in users only read.
+create table if not exists public.quote_comments (
+  id uuid primary key default gen_random_uuid(),
+  quote_id uuid not null references public.quotes(id) on delete cascade,
+  parent_id uuid references public.quote_comments(id) on delete cascade,
+  author_id uuid not null references public.profiles(id),
+  anchor text not null default 'general' check (anchor in ('general','client','line','section','totals','terms')),
+  -- The line a comment points at; null once that line is deleted (the label below still says which one).
+  line_id uuid references public.quote_lines(id) on delete set null,
+  section_title text,
+  anchor_label text not null default '',
+  body text not null check (length(trim(body)) between 1 and 2000),
+  resolved_at timestamptz,
+  resolved_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists quote_comments_quote_idx on public.quote_comments(quote_id, created_at);
+create index if not exists quote_comments_open_idx on public.quote_comments(quote_id) where parent_id is null and resolved_at is null;
+
 create table if not exists public.task_types (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
@@ -497,6 +519,7 @@ grant insert (quote_id, position, library_item_id, item_name, unit, qty, unit_pr
 grant update (position, qty, unit_price, library_price, override_reason, section, description) on public.quote_lines to authenticated;
 
 grant select on public.approvals to authenticated;
+grant select on public.quote_comments to authenticated;
 
 grant select on public.task_types to authenticated;
 grant insert (name, milestone_1, milestone_2, milestone_3, milestone_4, active) on public.task_types to authenticated;
@@ -524,7 +547,7 @@ revoke update, delete, truncate on public.events from authenticated, service_rol
 -- ----------------------------------------------------- row level security ------------
 do $$ declare t text; begin
   foreach t in array array['profiles','settings','library_items','price_rules','quotes','quote_lines','approvals',
-                           'task_types','tasks','milestones','checkpoints','alerts','events','quote_terms'] loop
+                           'task_types','tasks','milestones','checkpoints','alerts','events','quote_terms','quote_comments'] loop
     execute format('alter table public.%I enable row level security', t);
   end loop;
 end $$;
@@ -602,6 +625,13 @@ create policy lines_delete on public.quote_lines for delete to authenticated
 drop policy if exists approvals_read on public.approvals;
 create policy approvals_read on public.approvals for select to authenticated
   using (exists (select 1 from public.quotes q where q.id = quote_id));
+
+-- Review comments are internal: the PM, CEO and Admin read all of them, an Account only those on
+-- their own quotes (not on other people's sent quotes in the archive).
+drop policy if exists quote_comments_read on public.quote_comments;
+create policy quote_comments_read on public.quote_comments for select to authenticated
+  using (public.has_role('pm','ceo','admin')
+         or exists (select 1 from public.quotes q where q.id = quote_id and q.created_by = auth.uid()));
 
 drop policy if exists task_types_read on public.task_types;
 create policy task_types_read on public.task_types for select to authenticated using (public.app_role() is not null);

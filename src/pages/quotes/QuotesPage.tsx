@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fmtNum, QUOTE_STATUS_LABEL, QuoteStatus, workingHoursBetween } from '@/domain';
-import { Button, Card, EmptyState, ErrorBox, Loading, PageHeader, Select, useAsync, useToast } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, ErrorBox, Icon, Loading, PageHeader, Select, useAsync, useToast } from '@/components/ui';
 import { fmtVnd, fmtVnDateTime } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
 import { loadPeople, normQuote, payable, personName, QUOTE_COLS, QuoteRow } from './data';
 import { BandBadge, StatusBadge } from './parts';
+import { loadOpenCounts } from './review';
 
 export function QuotesPage() {
   const me = useProfile();
@@ -20,7 +21,10 @@ export function QuotesPage() {
     let q = supabase.from('quotes').select(QUOTE_COLS).eq('source', 'app').order('created_at', { ascending: false }).limit(500);
     if (me.role === 'account') q = q.eq('created_by', me.id);
     const [rows, people] = await Promise.all([q, loadPeople()]);
-    return { rows: (check(rows) as QuoteRow[]).map(normQuote), people };
+    const list = (check(rows) as QuoteRow[]).map(normQuote);
+    // Review comments still open, so the Account sees at a glance which quotes need a fix.
+    const open = await loadOpenCounts(list.filter((x) => x.status !== 'sent').map((x) => x.id));
+    return { rows: list, people, open };
   }, [me.id]);
 
   const rows = useMemo(() => {
@@ -110,7 +114,15 @@ export function QuotesPage() {
                       <td className="py-2.5 pr-3">{q.client || <span className="text-ink-3">(chưa nhập)</span>}</td>
                       {me.role !== 'account' && <td className="hidden py-2.5 pr-3 sm:table-cell">{personName(data!.people, q.created_by)}</td>}
                       <td className="py-2.5 pr-3">
-                        <StatusBadge status={q.status} />
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <StatusBadge status={q.status} />
+                          {(data!.open.get(q.id) ?? 0) > 0 && (
+                            <Badge tone="accent">
+                              <Icon name="message" size={12} />
+                              {data!.open.get(q.id)} góp ý
+                            </Badge>
+                          )}
+                        </span>
                       </td>
                       <td className="hidden py-2.5 pr-3 sm:table-cell">
                         <BandBadge level={q.band_result} />

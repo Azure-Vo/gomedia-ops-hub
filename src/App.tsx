@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { HOME, Layout, RequireRole } from '@/components/Layout';
 import { Banner, Button, Loading } from '@/components/ui';
 import { isConfigured } from '@/lib/config';
@@ -12,7 +13,7 @@ import { LarkPage } from '@/pages/lark/LarkPage';
 import { LarkSetupPage } from '@/pages/lark/LarkSetupPage';
 import { LibraryPage } from '@/pages/library/LibraryPage';
 import { PriceRulesPage } from '@/pages/library/PriceRulesPage';
-import { LoginPage, NotConfiguredPage } from '@/pages/LoginPage';
+import { LoginPage, NotConfiguredPage, RETURN_KEY, takeReturnPath } from '@/pages/LoginPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { ApprovalsPage } from '@/pages/quotes/ApprovalsPage';
 import { ArchivePage } from '@/pages/quotes/ArchivePage';
@@ -34,7 +35,19 @@ function guard(roles: Role[], el: JSX.Element) {
 
 function HomeRedirect() {
   const { profile } = useSession();
-  return <Navigate to={profile ? HOME[profile.role] : '/'} replace />;
+  // Someone who opened a quote link, then signed in with the emailed link, lands on the app root:
+  // send them on to the page the link pointed at.
+  const [back] = useState(takeReturnPath);
+  return <Navigate to={back ?? (profile ? HOME[profile.role] : '/')} replace />;
+}
+
+/** Once signed in on any page other than the root, a stored return path is no longer needed. */
+function ForgetReturnPath() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (pathname !== '/') localStorage.removeItem(RETURN_KEY);
+  }, [pathname]);
+  return null;
 }
 
 export function App() {
@@ -53,6 +66,7 @@ export function App() {
   }
   return (
     <SettingsProvider>
+      <ForgetReturnPath />
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<HomeRedirect />} />

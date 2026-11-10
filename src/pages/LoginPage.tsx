@@ -2,6 +2,23 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Banner, Button, Field, Input } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 
+export const RETURN_KEY = 'ops-hub-return-to';
+
+/** The page to go back to after signing in, if it was stored in the last 30 minutes. Reading it clears it. */
+export function takeReturnPath(): string | null {
+  try {
+    const raw = localStorage.getItem(RETURN_KEY);
+    if (!raw) return null;
+    localStorage.removeItem(RETURN_KEY);
+    const v = JSON.parse(raw) as { path?: string; at?: number };
+    if (typeof v.path !== 'string' || !v.path.startsWith('/') || v.path.startsWith('//')) return null;
+    if (!(Date.now() - Number(v.at) < 30 * 60_000)) return null;
+    return v.path;
+  } catch {
+    return null;
+  }
+}
+
 function friendly(msg: string): string {
   if (/signups not allowed|otp_disabled|user not found/i.test(msg)) return 'Email này chưa được Admin mời vào app. Nhờ Admin thêm bạn ở trang Người dùng.';
   if (/only request this after|rate limit|too many/i.test(msg)) return 'Bạn vừa yêu cầu email. Đợi khoảng 1 phút rồi thử lại.';
@@ -36,6 +53,10 @@ export function LoginPage() {
     setBusy(false);
     if (error) return setError(friendly(error.message));
     localStorage.setItem('ops-hub-last-email', clean);
+    // The emailed link opens the app root: remember the page this person was sent to (e.g. a quote link).
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+    const path = window.location.pathname.slice(base.length) || '/';
+    if (path !== '/') localStorage.setItem(RETURN_KEY, JSON.stringify({ path: path + window.location.search, at: Date.now() }));
     setStep('code');
   }
 

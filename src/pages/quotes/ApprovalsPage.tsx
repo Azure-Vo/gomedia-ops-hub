@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { deviationPct, fmtNum, ROLE_LABEL, workingHoursBetween } from '@/domain';
+import { approveGate, deviationPct, fmtNum, requestChangesGate, ROLE_LABEL, workingHoursBetween } from '@/domain';
 import { Badge, Button, Card, EmptyState, ErrorBox, Field, Loading, Modal, PageHeader, Textarea, useAsync, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { fmtVnd, fmtVnDateTime } from '@/lib/format';
@@ -9,6 +9,7 @@ import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
 import { LINE_COLS, LineRow, loadLibrary, loadPeople, normLine, normQuote, payable, personName, QUOTE_COLS, QuoteRow } from './data';
 import { BandReasons, PriceTag } from './parts';
+import { loadOpenCounts } from './review';
 
 export function ApprovalsPage() {
   const me = useProfile();
@@ -20,12 +21,13 @@ export function ApprovalsPage() {
   const { data, error, loading, reload } = useAsync(async () => {
     const qs = (check(await supabase.from('quotes').select(QUOTE_COLS).eq('status', 'pending').eq('approver', level).order('approval_requested_at')) as QuoteRow[]).map(normQuote);
     const ids = qs.map((q) => q.id);
-    const [lines, people, lib] = await Promise.all([
+    const [lines, people, lib, open] = await Promise.all([
       ids.length ? supabase.from('quote_lines').select(LINE_COLS).in('quote_id', ids).order('position') : Promise.resolve({ data: [], error: null }),
       loadPeople(),
       loadLibrary(true),
+      loadOpenCounts(ids),
     ]);
-    return { qs, lines: (check(lines) as LineRow[]).map(normLine), people, lib: new Map(lib.map((i) => [i.id, i])) };
+    return { qs, lines: (check(lines) as LineRow[]).map(normLine), people, lib: new Map(lib.map((i) => [i.id, i])), open };
   }, [level]);
 
   async function decide() {
@@ -45,7 +47,10 @@ export function ApprovalsPage() {
 
   return (
     <div>
-      <PageHeader title="Duyệt báo giá" subtitle={`Hàng chờ của ${ROLE_LABEL[level]}. Chỉ báo giá ngoài khung giá cần đúng cấp của bạn mới hiện ở đây.`} />
+      <PageHeader
+        title="Duyệt báo giá"
+        subtitle={`Hàng chờ của ${ROLE_LABEL[level]}. Chỉ báo giá ngoài khung giá cần đúng cấp của bạn mới hiện ở đây. Mở báo giá để góp ý ngay tại dòng cần sửa.`}
+      />
       {loading ? (
         <Loading />
       ) : error ? (
@@ -57,6 +62,7 @@ export function ApprovalsPage() {
           {data!.qs.map((q) => {
             const lines = data!.lines.filter((l) => l.quote_id === q.id);
             const waiting = q.approval_requested_at ? workingHoursBetween(q.approval_requested_at, Date.now(), calendar) : 0;
+            const open = data!.open.get(q.id) ?? 0;
             return (
               <Card
                 key={q.id}
@@ -66,15 +72,19 @@ export function ApprovalsPage() {
                       {q.code}
                     </Link>
                     <Badge tone="brand">Chờ {ROLE_LABEL[level]}</Badge>
+                    {open > 0 && <Badge tone="accent">{open} góp ý đang mở</Badge>}
                   </span>
                 }
                 subtitle={`${q.client} · ${personName(data!.people, q.created_by)} · gửi duyệt ${q.approval_requested_at ? fmtVnDateTime(q.approval_requested_at, tz) : ''} · đã chờ ${fmtNum(waiting, 1)} giờ làm việc`}
                 actions={
                   <>
+                    <Link to={`/quotes/${q.id}`} className="inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-[10px] border-[1.5px] border-dashed border-accent-line bg-accent-soft px-4 text-[15px] font-semibold text-accent hover:bg-[#FFE9D6]">
+                      Mở báo giá để góp ý
+                    </Link>
                     <Button variant="secondary" icon="edit" onClick={() => setDecision({ quote: q, kind: 'changes', comment: '' })}>
                       Yêu cầu sửa
                     </Button>
-                    <Button icon="check" onClick={() => setDecision({ quote: q, kind: 'approve', comment: '' })}>
+                    <Button icon="check" disabled={open > 0} title={open > 0 ? 'Còn góp ý chưa xử lý trên báo giá' : undefined} onClick={() => setDecision({ quote: q, kind: 'approve', comment: '' })}>
                       Duyệt
                     </Button>
                   </>
@@ -138,13 +148,30 @@ export function ApprovalsPage() {
             <Button variant="ghost" onClick={() => setDecision(null)}>
               Huỷ
             </Button>
-            <Button busy={busy} disabled={decision?.kind === 'changes' && !decision.comment.trim()} onClick={decide}>
+            <Button
+              busy={busy}
+              disabled={
+                !!decision &&
+                (decision.kind === 'changes'
+                  ? !requestChangesGate(decision.comment, data?.open.get(decision.quote.id) ?? 0).ok
+                  : !approveGate(data?.open.get(decision.quote.id) ?? 0).ok)
+              }
+              onClick={decide}
+            >
               {decision?.kind === 'approve' ? 'Duyệt báo giá' : 'Gửi yêu cầu sửa'}
             </Button>
           </>
         }
       >
-        <Field label={decision?.kind === 'approve' ? 'Nhận xét (không bắt buộc)' : 'Account cần sửa gì? (bắt buộc)'}>
+        <Field
+          label={
+            decision?.kind === 'approve'
+              ? 'Nhận xét (không bắt buộc)'
+              : (data?.open.get(decision?.quote.id ?? '') ?? 0) > 0
+                ? 'Nhận xét chung (không bắt buộc, Account đã thấy các góp ý trên báo giá)'
+                : 'Account cần sửa gì? (bắt buộc, hoặc mở báo giá để góp ý từng dòng)'
+          }
+        >
           {(id) => <Textarea id={id} value={decision?.comment ?? ''} onChange={(e) => setDecision((d) => (d ? { ...d, comment: e.target.value } : d))} />}
         </Field>
       </Modal>
