@@ -23,6 +23,8 @@ export interface QuoteKpis {
   avgHours: number | null;
   lateCount: number;
   latePct: number | null;
+  /** Average turnaround of the late quotes only (always above lateHours when there is one). */
+  lateAvgHours: number | null;
   rows: QuoteKpiRow[];
 }
 
@@ -41,12 +43,14 @@ export function quoteKpis(quotes: QuoteForKpi[], cal: WorkCalendar, lateHours: n
     rows.push({ ...q, hours, late: hours > lateHours + 1e-9 });
   }
   const count = rows.length;
-  const lateCount = rows.filter((r) => r.late).length;
+  const lateRows = rows.filter((r) => r.late);
+  const lateCount = lateRows.length;
   return {
     count,
     avgHours: count ? rows.reduce((s, r) => s + r.hours, 0) / count : null,
     lateCount,
     latePct: count ? (lateCount * 100) / count : null,
+    lateAvgHours: lateCount ? lateRows.reduce((s, r) => s + r.hours, 0) / lateCount : null,
     rows,
   };
 }

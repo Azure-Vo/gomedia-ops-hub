@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { fmtNum, QUOTE_STATUS_LABEL, QuoteStatus, workingHoursBetween } from '@/domain';
+import { fmtNum, localToMs, QUOTE_STATUS_LABEL, quoteKpis, QuoteStatus, turnaroundByBand, workingHoursBetween } from '@/domain';
 import { Badge, Button, Card, EmptyState, ErrorBox, Icon, Loading, PageHeader, Select, useAsync, useToast } from '@/components/ui';
 import { fmtVnd, fmtVnDateTime } from '@/lib/format';
 import { useProfile } from '@/lib/session';
@@ -9,6 +9,7 @@ import { check, supabase } from '@/lib/supabase';
 import { loadPeople, normQuote, payable, personName, QUOTE_COLS, QuoteRow } from './data';
 import { BandBadge, StatusBadge } from './parts';
 import { loadOpenCounts } from './review';
+import { QuoteKpiTiles } from './QuoteKpiTiles';
 
 export function QuotesPage() {
   const me = useProfile();
@@ -66,6 +67,7 @@ export function QuotesPage() {
           )
         }
       />
+      <KpiCard />
       <Card
         title="Danh sách"
         actions={
@@ -142,5 +144,46 @@ export function QuotesPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+const dayMs = (date: string, tz: string) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return localToMs(y, m, d, 0, 0, tz);
+};
+const vnDate = (date: string) => date.split('-').reverse().join('/');
+
+/** S2 KPIs over the pilot period (Admin → Cài đặt), the same figures as the Dashboard. */
+function KpiCard() {
+  const me = useProfile();
+  const { settings, calendar, tz } = useSettings();
+  const from = settings?.pilot_start ?? null;
+  const to = settings?.pilot_end ?? null;
+  const { data, error } = useAsync(async () => {
+    let q = supabase.from('quotes').select('id, requested_at, sent_at, band_result').eq('status', 'sent').eq('source', 'app');
+    if (from) q = q.gte('sent_at', new Date(dayMs(from, tz)).toISOString());
+    if (to) q = q.lt('sent_at', new Date(dayMs(to, tz) + 86_400_000).toISOString());
+    return check(await q) as { id: string; requested_at: string; sent_at: string; band_result: 'send_now' | 'pm' | 'ceo' | null }[];
+  }, [from, to, tz]);
+  if (error) return null;
+  const late = settings?.quote_late_hours ?? 8;
+  const qs = (data ?? []).map((q) => ({ id: q.id, requestedAt: Date.parse(q.requested_at), sentAt: Date.parse(q.sent_at), bandResult: q.band_result }));
+  const k = quoteKpis(qs, calendar, late);
+  const period = from && to ? ` trong kỳ pilot ${vnDate(from)}–${vnDate(to)}` : '';
+  return (
+    <Card
+      className="mb-4"
+      title="Chỉ số báo giá (S2)"
+      subtitle={`${k.count} báo giá đã gửi${period} · thời gian = giờ làm việc từ lúc khách yêu cầu đến lúc gửi`}
+      actions={
+        ['pm', 'ceo', 'admin'].includes(me.role) ? (
+          <Link to="/dashboard" className="text-[14px] font-bold text-brand underline">
+            Xem Dashboard
+          </Link>
+        ) : undefined
+      }
+    >
+      {data ? <QuoteKpiTiles k={k} byBand={turnaroundByBand(qs, calendar, late)} settings={settings} /> : <p className="text-ink-3">Đang tính…</p>}
+    </Card>
   );
 }

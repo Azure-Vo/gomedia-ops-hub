@@ -368,6 +368,8 @@ describe('closing and KPIs', () => {
     expect(k.count).toBe(19);
     expect(Math.round((k.avgHours as number) * 100) / 100).toBe(8.66);
     expect(k.lateCount).toBe(10);
+    // The 10 late quotes alone average 10.70 h (the ">10 h" figure); the target applies to the overall average.
+    expect(Math.round((k.lateAvgHours as number) * 100) / 100).toBe(10.7);
     expect(baselineCheck(quotes, cal).pass).toBe(true);
     // Extra archive history outside 01/07–30/09/2026 does not change the check.
     const older = { id: 'old', requestedAt: localToMs(2026, 5, 4, 8, 0, cal.timeZone), sentAt: localToMs(2026, 5, 8, 17, 0, cal.timeZone) };

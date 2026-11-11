@@ -203,7 +203,8 @@ export function SettingsPage() {
               <Field label="Pilot bắt đầu">{(id) => <Input id={id} type="date" value={s.pilot_start ?? ''} onChange={(e) => setS({ ...s, pilot_start: e.target.value || null })} />}</Field>
               <Field label="Pilot kết thúc">{(id) => <Input id={id} type="date" value={s.pilot_end ?? ''} onChange={(e) => setS({ ...s, pilot_end: e.target.value || null })} />}</Field>
               {numField('Baseline: báo giá TB (giờ)', s.kpi_baselines.quote_avg_hours, (n) => setS({ ...s, kpi_baselines: { ...s.kpi_baselines, quote_avg_hours: n } }))}
-              {numField('Mục tiêu: báo giá TB ≤ (giờ)', s.kpi_targets.quote_avg_hours, (n) => setS({ ...s, kpi_targets: { ...s.kpi_targets, quote_avg_hours: n } }))}
+              {numField('Baseline: TB riêng báo giá trễ (giờ)', s.kpi_baselines.quote_late_avg_hours ?? 10.7, (n) => setS({ ...s, kpi_baselines: { ...s.kpi_baselines, quote_late_avg_hours: n } }))}
+              {numField('Mục tiêu: báo giá TB < (giờ)', s.kpi_targets.quote_avg_hours, (n) => setS({ ...s, kpi_targets: { ...s.kpi_targets, quote_avg_hours: n } }))}
               {numField('Baseline: % báo giá trễ', s.kpi_baselines.quote_late_pct, (n) => setS({ ...s, kpi_baselines: { ...s.kpi_baselines, quote_late_pct: n } }))}
               {numField('Mục tiêu: % báo giá trễ ≤', s.kpi_targets.quote_late_pct, (n) => setS({ ...s, kpi_targets: { ...s.kpi_targets, quote_late_pct: n } }))}
               {numField('Baseline: % task trễ', s.kpi_baselines.task_overdue_pct, (n) => setS({ ...s, kpi_baselines: { ...s.kpi_baselines, task_overdue_pct: n } }))}

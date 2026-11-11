@@ -10,7 +10,7 @@ export interface SettingsRow {
   no_reply_window_hours: number;
   quote_late_hours: number;
   library_review_months: number;
-  kpi_baselines: { quote_avg_hours: number; quote_late_pct: number; quote_count: number; task_overdue_pct: number };
+  kpi_baselines: { quote_avg_hours: number; quote_late_pct: number; quote_count: number; task_overdue_pct: number; quote_late_avg_hours?: number };
   kpi_targets: { quote_avg_hours: number; quote_late_pct: number; response_rate: number; early_warning: number; overdue_pct: number };
   pilot_start: string | null;
   pilot_end: string | null;

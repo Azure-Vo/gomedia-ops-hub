@@ -1,6 +1,5 @@
-import { ReactNode, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  BAND_LABEL,
   checkpointResponseRate,
   earlyWarningRate,
   fmtNum,
@@ -10,7 +9,7 @@ import {
   turnaroundByBand,
   weeklyTurnaround,
 } from '@/domain';
-import { Banner, Button, Card, ErrorBox, Field, Icon, Input, Loading, PageHeader, Select, useAsync } from '@/components/ui';
+import { Banner, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, Select, useAsync } from '@/components/ui';
 import { downloadText, toCsv } from '@/lib/csv';
 import { fmtVnDateTime, toDateInput } from '@/lib/format';
 import { useProfile } from '@/lib/session';
@@ -18,6 +17,7 @@ import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
 import { ALERT_COLS, AlertRow, CP_COLS, CheckpointRow, TASK_COLS, TaskRow } from '../tasks/data';
 import { WeeklyChart } from './WeeklyChart';
+import { DEFAULT_BASE, DEFAULT_TARGET, KpiTile, QuoteKpiTiles } from '../quotes/QuoteKpiTiles';
 
 interface QuoteLite {
   id: string;
@@ -35,24 +35,6 @@ function dayStart(date: string, tz: string): number {
   return localToMs(y, m, d, 0, 0, tz);
 }
 
-function Tile({ label, value, base, target, good, children }: { label: string; value: string; base?: string; target: string; good: boolean | null; children?: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-xl bg-canvas p-4">
-      <div className="text-[13px] font-semibold text-ink-2">{label}</div>
-      <div className="text-[32px] font-extrabold leading-tight text-ink">{value}</div>
-      <div className="text-[13px] text-ink-3">
-        {base && <>Baseline {base} · </>}Mục tiêu {target}
-      </div>
-      {good !== null && (
-        <div className={`mt-1 inline-flex items-center gap-1 text-[13px] font-bold ${good ? 'text-ok-ink' : 'text-bad'}`}>
-          <Icon name={good ? 'check' : 'x'} size={16} /> {good ? 'Đạt mục tiêu' : 'Chưa đạt'}
-        </div>
-      )}
-      {children}
-    </div>
-  );
-}
-
 export function DashboardPage() {
   const me = useProfile();
   const { settings, calendar, tz } = useSettings();
@@ -65,8 +47,8 @@ export function DashboardPage() {
   const [source, setSource] = useState<'app' | 'import'>('app');
   const [table, setTable] = useState(false);
   const late = settings?.quote_late_hours ?? 8;
-  const base = settings?.kpi_baselines ?? { quote_avg_hours: 8.66, quote_late_pct: 52.6, quote_count: 19, task_overdue_pct: 55.2 };
-  const tgt = settings?.kpi_targets ?? { quote_avg_hours: 6.93, quote_late_pct: 30, response_rate: 90, early_warning: 85, overdue_pct: 20 };
+  const base = settings?.kpi_baselines ?? DEFAULT_BASE;
+  const tgt = settings?.kpi_targets ?? DEFAULT_TARGET;
 
   const range = useMemo(() => {
     const a = dayStart(from, tz);
@@ -205,7 +187,7 @@ export function DashboardPage() {
                 }
               >
                 <div className="grid gap-3 md:grid-cols-3">
-                  <Tile
+                  <KpiTile
                     label="Tỷ lệ task trễ hạn"
                     value={k.overdue.rate === null ? '–' : `${fmtNum(k.overdue.rate, 1)}%`}
                     base={`${fmtNum(base.task_overdue_pct, 1)}%`}
@@ -215,8 +197,8 @@ export function DashboardPage() {
                     <div className="text-[13px] text-ink-3">
                       {k.overdue.overdue}/{k.overdue.closed} task đã chốt
                     </div>
-                  </Tile>
-                  <Tile
+                  </KpiTile>
+                  <KpiTile
                     label="Tỷ lệ trả lời checkpoint"
                     value={k.response.rate === null ? '–' : `${fmtNum(k.response.rate, 1)}%`}
                     target={`≥ ${fmtNum(tgt.response_rate, 0)}%`}
@@ -225,8 +207,8 @@ export function DashboardPage() {
                     <div className="text-[13px] text-ink-3">
                       {k.response.answered}/{k.response.sent} checkpoint
                     </div>
-                  </Tile>
-                  <Tile
+                  </KpiTile>
+                  <KpiTile
                     label="Tỷ lệ rủi ro được cảnh báo sớm"
                     value={k.early.rate === null ? '–' : `${fmtNum(k.early.rate, 1)}%`}
                     target={`≥ ${fmtNum(tgt.early_warning, 0)}%`}
@@ -235,7 +217,7 @@ export function DashboardPage() {
                     <div className="text-[13px] text-ink-3">
                       {k.early.early}/{k.early.risky} task có rủi ro được báo trước deadline
                     </div>
-                  </Tile>
+                  </KpiTile>
                 </div>
               </Card>
             )}
@@ -254,40 +236,12 @@ export function DashboardPage() {
                   </>
                 }
               >
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Tile
-                    label={`Tỷ lệ báo giá quá ${late} giờ`}
-                    value={k.quote.latePct === null ? '–' : `${fmtNum(k.quote.latePct, 1)}%`}
-                    base={`${fmtNum(base.quote_late_pct, 1)}%`}
-                    target={`≤ ${fmtNum(tgt.quote_late_pct, 0)}%`}
-                    good={k.quote.latePct === null ? null : k.quote.latePct <= tgt.quote_late_pct}
-                  >
-                    <div className="text-[13px] text-ink-3">
-                      {k.quote.lateCount}/{k.quote.count} báo giá
-                    </div>
-                  </Tile>
-                  <Tile
-                    label="Thời gian báo giá trung bình"
-                    value={k.quote.avgHours === null ? '–' : `${fmtNum(k.quote.avgHours, 2)} h`}
-                    base={`${fmtNum(base.quote_avg_hours, 2)} h`}
-                    target={`≤ ${fmtNum(tgt.quote_avg_hours, 2)} h`}
-                    good={k.quote.avgHours === null ? null : k.quote.avgHours <= tgt.quote_avg_hours}
-                  />
-                  <div className="rounded-xl bg-canvas p-4">
-                    <div className="text-[13px] font-semibold text-ink-2">Theo kết quả khung giá</div>
-                    <ul className="mt-2 flex flex-col gap-1.5 text-[14px]">
-                      {k.byBand.map((b) => (
-                        <li key={b.level} className="flex justify-between gap-2">
-                          <span>{BAND_LABEL[b.level]}</span>
-                          <span className="tabular-nums">
-                            {b.count} · {b.avgHours === null ? '–' : `${fmtNum(b.avgHours, 2)} h`}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    {source === 'import' && <p className="mt-2 text-[12px] text-ink-3">Dữ liệu lịch sử không có kết quả khung giá.</p>}
-                  </div>
-                </div>
+                <QuoteKpiTiles
+                  k={k.quote}
+                  byBand={k.byBand}
+                  settings={settings}
+                  note={source === 'import' && <p className="mt-2 text-[12px] text-ink-3">Dữ liệu lịch sử không có kết quả khung giá.</p>}
+                />
                 <h3 className="mt-5 text-[15px] font-bold text-ink">Thời gian báo giá trung bình theo tuần (giờ làm việc)</h3>
                 {!k.weekly.length ? (
                   <p className="mt-2 text-sm text-ink-3">Chưa có báo giá nào được gửi trong khoảng này.</p>

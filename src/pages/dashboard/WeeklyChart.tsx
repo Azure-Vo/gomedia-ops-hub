@@ -52,7 +52,7 @@ export function WeeklyChart({ points, baseline, target, lateHours }: { points: W
   const last = points.length ? points[points.length - 1] : null;
   const refs = [
     { v: baseline, label: `Baseline ${fmtNum(baseline, 2)} h`, color: '#5D5B80', dash: '6 4' },
-    { v: target, label: `Mục tiêu ≤ ${fmtNum(target, 2)} h`, color: '#C2410C', dash: '2 4' },
+    { v: target, label: `Mục tiêu < ${fmtNum(target, 2)} h`, color: '#C2410C', dash: '2 4' },
   ];
 
   return (
