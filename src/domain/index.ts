@@ -13,3 +13,4 @@ export * from './imports';
 export * from './cases';
 export * from './version';
 export * from './labels';
+export * from './gostar';
