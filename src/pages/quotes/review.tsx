@@ -142,6 +142,9 @@ export function ReviewProvider({
 }) {
   const toast = useToast();
   const [comments, setComments] = useState<ReviewComment[]>([]);
+  // Names of people who are not in the list the page loaded at open (e.g. an account created after
+  // the Account opened this tab): fetched when their first comment arrives, so it never shows "–".
+  const [extraPeople, setExtraPeople] = useState<People>(new Map());
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -171,6 +174,31 @@ export function ReviewProvider({
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [reload]);
+
+  useEffect(() => {
+    const missing = new Set<string>();
+    for (const c of comments) {
+      for (const id of [c.authorId, c.resolvedBy]) if (id && !people.has(id) && !extraPeople.has(id)) missing.add(id);
+    }
+    if (!missing.size) return;
+    let alive = true;
+    supabase
+      .from('profiles')
+      .select('id, full_name, email, role')
+      .in('id', [...missing])
+      .then(({ data }) => {
+        if (!alive || !data?.length) return;
+        setExtraPeople((cur) => {
+          const next = new Map(cur);
+          for (const r of data as { id: string; full_name: string; email: string; role: string }[]) next.set(r.id, r);
+          return next;
+        });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [comments, people, extraPeople]);
+  const allPeople = useMemo<People>(() => (extraPeople.size ? new Map([...people, ...extraPeople]) : people), [people, extraPeople]);
 
   const lineKey = lineIds.join('|');
   const sectionKey = sectionTitles.join('|');
@@ -234,14 +262,14 @@ export function ReviewProvider({
           setBusy(false);
         }
       },
-      people,
+      people: allPeople,
       meId,
       tz,
       busy,
       error,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [comments, lineKey, sectionKey, canWrite, expanded, people, meId, tz, busy, error, quoteId, reload, toast]);
+  }, [comments, lineKey, sectionKey, canWrite, expanded, allPeople, meId, tz, busy, error, quoteId, reload, toast]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -305,6 +305,18 @@ await step('Review by link: PM comments on a line, Account fixes and marks done,
   await account.getByText(/Còn 2 góp ý đang mở/).waitFor();
   await account.getByText('12 video là nhiều so với ngân sách khách, giảm còn 8').first().waitFor();
   await shot(account, '07c-review-account-sees');
+  // Someone whose account was created after the Account opened this page answers: their name must
+  // still show (the page loads the list of names only once).
+  const [late] = await sql(
+    `insert into auth.users (email, raw_app_meta_data, raw_user_meta_data) values ('ceo.moi@go.vn', '{"ops_role":"ceo"}', '{"full_name":"CEO Mới Vào"}') returning id`,
+  );
+  const [lineThread] = await sql(`select id, anchor, line_id, anchor_label from public.quote_comments where quote_id = $1 and anchor = 'line' and parent_id is null`, [id]);
+  await sql(
+    `insert into public.quote_comments (quote_id, parent_id, author_id, anchor, line_id, anchor_label, body) values ($1, $2, $3, $4, $5, $6, 'CEO đồng ý với PM')`,
+    [id, lineThread.id, late.id, lineThread.anchor, lineThread.line_id, lineThread.anchor_label],
+  );
+  await account.getByText('CEO đồng ý với PM').waitFor({ timeout: 35000 });
+  await account.getByText('CEO Mới Vào').waitFor({ timeout: 10000 });
   await account.getByLabel(/Số lượng: Video TikTok/).fill('8');
   await account.locator('#discount').fill('10');
   await account.getByText('Trong khung giá · Account gửi được ngay').waitFor({ timeout: 15000 });
@@ -328,7 +340,7 @@ await step('Review by link: PM comments on a line, Account fixes and marks done,
   await account.getByText(/Đã lưu vào Kho tham chiếu/).waitFor({ timeout: 15000 });
   const [row] = await sql(`select q.status, (select count(*)::int from public.quote_comments c where c.quote_id = q.id and c.parent_id is null and c.resolved_at is not null) done,
                                   (select count(*)::int from public.quote_comments c where c.quote_id = q.id) total from public.quotes q where q.id = $1`, [id]);
-  assert.deepEqual(row, { status: 'sent', done: 2, total: 3 });
+  assert.deepEqual(row, { status: 'sent', done: 2, total: 4 });
   // Sent: the comments stay readable, nothing new can be added.
   await account.reload();
   await account.getByText(/Báo giá đã gửi khách: góp ý được giữ lại/).waitFor();
