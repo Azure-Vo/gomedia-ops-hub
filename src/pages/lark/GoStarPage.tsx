@@ -195,7 +195,7 @@ export function GoStarPage() {
         <>
           {closed ? (
             <Banner tone="ok" title={`Đã chốt ${monthLabel(month)}`} className="mb-4">
-              CEO {profileName(closed.finalized_by)} chốt lúc {fmtVnDateTime(closed.finalized_at, tz)}. Bảng dưới đây là kết quả đã khoá; điểm của tháng không sửa được nữa.
+              {profileName(closed.finalized_by)} chốt lúc {fmtVnDateTime(closed.finalized_at, tz)}. Bảng dưới đây là kết quả đã khoá; điểm của tháng không sửa được nữa.
             </Banner>
           ) : over ? (
             <Banner tone="warn" title={`${monthLabel(month)} đã kết thúc, chưa chốt`} className="mb-4">
@@ -215,17 +215,18 @@ export function GoStarPage() {
             <>
               <div className="mb-4 grid gap-3 md:grid-cols-3">
                 {[1, 2, 3].map((place) => {
-                  const r = rows.find((x) => x.rank === place) ?? rows.filter((x) => x.rank <= place).at(place - 1);
+                  const hit = rows.find((x) => x.rank === place) ?? rows.filter((x) => x.rank <= place).at(place - 1);
+                  const r = hit && hit.starCount > 0 ? hit : undefined;
                   const medal = ['🥇', '🥈', '🥉'][place - 1];
                   const isEom = r && eom.length === 1 && eom[0].openId === r.openId;
                   return (
                     <div key={place} className={cx('rounded-2xl border p-4', isEom ? 'border-[#F5C76B] bg-[#FFF8E6]' : 'border-line bg-white')}>
                       <div className="flex items-center justify-between">
                         <span className="text-[13px] font-bold uppercase tracking-wide text-ink-3">
-                          {medal} Hạng {r?.rank ?? place}
+                          {medal} Hạng {hit?.rank ?? place}
                           {r?.tied ? ' · đồng hạng' : ''}
                         </span>
-                        {isEom && <Badge tone="accent">Employee of the Month</Badge>}
+                        {isEom && <Badge tone="accent">{closed ? 'Employee of the Month' : 'Dự kiến Employee of the Month'}</Badge>}
                       </div>
                       {r ? (
                         <>
@@ -235,11 +236,11 @@ export function GoStarPage() {
                             <span className="text-[13px] font-bold text-ink-2">{r.starCount}/5</span>
                           </div>
                           <div className="mt-2 text-[14px] text-ink-2">
-                            Thưởng: <b className="text-ink">{r.prize ? fmtVnd(r.prize) : '—'}</b>
+                            {closed ? 'Thưởng' : 'Thưởng dự kiến'}: <b className="text-ink">{r.prize ? fmtVnd(r.prize) : '—'}</b>
                           </div>
                         </>
                       ) : (
-                        <div className="mt-2 text-ink-3">—</div>
+                        <div className="mt-2 text-ink-3">Chưa có ai đạt sao</div>
                       )}
                     </div>
                   );
@@ -257,7 +258,7 @@ export function GoStarPage() {
                 className="mb-4"
               >
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[980px] text-[14px]">
+                  <table className="w-full min-w-[900px] text-[14px]">
                     <thead>
                       <tr className="border-b border-line text-left text-[12px] uppercase tracking-wide text-ink-3">
                         <th className="py-2 pr-2">Hạng</th>
@@ -268,10 +269,7 @@ export function GoStarPage() {
                           </th>
                         ))}
                         <th className="py-2 pr-3">Tổng</th>
-                        <th className="py-2 pr-2 text-right">KPI</th>
-                        <th className="py-2 pr-2 text-right">C.lượng</th>
-                        <th className="py-2 pr-3 text-right">Teamwork</th>
-                        <th className="py-2 pr-3 text-right">Thưởng</th>
+                        <th className="py-2 pr-3 text-right">{closed ? 'Thưởng' : 'Thưởng dự kiến'}</th>
                         <th className="py-2" />
                       </tr>
                     </thead>
@@ -307,10 +305,7 @@ export function GoStarPage() {
                             <td className="py-2.5 pr-3">
                               <Stars n={r.starCount} />
                             </td>
-                            <td className="py-2.5 pr-2 text-right tabular-nums">{r.score.kpiPct !== null ? `${r.score.kpiPct}%` : '—'}</td>
-                            <td className="py-2.5 pr-2 text-right tabular-nums">{r.score.quality ?? '—'}</td>
-                            <td className="py-2.5 pr-3 text-right tabular-nums">{r.score.teamwork ?? '—'}</td>
-                            <td className="py-2.5 pr-3 text-right font-bold tabular-nums">{r.prize ? fmtVnd(r.prize) : '—'}</td>
+                            <td className="whitespace-nowrap py-2.5 pr-3 text-right font-bold tabular-nums">{r.prize ? fmtVnd(r.prize) : '—'}</td>
                             <td className="py-2 text-right">
                               {canScore && (
                                 <Button size="sm" variant="secondary" onClick={() => setEditing(r)}>
@@ -354,7 +349,7 @@ export function GoStarPage() {
                   <div className="mb-2 text-[13px] font-extrabold uppercase tracking-wide text-ink-3">Tin vinh danh trên group Lark</div>
                   <BotCard message={goStarMessage(month, rows, (v) => fmtVnd(v))} />
                   <p className="mt-2 px-1 text-[12.5px] text-ink-3">
-                    Bản xem trước của tin bot gửi group Lark khi CEO chốt tháng. Bước gửi tự động lên Lark chưa làm.
+                    {closed ? 'Nội dung tin vinh danh của tháng đã chốt.' : 'Xem trước theo số liệu tạm tính; tin chính thức theo kết quả lúc CEO chốt tháng.'} Bước bot tự gửi lên group Lark chưa làm.
                   </p>
                 </div>
               </div>
