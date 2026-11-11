@@ -14,6 +14,7 @@ import {
   linesMissingOverrideReason,
   PublicBand,
   quoteTotals,
+  appendScope,
   rankSimilar,
   requestChangesGate,
   ROLE_LABEL,
@@ -22,7 +23,7 @@ import {
   validateQuote,
   workingHoursBetween,
 } from '@/domain';
-import { Badge, Banner, Button, Card, ErrorBox, Field, Icon, IconButton, Input, Loading, Modal, Select, Textarea, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Card, cx, ErrorBox, Field, Icon, IconButton, Input, Loading, Modal, Select, Textarea, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { fmtVnd, fmtVnDate, fmtVnDateTime, fmtVnLong, fromLocalInput, toLocalInput } from '@/lib/format';
 import { useProfile } from '@/lib/session';
@@ -71,7 +72,7 @@ interface ArchiveEntry {
   service_group: string | null;
   sent_at: string;
   total: number;
-  quote_lines: { library_item_id: string | null; item_name: string; qty: number; section: string | null; description: string | null }[];
+  quote_lines: { library_item_id: string | null; item_name: string; unit: string; qty: number; unit_price: number; position: number; section: string | null; description: string | null }[];
 }
 
 const newKey = () => Math.random().toString(36).slice(2);
@@ -131,7 +132,7 @@ export function QuoteBuilderPage() {
         supabase.from('approvals').select('id, level, approver_id, decision, comment, decided_at').eq('quote_id', id).order('decided_at', { ascending: false }),
         loadLibrary(true),
         loadPeople(),
-        supabase.from('quotes').select('id, code, client, service_group, sent_at, total, quote_lines(library_item_id, item_name, qty, section, description)').eq('status', 'sent').neq('id', id).order('sent_at', { ascending: false }).limit(400),
+        supabase.from('quotes').select('id, code, client, service_group, sent_at, total, quote_lines(library_item_id, item_name, unit, qty, unit_price, position, section, description)').eq('status', 'sent').neq('id', id).order('sent_at', { ascending: false }).limit(400),
         loadTerms(true),
       ]);
       const qr = check(q) as QuoteRow | null;
@@ -461,29 +462,53 @@ export function QuoteBuilderPage() {
     setH({ terms: [...lib, ...custom] });
   }
 
-  function copyFrom(src: ArchiveEntry) {
-    if (lines.length && !window.confirm(`Thay ${lines.length} dòng hiện tại bằng các hạng mục của ${src.code}?`)) return;
+  /** Brings a past quote's items into this one, at today's library prices: appended, or replacing the current lines. */
+  function addFrom(src: ArchiveEntry, mode: 'append' | 'replace') {
+    if (mode === 'replace' && lines.length && !window.confirm(`Thay ${lines.length} dòng hiện tại bằng các hạng mục của ${src.code}?`)) return;
     const res = copyLinesWithTodayPrices(
-      src.quote_lines.map((l) => ({ libraryItemId: l.library_item_id, itemName: l.item_name, qty: Number(l.qty), section: l.section, description: l.description })),
+      [...src.quote_lines].sort((a, b) => a.position - b.position).map((l) => ({ libraryItemId: l.library_item_id, itemName: l.item_name, qty: Number(l.qty), section: l.section, description: l.description })),
       libForCopy,
     );
-    setLines(
-      res.lines.map((l) => ({
-        key: newKey(),
-        library_item_id: l.libraryItemId,
-        item_name: l.itemName,
-        unit: l.unit,
-        qty: l.qty,
-        unit_price: l.unitPrice,
-        override_reason: null,
-        section: l.section || libMap.get(l.libraryItemId)?.service_group || DEFAULT_SECTION_TITLE,
-        description: l.description,
-        kind: l.kind,
-      })),
+    const copied: EditLine[] = res.lines.map((l) => ({
+      key: newKey(),
+      library_item_id: l.libraryItemId,
+      item_name: l.itemName,
+      unit: l.unit,
+      qty: l.qty,
+      unit_price: l.unitPrice,
+      override_reason: null,
+      section: l.section || libMap.get(l.libraryItemId)?.service_group || DEFAULT_SECTION_TITLE,
+      description: l.description,
+      kind: l.kind,
+    }));
+    const skippedNote = res.skipped.length ? `. Bỏ qua ${res.skipped.join(', ')} (không còn trong thư viện)` : '';
+    if (mode === 'replace' || !lines.length) {
+      setLines(copied);
+      setExtraSections([]);
+      setH({ copied_from: src.id, service_group: header?.service_group ?? src.service_group });
+      toast(`Đã thêm ${copied.length} hạng mục từ ${src.code}, giá theo thư viện hôm nay${skippedNote}`);
+      return;
+    }
+    const { added, already } = appendScope(
+      lines.map((l) => ({ libraryItemId: l.library_item_id, section: sectionOf(l) })),
+      copied.map((l) => ({ ...l, libraryItemId: l.library_item_id, section: sectionOf(l) })),
     );
-    setExtraSections([]);
-    setH({ copied_from: src.id, service_group: header?.service_group ?? src.service_group });
-    toast(`Đã chép ${res.lines.length} hạng mục từ ${src.code}, giá lấy theo thư viện hôm nay${res.skipped.length ? `. Bỏ qua: ${res.skipped.join(', ')} (không còn trong thư viện)` : ''}`);
+    // Each added line goes right after the last line of its section, or into a new section at the end.
+    setLines((ls) => {
+      let out = [...ls];
+      for (const { libraryItemId: _id, ...line } of added) {
+        const last = out.map((l) => sectionOf(l)).lastIndexOf(sectionOf(line));
+        out = last < 0 ? [...out, line] : [...out.slice(0, last + 1), line, ...out.slice(last + 1)];
+      }
+      return out;
+    });
+    if (!header?.copied_from) setH({ copied_from: src.id });
+    if (!header?.service_group && src.service_group) setH({ service_group: src.service_group });
+    toast(
+      `Đã thêm ${added.length} hạng mục từ ${src.code}, giá theo thư viện hôm nay` +
+        (already.length ? `. Giữ nguyên ${already.length} hạng mục đã có: ${already.map((l) => l.item_name).join(', ')}` : '') +
+        skippedNote,
+    );
   }
 
   async function run(label: string, fn: () => Promise<void>) {
@@ -1163,30 +1188,7 @@ export function QuoteBuilderPage() {
           </div>
           {!similar.length && <p className="text-sm text-ink-3">Chưa có báo giá tương tự. Chọn nhóm dịch vụ hoặc thêm hạng mục để gợi ý.</p>}
           {similar.map(({ q, sharedItems, sameGroup }) => (
-            <div key={q.id} className="flex flex-col gap-1.5 rounded-xl border border-line p-3.5">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                <Link to={`/quotes/${q.id}`} className="whitespace-nowrap font-bold text-ink hover:text-brand">
-                  {q.code}
-                </Link>
-                <span className="whitespace-nowrap text-[12px] text-ink-3">
-                  {sameGroup ? 'Cùng nhóm' : 'Khác nhóm'} · {sharedItems} hạng mục trùng
-                </span>
-              </div>
-              <div className="text-[14.5px] leading-snug">
-                {q.client} · {q.quote_lines.slice(0, 3).map((l) => `${Number(l.qty)} × ${l.item_name}`).join(', ')}
-                {q.quote_lines.length > 3 ? '…' : ''}
-              </div>
-              <div className="flex items-center justify-between gap-2 text-[13.5px] text-ink-3">
-                <span className="leading-snug">
-                  <span className="whitespace-nowrap">{fmtVnDate(q.sent_at, tz)}</span> · <span className="whitespace-nowrap font-semibold text-ink-2">{fmtVnd(q.total)}</span>
-                </span>
-                {editable && (
-                  <button type="button" onClick={() => copyFrom(q)} className="min-h-[40px] shrink-0 whitespace-nowrap rounded-lg bg-accent-soft px-3 font-bold text-accent">
-                    Chép hạng mục →
-                  </button>
-                )}
-              </div>
-            </div>
+            <SimilarCard key={q.id} q={q} sharedItems={sharedItems} sameGroup={sameGroup} tz={tz} editable={editable} hasLines={lines.length > 0} onAdd={(mode) => addFrom(q, mode)} />
           ))}
         </aside>
         </div>
@@ -1249,5 +1251,77 @@ export function QuoteBuilderPage() {
       </Modal>
     </div>
     </ReviewProvider>
+  );
+}
+
+function SimilarCard({
+  q,
+  sharedItems,
+  sameGroup,
+  tz,
+  editable,
+  hasLines,
+  onAdd,
+}: {
+  q: ArchiveEntry;
+  sharedItems: number;
+  sameGroup: boolean;
+  tz: string;
+  editable: boolean;
+  hasLines: boolean;
+  onAdd: (mode: 'append' | 'replace') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const items = [...q.quote_lines].sort((a, b) => a.position - b.position);
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-line p-3.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <Link to={`/quotes/${q.id}`} className="whitespace-nowrap font-bold text-ink hover:text-brand">
+          {q.code}
+        </Link>
+        <span className="whitespace-nowrap text-[12px] text-ink-3">
+          {sameGroup ? 'Cùng nhóm' : 'Khác nhóm'} · {sharedItems} hạng mục trùng
+        </span>
+      </div>
+      <div className="text-[14.5px] font-semibold leading-snug text-ink">{q.client}</div>
+      <div className="text-[13.5px] text-ink-3">
+        <span className="whitespace-nowrap">{fmtVnDate(q.sent_at, tz)}</span> · <span className="whitespace-nowrap font-semibold text-ink-2">{fmtVnd(q.total)}</span>
+      </div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex min-h-[36px] items-center justify-between rounded-lg bg-canvas px-3 text-left text-[13.5px] font-semibold text-ink-2 hover:bg-line-soft"
+      >
+        <span>{open ? 'Ẩn' : 'Xem'} {items.length} hạng mục</span>
+        <span className={cx('transition-transform', open && 'rotate-180')}><Icon name="chevronDown" size={16} /></span>
+      </button>
+      {open && (
+        <ul className="flex flex-col divide-y divide-line-soft text-[13.5px]">
+          {items.map((l, i) => (
+            <li key={i} className="flex items-baseline justify-between gap-3 py-1.5">
+              <span className="min-w-0 leading-snug">
+                <span className="tabular-nums text-ink-3">{Number(l.qty)} ×</span> {l.item_name}
+                {!l.library_item_id && <span className="ml-1 text-[12px] text-ink-3">(ngoài thư viện, không chép)</span>}
+              </span>
+              <span className="shrink-0 tabular-nums text-ink-3">{fmtVnd(Number(l.unit_price) * Number(l.qty))}</span>
+            </li>
+          ))}
+          <li className="pt-1.5 text-[12px] text-ink-3">Giá trên là giá lúc gửi; khi thêm vào báo giá này, giá lấy theo thư viện hôm nay.</li>
+        </ul>
+      )}
+      {editable && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" icon="plus" className="flex-1" onClick={() => onAdd('append')}>
+            Thêm tất cả {items.length} hạng mục
+          </Button>
+          {hasLines && (
+            <button type="button" onClick={() => onAdd('replace')} className="min-h-[36px] px-2 text-[13px] font-semibold text-ink-3 underline hover:text-ink">
+              Thay toàn bộ
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

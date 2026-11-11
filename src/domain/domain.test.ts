@@ -8,6 +8,7 @@ import {
   checkpointResponseRate,
   checkpointTimes,
   closeOutcome,
+  appendScope,
   copyLinesWithTodayPrices,
   DEFAULT_BAND_RULES,
   DEFAULT_SECTION_TITLE,
@@ -224,6 +225,22 @@ describe('quote lifecycle and maths', () => {
     );
     expect(res.lines).toEqual([{ libraryItemId: 'tt', itemName: 'TikTok', unit: 'video', qty: 10, unitPrice: 1_600_000, libraryPrice: 1_600_000, kind: 'service', section: null, description: null }]);
     expect(res.skipped).toEqual(['Old', 'Custom']);
+  });
+  it('"Thêm tất cả" appends a past scope and keeps lines already in the same section', () => {
+    const current = [
+      { libraryItemId: 'tt', section: 'Social' },
+      { libraryItemId: null, section: 'Social' },
+    ];
+    const incoming = [
+      { libraryItemId: 'tt', section: 'Social', qty: 8 }, // already there: current qty kept
+      { libraryItemId: 'tt', section: 'Ads', qty: 2 }, // same item, other section: added
+      { libraryItemId: 'fb', section: 'Social', qty: 3 },
+      { libraryItemId: 'fb', section: 'Social', qty: 1 }, // a past quote may list an item twice: both kept
+    ];
+    const r = appendScope(current, incoming);
+    expect(r.added.map((l) => `${l.libraryItemId}/${l.section}/${l.qty}`)).toEqual(['tt/Ads/2', 'fb/Social/3', 'fb/Social/1']);
+    expect(r.already.map((l) => l.qty)).toEqual([8]);
+    expect(appendScope([], incoming).added).toHaveLength(4);
   });
   it('ranks similar quotes by service group, then shared items', () => {
     const archive = [

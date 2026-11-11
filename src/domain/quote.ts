@@ -245,6 +245,21 @@ export function copyLinesWithTodayPrices(
   return { lines, skipped };
 }
 
+/**
+ * "Thêm tất cả" from a past quote: its lines are appended to the current scope. A library item that is
+ * already in the same section keeps its current line (quantity untouched) instead of being doubled.
+ */
+export function appendScope<T extends { libraryItemId: string | null; section: string }>(
+  existing: { libraryItemId: string | null; section: string }[],
+  incoming: T[],
+): { added: T[]; already: T[] } {
+  const have = new Set(existing.filter((e) => e.libraryItemId).map((e) => `${e.libraryItemId}|${e.section}`));
+  const added: T[] = [];
+  const already: T[] = [];
+  for (const l of incoming) (l.libraryItemId && have.has(`${l.libraryItemId}|${l.section}`) ? already : added).push(l);
+  return { added, already };
+}
+
 export interface ArchiveQuote {
   id: string;
   serviceGroup: string | null;
