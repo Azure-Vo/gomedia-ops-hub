@@ -70,17 +70,39 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-canvas">
-      <div className="mx-auto flex max-w-md flex-col gap-6 px-4 py-16">
-        <div className="flex flex-col items-start gap-3">
-          <img src={`${import.meta.env.BASE_URL}brand/gomedia-logo.png`} alt="Go Media" width={526} height={200} className="h-16 w-auto" />
-          <h1 className="text-2xl font-extrabold text-ink">Ops Hub</h1>
+    <div className="grid min-h-screen bg-canvas lg:grid-cols-[minmax(380px,5fr)_7fr]">
+      <aside className="relative hidden flex-col justify-between overflow-hidden bg-rail px-12 py-12 text-white lg:flex">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-white">
+            <img src={`${import.meta.env.BASE_URL}brand/gomedia-mark.png`} alt="" width={32} height={32} className="h-8 w-8" />
+          </span>
+          <span className="text-[15px] text-rail-text">Go Media</span>
         </div>
-        <div className="rounded-2xl border border-line bg-white p-6">
+        <div className="max-w-sm">
+          <p className="text-[44px] font-semibold leading-[1.05] tracking-[-0.03em]">Ops Hub</p>
+          <dl className="mt-10 flex flex-col border-t border-white/15 text-[14.5px]">
+            <div className="flex gap-4 border-b border-white/15 py-3.5">
+              <dt className="w-8 shrink-0 font-semibold text-white">S2</dt>
+              <dd className="text-rail-text">Báo giá theo Thư viện giá, kiểm tra khung giá, góp ý ngay trên từng dòng.</dd>
+            </div>
+            <div className="flex gap-4 border-b border-white/15 py-3.5">
+              <dt className="w-8 shrink-0 font-semibold text-white">S1</dt>
+              <dd className="text-rail-text">Nhắc task trên Lark và ghi nhận nhân viên hằng tháng với Go Star.</dd>
+            </div>
+          </dl>
+        </div>
+        <p className="text-[13px] text-rail-group">Thời gian tính bằng giờ làm việc của Go Media.</p>
+      </aside>
+      <div className="mx-auto flex w-full max-w-md flex-col justify-center gap-6 px-4 py-16">
+        <div className="flex flex-col items-start gap-3 lg:hidden">
+          <img src={`${import.meta.env.BASE_URL}brand/gomedia-logo.png`} alt="Go Media" width={526} height={200} className="h-14 w-auto" />
+        </div>
+        <h1 className="sr-only">Ops Hub</h1>
+        <div className="rounded-xl border border-line bg-white p-7 shadow-sheet">
           {step === 'email' ? (
             <form onSubmit={sendLink} className="flex flex-col gap-4">
               <div>
-                <h2 className="text-lg font-bold text-ink">Đăng nhập bằng email công việc</h2>
+                <h2 className="text-[20px] font-semibold tracking-[-0.01em] text-ink">Đăng nhập bằng email công việc</h2>
                 <p className="mt-1 text-sm text-ink-3">App gửi cho bạn một email có link đăng nhập và mã 6 số. Không cần mật khẩu.</p>
               </div>
               <Field label="Email">{(id) => <Input id={id} type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ten@gomedia.vn" />}</Field>
@@ -92,7 +114,7 @@ export function LoginPage() {
           ) : (
             <form onSubmit={verify} className="flex flex-col gap-4">
               <div>
-                <h2 className="text-lg font-bold text-ink">Kiểm tra hộp thư</h2>
+                <h2 className="text-[20px] font-semibold tracking-[-0.01em] text-ink">Kiểm tra hộp thư</h2>
                 <p className="mt-1 text-sm text-ink-3">
                   Đã gửi tới <b className="text-ink">{email}</b>. Bấm link trong email (mở trên máy này), hoặc nhập mã trong email vào đây.
                 </p>
@@ -105,10 +127,10 @@ export function LoginPage() {
                 Đăng nhập
               </Button>
               <div className="flex flex-wrap justify-between gap-2 text-sm">
-                <button type="button" className="min-h-[44px] font-semibold text-brand" onClick={() => setStep('email')}>
+                <button type="button" className="min-h-[40px] font-medium text-brand underline-offset-[3px] hover:underline" onClick={() => setStep('email')}>
                   Đổi email
                 </button>
-                <button type="button" className="min-h-[44px] font-semibold text-brand" onClick={() => sendLink()}>
+                <button type="button" className="min-h-[40px] font-medium text-brand underline-offset-[3px] hover:underline" onClick={() => sendLink()}>
                   Gửi lại email
                 </button>
               </div>

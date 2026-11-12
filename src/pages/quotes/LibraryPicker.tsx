@@ -140,7 +140,7 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
 
   return (
     <div className="mt-3 overflow-hidden rounded-xl border border-brand-line bg-white shadow-[0_6px_24px_-12px_rgba(24,0,173,0.35)]">
-      <div className="flex flex-col gap-3 border-b border-line-soft bg-[#FBFAFE] p-3">
+      <div className="flex flex-col gap-3 border-b border-line-soft bg-canvas/50 p-3">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Icon name="search" size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
@@ -155,7 +155,7 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
               aria-expanded="true"
               aria-controls={listId}
               aria-activedescendant={rows[active] ? `lp-${rows[active].id}` : undefined}
-              className="min-h-[44px] w-full rounded-lg border-[1.5px] border-line bg-white pl-10 pr-10 text-[15px] text-ink placeholder:text-ink-3/70 focus:border-brand focus:outline-none"
+              className="min-h-[44px] w-full rounded-lg border border-line bg-white pl-10 pr-10 text-[15px] text-ink placeholder:text-ink-3 focus:border-brand focus:outline-none"
             />
             {query && (
               <button type="button" aria-label="Xoá ô tìm" onClick={() => { setQuery(''); inputRef.current?.focus(); }} className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-ink-3 hover:bg-canvas hover:text-ink">
@@ -163,11 +163,11 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
               </button>
             )}
           </div>
-          <button type="button" onClick={onClose} className="min-h-[44px] rounded-[10px] bg-brand px-4 text-[15px] font-semibold text-white hover:bg-brand-dark">
+          <button type="button" onClick={onClose} className="min-h-[44px] rounded-lg bg-brand px-4 text-[15px] font-semibold text-white hover:bg-brand-dark">
             Xong
           </button>
         </div>
-        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-0.5 sm:flex-wrap sm:overflow-visible" role="group" aria-label="Lọc theo nhóm dịch vụ">
+        <div className="relative -mx-3 flex gap-2 overflow-x-auto px-3 pb-0.5 sm:flex-wrap sm:overflow-visible" role="group" aria-label="Lọc theo nhóm dịch vụ">
           {chip(ALL, 'Tất cả', items.length)}
           {popularIds.size > 0 && chip(POPULAR, 'Hay dùng', popularIds.size, 'clock')}
           {groups.map((g) => chip(g.name, g.name, g.n))}
@@ -213,7 +213,7 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
                     <span className="font-semibold tabular-nums text-ink-2 sm:hidden">
                       {fmtVnd(i.unit_price)} / {i.unit}
                     </span>
-                    {i.kind === 'pass_through' && <span className="rounded bg-[#E6F0FF] px-1 text-[11px] font-bold text-[#1D4ED8]">CHI HỘ</span>}
+                    {i.kind === 'pass_through' && <span className="rounded bg-info-soft px-1 text-[11px] font-bold text-info">CHI HỘ</span>}
                     {i.code && <span className="hidden font-mono text-[11.5px] sm:inline">{i.code}</span>}
                     {!showHeaders && <span>· {i.service_group}</span>}
                     {group === POPULAR && <span>· dùng trong {usage.get(i.id)} báo giá</span>}
@@ -253,7 +253,7 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-soft bg-[#FBFAFE] px-4 py-2 text-[12.5px] text-ink-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-soft bg-canvas/50 px-4 py-2 text-[12.5px] text-ink-3">
         <span className="hidden sm:inline">
           <kbd className="rounded border border-line bg-white px-1">↑</kbd> <kbd className="rounded border border-line bg-white px-1">↓</kbd> chọn ·{' '}
           <kbd className="rounded border border-line bg-white px-1">Enter</kbd> thêm · <kbd className="rounded border border-line bg-white px-1">Esc</kbd> đóng · gõ không dấu cũng được · bấm lại mục đã có để +1 SL

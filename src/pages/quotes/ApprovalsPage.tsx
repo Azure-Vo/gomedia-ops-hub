@@ -72,13 +72,13 @@ export function ApprovalsPage() {
                       {q.code}
                     </Link>
                     <Badge tone="brand">Chờ {ROLE_LABEL[level]}</Badge>
-                    {open > 0 && <Badge tone="accent">{open} góp ý đang mở</Badge>}
+                    {open > 0 && <Badge tone="warn">{open} góp ý đang mở</Badge>}
                   </span>
                 }
                 subtitle={`${q.client} · ${personName(data!.people, q.created_by)} · gửi duyệt ${q.approval_requested_at ? fmtVnDateTime(q.approval_requested_at, tz) : ''} · đã chờ ${fmtNum(waiting, 1)} giờ làm việc`}
                 actions={
                   <>
-                    <Link to={`/quotes/${q.id}`} className="inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-[10px] border-[1.5px] border-dashed border-accent-line bg-accent-soft px-4 text-[15px] font-semibold text-accent hover:bg-[#FFE9D6]">
+                    <Link to={`/quotes/${q.id}`} className="inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-lg border border-dashed border-accent-line bg-accent-soft px-4 text-[15px] font-semibold text-accent hover:bg-accent-soft">
                       Mở báo giá để góp ý
                     </Link>
                     <Button variant="secondary" icon="edit" onClick={() => setDecision({ quote: q, kind: 'changes', comment: '' })}>
@@ -94,10 +94,10 @@ export function ApprovalsPage() {
                   <b>Vì sao cần duyệt</b>
                   <BandReasons band={q.band_detail} />
                 </div>
-                <div className="mt-3 overflow-x-auto">
+                <div className="relative mt-3 overflow-x-auto">
                   <table className="w-full min-w-[640px] text-[14.5px]">
                     <thead className="text-left text-[13px] text-ink-3">
-                      <tr className="border-b border-line">
+                      <tr className="border-b-2 border-ink">
                         <th className="py-2 pr-3 font-semibold">Hạng mục</th>
                         <th className="py-2 pr-3 text-right font-semibold">SL</th>
                         <th className="py-2 pr-3 text-right font-semibold">Đơn giá</th>

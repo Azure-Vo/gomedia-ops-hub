@@ -106,7 +106,7 @@ export function LarkPage() {
         </p>
       )}
 
-      <div role="tablist" aria-label="S1 Lark" className="mb-4 flex gap-1 rounded-xl bg-line-soft p-1">
+      <div role="tablist" aria-label="S1 Lark" className="mb-5 flex gap-6 border-b border-line">
         {(
           [
             ['track', 'Theo dõi task'],
@@ -119,7 +119,7 @@ export function LarkPage() {
             role="tab"
             aria-selected={tab === k}
             onClick={() => setTab(k)}
-            className={cx('min-h-[40px] flex-1 rounded-lg px-3 text-[14.5px] font-bold', tab === k ? 'bg-white text-ink shadow-sm' : 'text-ink-3 hover:text-ink')}
+            className={cx('-mb-px min-h-[42px] border-b-2 px-0.5 text-[14.5px] transition-colors duration-150', tab === k ? 'border-ink font-semibold text-ink' : 'border-transparent text-ink-3 hover:border-line hover:text-ink')}
           >
             {label}
           </button>
@@ -199,10 +199,10 @@ function TrackTab({
             {!kids.length ? (
               <p className="text-ink-3">Chưa có task con.</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full min-w-[720px] text-[14.5px]">
                   <thead>
-                    <tr className="border-b border-line text-left text-[12.5px] uppercase tracking-wide text-ink-3">
+                    <tr className="border-b border-line text-left text-[12.5px] text-ink-3">
                       <th className="py-2 pr-3">Mã</th>
                       <th className="py-2 pr-3">Task con</th>
                       <th className="py-2 pr-3">Người thực hiện</th>
@@ -282,7 +282,7 @@ function GroupTab({ notifs, tasks }: { notifs: LarkNotificationRow[]; tasks: Lar
       </label>
       {days.map((d) => (
         <section key={d} className="mb-5">
-          <h2 className="mb-2 text-[13px] font-extrabold uppercase tracking-wide text-ink-3">{fmtDueDate(d)}</h2>
+          <h2 className="mb-2 text-[13px] font-semibold text-ink-3">{fmtDueDate(d)}</h2>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {list
               .filter((n) => n.local_date === d)

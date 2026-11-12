@@ -65,11 +65,11 @@ export function Layout() {
   const items = NAV.filter((n) => n.roles.includes(profile.role));
   const groups = [...new Set(items.map((i) => i.group))];
   const nav = (
-    <nav aria-label="Điều hướng chính" className="flex flex-col gap-4">
+    <nav aria-label="Điều hướng chính" className="flex flex-col gap-5">
       {groups.map((g) => (
         <div key={g}>
-          <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-ink-3">{g}</div>
-          <ul className="flex flex-col gap-0.5">
+          <div className="px-3 pb-1.5 text-[12px] font-medium text-rail-group">{g}</div>
+          <ul className="flex flex-col gap-px">
             {items
               .filter((i) => i.group === g)
               .map((i) => (
@@ -78,10 +78,13 @@ export function Layout() {
                     to={i.to}
                     onClick={() => setOpen(false)}
                     className={({ isActive }) =>
-                      cx('flex min-h-[44px] items-center gap-3 rounded-[10px] px-3 text-[15px] font-medium', isActive ? 'bg-brand-soft font-bold text-brand' : 'text-ink-2 hover:bg-canvas')
+                      cx(
+                        'relative flex min-h-[40px] items-center gap-3 rounded-lg px-3 text-[14.5px] transition-colors duration-150',
+                        isActive ? 'bg-rail-active font-semibold text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-rail-text hover:bg-rail-hover hover:text-white',
+                      )
                     }
                   >
-                    <Icon name={i.icon} />
+                    <Icon name={i.icon} size={17} className="shrink-0 opacity-90" />
                     {i.label}
                   </NavLink>
                 </li>
@@ -94,25 +97,25 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-canvas">
       <div className="flex">
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-white p-4 lg:flex">
+        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-rail px-3 py-4 [scrollbar-color:#2A3F7E_transparent] lg:flex">
           <Brand />
-          <div className="mt-6 flex-1 overflow-y-auto">{nav}</div>
+          <div className="mt-7 flex-1 overflow-y-auto">{nav}</div>
           <UserBox name={profile.full_name || profile.email} role={ROLE_LABEL[profile.role]} onSignOut={signOut} />
         </aside>
         <div className="min-w-0 flex-1">
-          <header className="flex items-center justify-between gap-3 border-b border-line bg-white px-4 py-2 lg:hidden">
+          <header className="sticky top-0 z-30 flex items-center justify-between gap-3 bg-rail px-4 py-2 lg:hidden">
             <Brand />
-            <button type="button" aria-label="Mở menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-canvas">
+            <button type="button" aria-label="Mở menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex h-11 w-11 items-center justify-center rounded-lg text-white hover:bg-rail-hover">
               <Icon name={open ? 'x' : 'menu'} />
             </button>
           </header>
           {open && (
-            <div className="border-b border-line bg-white p-4 lg:hidden">
+            <div className="bg-rail px-3 pb-4 pt-2 lg:hidden">
               {nav}
               <UserBox name={profile.full_name || profile.email} role={ROLE_LABEL[profile.role]} onSignOut={signOut} />
             </div>
           )}
-          <main key={loc.pathname} className="mx-auto max-w-[1360px] px-4 py-6 sm:px-6">
+          <main key={loc.pathname} className="mx-auto max-w-[1440px] px-4 py-6 sm:px-8 sm:py-8">
             <Outlet />
           </main>
         </div>
@@ -123,11 +126,13 @@ export function Layout() {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-3">
-      <img src={`${import.meta.env.BASE_URL}brand/gomedia-mark.png`} alt="" width={44} height={44} className="h-11 w-11 shrink-0" />
+    <div className="flex items-center gap-3 px-1">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white">
+        <img src={`${import.meta.env.BASE_URL}brand/gomedia-mark.png`} alt="" width={30} height={30} className="h-[30px] w-[30px]" />
+      </span>
       <div className="leading-tight">
-        <div className="font-extrabold text-ink">Ops Hub</div>
-        <div className="text-[12px] font-semibold uppercase tracking-wide text-accent">Go Media</div>
+        <div className="text-[15.5px] font-semibold text-white">Ops Hub</div>
+        <div className="text-[12.5px] text-rail-text">Go Media</div>
       </div>
     </div>
   );
@@ -135,14 +140,25 @@ function Brand() {
 
 function UserBox({ name, role, onSignOut }: { name: string; role: string; onSignOut: () => void }) {
   return (
-    <div className="mt-4 flex items-center justify-between gap-2 border-t border-line-soft pt-4">
-      <div className="min-w-0">
-        <div className="truncate text-sm font-semibold text-ink">{name}</div>
-        <div className="text-[12px] text-ink-3">{role}</div>
+    <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/10 px-1 pt-4">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-[13px] font-semibold text-white">
+          {initials(name)}
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-white">{name}</div>
+          <div className="text-[12px] text-rail-group">{role}</div>
+        </div>
       </div>
-      <button type="button" onClick={onSignOut} aria-label="Đăng xuất" title="Đăng xuất" className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-3 hover:bg-canvas hover:text-ink">
+      <button type="button" onClick={onSignOut} aria-label="Đăng xuất" title="Đăng xuất" className="flex h-10 w-10 items-center justify-center rounded-lg text-rail-text transition-colors duration-150 hover:bg-rail-hover hover:text-white">
         <Icon name="logout" />
       </button>
     </div>
   );
+}
+
+function initials(name: string): string {
+  const parts = name.replace(/@.*/, '').trim().split(/\s+/).filter(Boolean);
+  const pick = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : (parts[0] ?? '?').slice(0, 2);
+  return pick.toUpperCase();
 }

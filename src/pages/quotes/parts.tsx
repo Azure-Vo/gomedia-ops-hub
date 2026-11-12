@@ -10,9 +10,22 @@ export function StatusBadge({ status }: { status: QuoteStatus }) {
   return <Badge tone={tone}>{QUOTE_STATUS_LABEL[status]}</Badge>;
 }
 
+/** Where the price band sent the quote. Read as a fact about pricing, not as a pending status. */
+const BAND_ROUTE: Record<BandLevel, [string, string]> = {
+  send_now: ['Trong khung', 'bg-ok'],
+  pm: ['Ngoài khung · PM duyệt', 'bg-accent-strong'],
+  ceo: ['Ngoài khung · CEO duyệt', 'bg-bad'],
+};
+
 export function BandBadge({ level }: { level: BandLevel | null }) {
   if (!level) return <span className="text-ink-3">–</span>;
-  return <Badge tone={level === 'send_now' ? 'ok' : level === 'pm' ? 'accent' : 'brand'}>{BAND_LABEL[level]}</Badge>;
+  const [text, dot] = BAND_ROUTE[level];
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13.5px] text-ink-2" title={BAND_LABEL[level]}>
+      <span aria-hidden="true" className={`h-2 w-2 rounded-full ${dot}`} />
+      {text}
+    </span>
+  );
 }
 
 export function BandReasons({ band }: { band: PublicBand | null | undefined }) {
@@ -26,18 +39,60 @@ export function BandReasons({ band }: { band: PublicBand | null | undefined }) {
   );
 }
 
-/** Deviation tag shown next to a unit price: LIBRARY, or CUSTOM ±x%. */
+/** Deviation tag shown next to a unit price: library price, or custom ±x%. */
 export function PriceTag({ unitPrice, libraryPrice, kind }: { unitPrice: number; libraryPrice: number | null; kind?: LineKind }) {
-  if (kind === 'pass_through') return <span className="whitespace-nowrap rounded-md bg-[#E6F0FF] px-1.5 py-0.5 text-[11px] font-extrabold tracking-wide text-[#1D4ED8]">CHI HỘ</span>;
-  if (libraryPrice === null) return <span className="whitespace-nowrap rounded-md bg-line-soft px-1.5 py-0.5 text-[11px] font-extrabold tracking-wide text-ink-2">NGOÀI THƯ VIỆN</span>;
+  const base = 'whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[12px] font-semibold leading-5';
+  if (kind === 'pass_through') return <span className={`${base} bg-info-soft text-info`}>Chi hộ</span>;
+  if (libraryPrice === null) return <span className={`${base} bg-ink/[0.06] text-ink-2`}>Ngoài thư viện</span>;
   const dev = libraryPrice > 0 ? ((unitPrice - libraryPrice) * 100) / libraryPrice : 0;
-  if (Math.abs(dev) < 0.005) return <span className="whitespace-nowrap rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-extrabold tracking-wide text-accent">THƯ VIỆN</span>;
-  const r = Math.round(Math.abs(dev) * 10) / 10;
+  if (Math.abs(dev) < 0.005) return <span className={`${base} bg-brand-soft text-brand`}>Giá thư viện</span>;
   return (
-    <span className="whitespace-nowrap rounded-md bg-[#FDE7D3] px-1.5 py-0.5 text-[11px] font-extrabold tracking-wide text-[#9A3412]">
-      TỰ NHẬP {dev > 0 ? '+' : '−'}
-      {String(r).replace('.', ',')}%
+    <span className={`${base} bg-accent-soft text-[#9A3412]`}>
+      Tự nhập {fmtDev(dev)}
     </span>
+  );
+}
+
+function fmtDev(dev: number): string {
+  const r = Math.round(Math.abs(dev) * 10) / 10;
+  return `${dev > 0 ? '+' : '−'}${String(r).replace('.', ',')}%`;
+}
+
+/** How far the band ruler reaches either side of the library price. */
+const RULER_SPAN = 30;
+
+/**
+ * Band ruler: where this line's unit price sits against its library price. The centre tick is the
+ * library price; the marker is the entered price, clamped to ±30%. It turns orange only when the
+ * server's band check named this line as a reason the quote left the self-send band. The rule
+ * thresholds themselves stay with the CEO and are never drawn.
+ */
+export function BandRuler({ unitPrice, libraryPrice, kind, flagged }: { unitPrice: number; libraryPrice: number | null; kind?: LineKind; flagged: boolean }) {
+  if (kind === 'pass_through') return <span className="text-[12px] font-medium text-info">Chi hộ · không xét khung giá</span>;
+  if (libraryPrice === null)
+    return <span className={`text-[12px] font-medium ${flagged ? 'text-accent' : 'text-ink-3'}`}>Ngoài thư viện{flagged ? ' · cần duyệt' : ''}</span>;
+  const dev = libraryPrice > 0 ? ((unitPrice - libraryPrice) * 100) / libraryPrice : 0;
+  const same = Math.abs(dev) < 0.005;
+  const clamped = Math.max(-RULER_SPAN, Math.min(RULER_SPAN, dev));
+  const left = 50 + (clamped / RULER_SPAN) * 50;
+  const tone = flagged ? 'bg-accent-strong' : same ? 'bg-brand' : 'bg-ink-2';
+  const label = same ? 'Đúng giá thư viện' : `${fmtDev(dev)} so với giá thư viện`;
+  return (
+    <div className="flex w-full flex-col items-stretch gap-1 sm:w-36" title={`Giá thư viện ${libraryPrice.toLocaleString('vi-VN')} đ`}>
+      <span aria-hidden="true" className="relative block h-4 w-full">
+        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-ink/35" />
+        {[0, 25, 75, 100].map((x) => (
+          <span key={x} className="absolute top-1/2 h-[7px] w-px -translate-y-1/2 bg-ink/35" style={{ left: `${x}%` }} />
+        ))}
+        <span className="absolute top-0 h-4 w-[2px] -translate-x-1/2 bg-ink" style={{ left: '50%' }} />
+        {!same && <span className={`absolute top-1/2 h-[3px] -translate-y-1/2 rounded-full ${tone}`} style={{ left: `${Math.min(50, left)}%`, width: `${Math.abs(left - 50)}%` }} />}
+        <span
+          className={`absolute top-1/2 h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white ${tone} ${Math.abs(dev) > RULER_SPAN ? 'rounded-[2px]' : ''}`}
+          style={{ left: `${left}%` }}
+        />
+      </span>
+      <span className={`text-right text-[12px] font-medium leading-tight ${flagged ? 'text-accent' : same ? 'text-brand' : 'text-ink-2'}`}>{label}</span>
+    </div>
   );
 }
 

@@ -144,7 +144,7 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Dashboard KPI" subtitle="Mọi con số tính tự động từ mốc thời gian đã lưu, bằng giờ làm việc, theo đúng định nghĩa trong PRD." />
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-white p-4">
+      <div className="flex flex-wrap items-end gap-3">
         <Field label="Từ ngày">{(id) => <Input id={id} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />}</Field>
         <Field label="Đến ngày">{(id) => <Input id={id} type="date" value={to} onChange={(e) => setTo(e.target.value)} />}</Field>
         {seeQuotes && (
@@ -186,13 +186,14 @@ export function DashboardPage() {
                   </>
                 }
               >
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-x-8 gap-y-6 md:grid-cols-3">
                   <KpiTile
                     label="Tỷ lệ task trễ hạn"
                     value={k.overdue.rate === null ? '–' : `${fmtNum(k.overdue.rate, 1)}%`}
                     base={`${fmtNum(base.task_overdue_pct, 1)}%`}
                     target={`< ${fmtNum(tgt.overdue_pct, 0)}%`}
                     good={k.overdue.rate === null ? null : k.overdue.rate < tgt.overdue_pct}
+                    bar={{ base: base.task_overdue_pct, now: k.overdue.rate, target: tgt.overdue_pct }}
                   >
                     <div className="text-[13px] text-ink-3">
                       {k.overdue.overdue}/{k.overdue.closed} task đã chốt
@@ -242,13 +243,13 @@ export function DashboardPage() {
                   settings={settings}
                   note={source === 'import' && <p className="mt-2 text-[12px] text-ink-3">Dữ liệu lịch sử không có kết quả khung giá.</p>}
                 />
-                <h3 className="mt-5 text-[15px] font-bold text-ink">Thời gian báo giá trung bình theo tuần (giờ làm việc)</h3>
+                <h3 className="mt-8 border-t border-line-soft pt-5 text-[15px] font-semibold text-ink">Thời gian báo giá trung bình theo tuần (giờ làm việc)</h3>
                 {!k.weekly.length ? (
                   <p className="mt-2 text-sm text-ink-3">Chưa có báo giá nào được gửi trong khoảng này.</p>
                 ) : table ? (
                   <table className="mt-2 w-full max-w-xl text-[14px]">
                     <thead className="text-left text-[13px] text-ink-3">
-                      <tr className="border-b border-line">
+                      <tr className="border-b-2 border-ink">
                         <th className="py-1.5">Tuần bắt đầu</th>
                         <th className="py-1.5 text-right">Số báo giá</th>
                         <th className="py-1.5 text-right">TB giờ</th>

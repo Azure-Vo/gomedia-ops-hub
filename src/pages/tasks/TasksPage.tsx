@@ -121,7 +121,7 @@ export function TasksPage() {
                   {!manager && open && t.owner_id === me.id && (
                     <div className="mt-2.5 flex flex-wrap justify-end gap-2">
                       {live && (
-                        <Link to="/checkins" className="inline-flex min-h-[40px] items-center rounded-[10px] bg-brand px-3 text-sm font-semibold text-white">
+                        <Link to="/checkins" className="inline-flex min-h-[40px] items-center rounded-lg bg-brand px-3 text-sm font-semibold text-white">
                           Trả lời checkpoint {live.pct}%
                         </Link>
                       )}

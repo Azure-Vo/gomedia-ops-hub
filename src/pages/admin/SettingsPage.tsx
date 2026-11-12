@@ -107,7 +107,7 @@ export function SettingsPage() {
                       type="button"
                       aria-pressed={on}
                       onClick={() => setS({ ...s, work_days: on ? s.work_days.filter((x) => x !== d) : [...s.work_days, d].sort() })}
-                      className={`h-11 w-12 rounded-lg border-[1.5px] font-bold ${on ? 'border-brand bg-brand text-white' : 'border-line bg-white text-ink-2'}`}
+                      className={`h-11 w-12 rounded-lg border font-bold ${on ? 'border-brand bg-brand text-white' : 'border-line bg-white text-ink-2'}`}
                     >
                       {label}
                     </button>

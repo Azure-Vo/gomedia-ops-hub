@@ -81,7 +81,7 @@ export function AlertsPage() {
         ) : (
           <ul className="flex flex-col gap-3">
             {items.map(({ a, t, done, pending }) => (
-              <li key={a.id} className={`rounded-xl border-[1.5px] p-3.5 ${a.kind === 'at_risk' ? 'border-warn-line bg-[#FFF7E8]' : 'border-bad-line bg-[#FFF5F7]'}`}>
+              <li key={a.id} className={`rounded-xl border p-3.5 ${a.kind === 'at_risk' ? 'border-warn-line bg-warn-soft/60' : 'border-bad-line bg-bad-soft/50'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
                     <AlertBadge kind={a.kind} />

@@ -80,11 +80,11 @@ export function WeeklyChart({ points, baseline, target, lateHours }: { points: W
             )}
           </g>
         ))}
-        {points.length > 1 && <path d={path} fill="none" stroke="#1800AD" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
+        {points.length > 1 && <path d={path} fill="none" stroke="#082774" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
         {hp && hover !== null && <line x1={x(hover)} x2={x(hover)} y1={PAD.t} y2={PAD.t + innerH} stroke="#A99BF0" strokeWidth={1} />}
         {points.map((p, i) => (
           <g key={p.weekStart}>
-            <circle cx={x(i)} cy={y(p.avgHours)} r={hover === i ? 6 : 4.5} fill="#1800AD" stroke="#FFFFFF" strokeWidth={2} />
+            <circle cx={x(i)} cy={y(p.avgHours)} r={hover === i ? 6 : 4.5} fill="#082774" stroke="#FFFFFF" strokeWidth={2} />
             {(i % labelEvery === 0 || i === points.length - 1) && (
               <text x={x(i)} y={H - PAD.b + 18} textAnchor="middle" fontSize={12} fill="#5D5B80">
                 {weekLabel(p.weekStart)}

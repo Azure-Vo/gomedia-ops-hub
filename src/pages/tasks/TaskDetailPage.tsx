@@ -85,8 +85,8 @@ export function TaskDetailPage() {
             <Icon name="chevronRight" className="rotate-180" />
           </Link>
           <div className="min-w-0">
-            <div className="text-[13px] font-bold uppercase tracking-wide text-accent">Task · S1 Checkpoint</div>
-            <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold text-ink">
+            <div className="text-[13px] font-bold text-accent">Task · S1 Checkpoint</div>
+            <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold text-ink">
               {t.name} <TaskStatusBadge status={t.status} waiting={!!live} />
               {t.closed_as && <Badge tone={t.closed_as === 'on_time' ? 'ok' : 'bad'}>{t.closed_as === 'on_time' ? 'Đúng hạn' : 'Trễ hạn'}</Badge>}
             </h1>
@@ -164,10 +164,10 @@ export function TaskDetailPage() {
         </Card>
       </div>
       <Card title="Checkpoint" subtitle="Bot hỏi ở 25/50/75/99% thời gian làm việc; không nhắn ngoài giờ làm.">
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-[14.5px]">
             <thead className="text-[13px] text-ink-3">
-              <tr className="border-b border-line">
+              <tr className="border-b-2 border-ink">
                 <th className="py-2 pr-3 font-semibold">Mốc</th>
                 <th className="py-2 pr-3 font-semibold">Lịch</th>
                 <th className="py-2 pr-3 font-semibold">Đã gửi</th>

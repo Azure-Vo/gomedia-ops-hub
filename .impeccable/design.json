@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-12T04:40:00Z",
+  "title": "Design System: Go Media Ops Hub",
+  "extensions": {
+    "colorMeta": {
+      "brand": { "role": "primary", "displayName": "Logo Navy", "canonical": "#082774" },
+      "rail": { "role": "primary", "displayName": "Rail Navy", "canonical": "#071D57" },
+      "accent-strong": { "role": "secondary", "displayName": "Money Orange", "canonical": "#C24A00" },
+      "canvas": { "role": "neutral", "displayName": "Ivory Grey Ground", "canonical": "#F4F3EF" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#1B1A33" }
+    },
+    "typographyMeta": {
+      "figure": { "displayName": "Key figure", "purpose": "KPI values and the quote total; tabular figures." },
+      "table-head": { "displayName": "Table head", "purpose": "Sentence-case column heads above a 2px ink rule." }
+    },
+    "shadows": [
+      { "name": "sheet", "value": "0 1px 2px rgba(27, 26, 51, 0.06)", "purpose": "Resting sheets, buttons." },
+      { "name": "lift", "value": "0 8px 24px -6px rgba(27, 26, 51, 0.18), 0 2px 6px rgba(27, 26, 51, 0.08)", "purpose": "Modals and toasts." }
+    ],
+    "motion": [
+      { "name": "state", "value": "150ms ease-out", "purpose": "Colour and border changes on hover, focus and selection." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px", "purpose": "Rail appears; below it the rail becomes a top bar." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action on a screen, e.g. Tạo báo giá, Gửi PM duyệt.",
+      "html": "<button class=\"ds-btn-primary\">Tạo báo giá</button>",
+      "css": ".ds-btn-primary { background:#082774; color:#fff; height:40px; padding:0 16px; border:0; border-radius:6px; font:600 14.5px Archivo, system-ui, sans-serif; box-shadow:0 1px 2px rgba(27,26,51,.06); transition:background-color 150ms ease-out, transform 150ms ease-out; cursor:pointer; } .ds-btn-primary:hover { background:#051A55; } .ds-btn-primary:active { transform:translateY(1px); } .ds-btn-primary:focus-visible { outline:2px solid #082774; outline-offset:2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Second actions: Sao chép link, Tải PDF, Chấm điểm.",
+      "html": "<button class=\"ds-btn-secondary\">Sao chép link</button>",
+      "css": ".ds-btn-secondary { background:#fff; color:#1B1A33; height:40px; padding:0 16px; border:1px solid #E2E0D9; border-radius:6px; font:600 14.5px Archivo, system-ui, sans-serif; box-shadow:0 1px 2px rgba(27,26,51,.06); transition:border-color 150ms ease-out, background-color 150ms ease-out; cursor:pointer; } .ds-btn-secondary:hover { border-color:#66657A; background:#F4F3EF; } .ds-btn-secondary:focus-visible { outline:2px solid #082774; outline-offset:2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "All form fields.",
+      "html": "<input class=\"ds-input\" placeholder=\"Tên khách / thương hiệu\" />",
+      "css": ".ds-input { height:40px; padding:0 12px; border:1px solid #E2E0D9; border-radius:6px; background:#fff; color:#1B1A33; font:400 15px Archivo, system-ui, sans-serif; transition:border-color 150ms, box-shadow 150ms; } .ds-input::placeholder { color:#66657A; } .ds-input:focus { outline:none; border-color:#082774; box-shadow:0 0 0 3px rgba(8,39,116,.15); }"
+    },
+    {
+      "name": "Status Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Quote status and price tags, sentence case.",
+      "html": "<span class=\"ds-tag\">Đã duyệt</span>",
+      "css": ".ds-tag { display:inline-flex; align-items:center; padding:1px 6px; border-radius:4px; background:#E8F3EA; color:#17652E; font:600 12px/20px Archivo, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Rail Navigation Item",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Item in the navy rail; active state shown.",
+      "html": "<nav class=\"ds-rail\"><a class=\"ds-nav ds-nav-active\">Báo giá</a><a class=\"ds-nav\">Kho tham chiếu</a></nav>",
+      "css": ".ds-rail { background:#071D57; padding:12px; width:220px; display:flex; flex-direction:column; gap:1px; } .ds-nav { display:flex; align-items:center; height:40px; padding:0 12px; border-radius:6px; color:#C3CDEB; font:400 14.5px Archivo, system-ui, sans-serif; text-decoration:none; transition:background-color 150ms; } .ds-nav:hover { background:#0E2A72; color:#fff; } .ds-nav-active { background:#163A92; color:#fff; font-weight:600; }"
+    },
+    {
+      "name": "Band Ruler",
+      "kind": "custom",
+      "description": "Signature: where a line's unit price sits against its library price. Orange only when the server flagged the line.",
+      "html": "<div class=\"ds-ruler\"><span class=\"ds-ruler-label\">+17,2% so với thư viện</span><span class=\"ds-ruler-scale\"><span class=\"ds-ruler-axis\"></span><span class=\"ds-ruler-centre\"></span><span class=\"ds-ruler-run\"></span><span class=\"ds-ruler-dot\"></span></span></div>",
+      "css": ".ds-ruler { display:flex; align-items:center; gap:8px; font:500 12px Archivo, system-ui, sans-serif; } .ds-ruler-label { color:#C2410C; } .ds-ruler-scale { position:relative; width:72px; height:12px; } .ds-ruler-axis { position:absolute; left:0; right:0; top:50%; height:1px; background:rgba(27,26,51,.2); } .ds-ruler-centre { position:absolute; left:50%; top:0; width:1px; height:12px; background:rgba(27,26,51,.6); } .ds-ruler-run { position:absolute; left:50%; width:28.7%; top:50%; height:1px; background:#C24A00; } .ds-ruler-dot { position:absolute; left:78.7%; top:50%; width:9px; height:9px; border-radius:50%; background:#C24A00; transform:translate(-50%,-50%); box-shadow:0 0 0 2px #fff; }"
+    },
+    {
+      "name": "Key Figure",
+      "kind": "custom",
+      "description": "KPI value under a 2px ink rule with a baseline-vs-now bar.",
+      "html": "<div class=\"ds-fig\"><div class=\"ds-fig-label\">Tỷ lệ báo giá quá 8 giờ</div><div class=\"ds-fig-value\">24,0%</div><div class=\"ds-fig-sub\">Baseline 52,6% · Mục tiêu ≤ 30%</div></div>",
+      "css": ".ds-fig { border-top:2px solid #1B1A33; padding-top:10px; font-family:Archivo, system-ui, sans-serif; font-variant-numeric:tabular-nums; width:260px; } .ds-fig-label { font:500 13px Archivo, sans-serif; color:#46455C; } .ds-fig-value { font:600 34px/1 Archivo, sans-serif; letter-spacing:-.02em; color:#1B1A33; margin:4px 0; } .ds-fig-sub { font:400 13px Archivo, sans-serif; color:#66657A; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Rate Card",
+    "overview": "Ops Hub is set like Go Media's service rate card: a navy rail, an ivory-grey ground, white sheets ruled with hairlines and ink rules, one family with tabular figures. Orange is reserved for money and over-band prices.",
+    "keyCharacteristics": ["Logo-navy rail", "Hairlines and 2px ink rules instead of nested cards", "Archivo with tabular figures", "Band ruler on every quote line"],
+    "rules": [
+      { "name": "The Money Rule", "body": "Orange only for money totals and prices outside the band.", "section": "colors" },
+      { "name": "No thresholds outside the CEO", "body": "The band ruler shows deviation from the library price, never the CEO's limits.", "section": "colors" }
+    ],
+    "dos": ["Use tokens before hex values", "Rule table heads with 2px ink", "Keep UI copy unchanged when restyling"],
+    "donts": ["Uppercase tracked eyebrows", "Emoji or glyphs as icons", "Cards inside cards", "Decorative orange"]
+  }
+}

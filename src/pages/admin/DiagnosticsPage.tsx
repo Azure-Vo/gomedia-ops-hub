@@ -20,10 +20,10 @@ interface Health {
 
 function CaseTable({ rows }: { rows: CaseResult[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[760px] text-left text-[14px]">
         <thead className="text-[13px] text-ink-3">
-          <tr className="border-b border-line">
+          <tr className="border-b-2 border-ink">
             <th className="py-2 pr-3 font-semibold">#</th>
             <th className="py-2 pr-3 font-semibold">Luật</th>
             <th className="py-2 pr-3 font-semibold">Đầu vào (lịch mặc định)</th>
@@ -220,7 +220,7 @@ export function DiagnosticsPage() {
             <div className="mt-3 max-h-80 overflow-y-auto">
               <table className="w-full text-left text-[14px]">
                 <thead className="sticky top-0 bg-white text-[13px] text-ink-3">
-                  <tr className="border-b border-line">
+                  <tr className="border-b-2 border-ink">
                     <th className="py-1.5 pr-3 font-semibold">Mã</th>
                     <th className="py-1.5 pr-3 font-semibold">Khách yêu cầu</th>
                     <th className="py-1.5 pr-3 font-semibold">Gửi</th>

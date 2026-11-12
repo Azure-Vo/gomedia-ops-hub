@@ -1,0 +1,5 @@
+# Impeccable runtime folders (decision pages, comps, review captures)
+questions/
+mocks/
+review/
+config.local.json

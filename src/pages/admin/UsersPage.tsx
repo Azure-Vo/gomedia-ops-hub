@@ -82,10 +82,10 @@ export function UsersPage() {
         ) : error ? (
           <ErrorBox error={error} />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-[14.5px]">
               <thead className="text-[13px] text-ink-3">
-                <tr className="border-b border-line">
+                <tr className="border-b-2 border-ink">
                   <th className="py-2 pr-3 font-semibold">Người dùng</th>
                   <th className="py-2 pr-3 font-semibold">Vai trò</th>
                   <th className="py-2 pr-3 font-semibold">Telegram</th>

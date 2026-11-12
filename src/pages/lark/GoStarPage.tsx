@@ -50,11 +50,22 @@ const STAR_SHORT: Record<GoStarCriterion, string> = {
   teamwork: 'Teamwork',
 };
 
-function Stars({ n, size = 'text-[15px]' }: { n: number; size?: string }) {
+const STAR_PATH = 'M12 2.8l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17.3l-5.7 3 1.1-6.3-4.6-4.5 6.4-.9z';
+
+function StarMark({ on, px = 16 }: { on: boolean; px?: number }) {
   return (
-    <span className={cx('whitespace-nowrap tracking-tight', size)} aria-label={`${n}/5 sao`}>
-      <span className="text-[#F5A524]">{'★'.repeat(n)}</span>
-      <span className="text-line">{'★'.repeat(5 - n)}</span>
+    <svg width={px} height={px} viewBox="0 0 24 24" aria-hidden="true" className={on ? 'text-[#E39A12]' : 'text-ink/15'}>
+      <path d={STAR_PATH} fill="currentColor" />
+    </svg>
+  );
+}
+
+function Stars({ n, px = 15 }: { n: number; px?: number }) {
+  return (
+    <span className="inline-flex items-center gap-px whitespace-nowrap" role="img" aria-label={`${n}/5 sao`}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <StarMark key={i} on={i < n} px={px} />
+      ))}
     </span>
   );
 }
@@ -213,35 +224,37 @@ export function GoStarPage() {
             <EmptyState title="Chưa có nhân viên nào trong tháng này">Bảng xếp hạng gồm nhân viên và những ai có task con đến hạn trong tháng trên Lark.</EmptyState>
           ) : (
             <>
-              <div className="mb-4 grid gap-3 md:grid-cols-3">
+              <div className="mb-8 grid border-y border-ink md:grid-cols-3">
                 {[1, 2, 3].map((place) => {
                   const hit = rows.find((x) => x.rank === place) ?? rows.filter((x) => x.rank <= place).at(place - 1);
                   const r = hit && hit.starCount > 0 ? hit : undefined;
-                  const medal = ['🥇', '🥈', '🥉'][place - 1];
                   const isEom = r && eom.length === 1 && eom[0].openId === r.openId;
                   return (
-                    <div key={place} className={cx('rounded-2xl border p-4', isEom ? 'border-[#F5C76B] bg-[#FFF8E6]' : 'border-line bg-white')}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13px] font-bold uppercase tracking-wide text-ink-3">
-                          {medal} Hạng {hit?.rank ?? place}
-                          {r?.tied ? ' · đồng hạng' : ''}
-                        </span>
-                        {isEom && <Badge tone="accent">{closed ? 'Employee of the Month' : 'Dự kiến Employee of the Month'}</Badge>}
+                    <div key={place} className={cx('relative flex gap-4 border-line p-5 [&:not(:first-child)]:border-t md:[&:not(:first-child)]:border-l md:[&:not(:first-child)]:border-t-0', isEom && 'bg-brand-soft/60')}>
+                      <div className={cx('w-10 shrink-0 text-[40px] font-semibold leading-none tracking-[-0.03em]', r ? (isEom ? 'text-brand' : 'text-ink') : 'text-ink-3')}>{r?.rank ?? place}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-3">
+                          <span>
+                            Hạng {hit?.rank ?? place}
+                            {r?.tied ? ' · đồng hạng' : ''}
+                          </span>
+                          {isEom && <Badge tone="brand">{closed ? 'Employee of the Month' : 'Dự kiến Employee of the Month'}</Badge>}
+                        </div>
+                        {r ? (
+                          <>
+                            <div className="mt-1 truncate text-[18px] font-semibold text-ink">{r.name}</div>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <Stars n={r.starCount} px={18} />
+                              <span className="text-[13px] font-medium text-ink-2">{r.starCount}/5</span>
+                            </div>
+                            <div className="mt-2 text-[14px] text-ink-2">
+                              {closed ? 'Thưởng' : 'Thưởng dự kiến'}: <b className="font-semibold text-ink">{r.prize ? fmtVnd(r.prize) : '—'}</b>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-1 text-ink-3">Chưa có ai đạt sao</div>
+                        )}
                       </div>
-                      {r ? (
-                        <>
-                          <div className="mt-2 text-[19px] font-extrabold text-ink">{r.name}</div>
-                          <div className="mt-1 flex items-center gap-2">
-                            <Stars n={r.starCount} size="text-[20px]" />
-                            <span className="text-[13px] font-bold text-ink-2">{r.starCount}/5</span>
-                          </div>
-                          <div className="mt-2 text-[14px] text-ink-2">
-                            {closed ? 'Thưởng' : 'Thưởng dự kiến'}: <b className="text-ink">{r.prize ? fmtVnd(r.prize) : '—'}</b>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="mt-2 text-ink-3">Chưa có ai đạt sao</div>
-                      )}
                     </div>
                   );
                 })}
@@ -257,10 +270,10 @@ export function GoStarPage() {
                 subtitle={`${rows.length} người · cùng số sao thì xét KPI, rồi Chất lượng, rồi Teamwork (mức độ đóng góp)`}
                 className="mb-4"
               >
-                <div className="overflow-x-auto">
+                <div className="relative overflow-x-auto">
                   <table className="w-full min-w-[900px] text-[14px]">
                     <thead>
-                      <tr className="border-b border-line text-left text-[12px] uppercase tracking-wide text-ink-3">
+                      <tr className="border-b-2 border-ink text-left">
                         <th className="py-2 pr-2">Hạng</th>
                         <th className="py-2 pr-3">Nhân viên</th>
                         {GOSTAR_CRITERIA.map((c) => (
@@ -286,8 +299,8 @@ export function GoStarPage() {
                         };
                         return (
                           <tr key={r.openId} className={cx('border-b border-line-soft align-middle', r.openId === myOpenId && 'bg-brand-soft/40')}>
-                            <td className="py-2.5 pr-2 font-extrabold text-ink">
-                              {r.rank <= 3 && r.starCount > 0 ? ['🥇', '🥈', '🥉'][r.rank - 1] : ''} {r.rank}
+                            <td className="py-2.5 pr-2 text-[15px] font-semibold text-ink">
+                              {r.starCount > 0 ? r.rank : <span className="text-ink-3" title="0 sao: không xếp hạng, không nhận thưởng">—</span>}
                             </td>
                             <td className="py-2.5 pr-3">
                               <div className="font-semibold text-ink">
@@ -298,14 +311,16 @@ export function GoStarPage() {
                             </td>
                             {GOSTAR_CRITERIA.map((c) => (
                               <td key={c.key} className="py-2.5 pr-2 text-center" title={`${c.name}: ${detail[c.key]}`}>
-                                <div className={cx('text-[18px] leading-none', r.stars[c.key] ? 'text-[#F5A524]' : 'text-line')}>★</div>
-                                <div className="mt-0.5 text-[11.5px] text-ink-3">{detail[c.key]}</div>
+                                <div className="flex justify-center">
+                                  <StarMark on={r.stars[c.key]} px={17} />
+                                </div>
+                                <div className={cx('mt-1 text-[12px]', r.stars[c.key] ? 'text-ink-2' : 'text-ink-3')}>{detail[c.key]}</div>
                               </td>
                             ))}
                             <td className="py-2.5 pr-3">
                               <Stars n={r.starCount} />
                             </td>
-                            <td className="whitespace-nowrap py-2.5 pr-3 text-right font-bold tabular-nums">{r.prize ? fmtVnd(r.prize) : '—'}</td>
+                            <td className="whitespace-nowrap py-2.5 pr-3 text-right font-semibold tabular-nums">{r.prize ? fmtVnd(r.prize) : <span className="text-ink-3">—</span>}</td>
                             <td className="py-2 text-right">
                               {canScore && (
                                 <Button size="sm" variant="secondary" onClick={() => setEditing(r)}>
@@ -346,7 +361,7 @@ export function GoStarPage() {
                   </ul>
                 </Card>
                 <div>
-                  <div className="mb-2 text-[13px] font-extrabold uppercase tracking-wide text-ink-3">Tin vinh danh trên group Lark</div>
+                  <h2 className="mb-2.5 text-[17px] font-semibold text-ink">Tin vinh danh trên group Lark</h2>
                   <BotCard message={goStarMessage(month, rows, (v) => fmtVnd(v))} />
                   <p className="mt-2 px-1 text-[12.5px] text-ink-3">
                     {closed ? 'Nội dung tin vinh danh của tháng đã chốt.' : 'Xem trước theo số liệu tạm tính; tin chính thức theo kết quả lúc CEO chốt tháng.'} Bước bot tự gửi lên group Lark chưa làm.

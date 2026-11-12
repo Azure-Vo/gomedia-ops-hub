@@ -2,15 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Archivo's ampersand reads like a letter; take "&" from the system sans instead. */
+@font-face {
+  font-family: 'Ops Amp';
+  src: local('Arial'), local('Helvetica Neue'), local('Helvetica'), local('Segoe UI'), local('Roboto'), local('DejaVu Sans'), local('Liberation Sans');
+  unicode-range: U+0026;
+}
 html {
   -webkit-text-size-adjust: 100%;
 }
 body {
   margin: 0;
-  background: #f4f3fa;
-  color: #24224f;
-  font-family: Inter, Arial, sans-serif;
+  background: #f4f3ef;
+  color: #1b1a33;
+  font-family: 'Ops Amp', Archivo, system-ui, 'Segoe UI', Arial, sans-serif;
   font-size: 15px;
+  line-height: 1.5;
+  /* Money and hours line up in every column. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 a,
 button,
@@ -19,16 +29,94 @@ select,
 textarea {
   -webkit-tap-highlight-color: transparent;
 }
+::selection {
+  background: #cfdaf3;
+  color: #051a55;
+}
 :focus-visible {
-  outline: 3px solid #6a82ff;
+  outline: 2px solid #082774;
   outline-offset: 2px;
+}
+input,
+textarea {
+  caret-color: #082774;
+}
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: #082774;
 }
 code {
   font-size: 0.92em;
-  background: #ecebf6;
+  background: #ecebe5;
   padding: 0 4px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 input[type='number']::-webkit-inner-spin-button {
   opacity: 1;
+}
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+}
+p,
+li,
+dd {
+  text-wrap: pretty;
+}
+
+@layer base {
+  thead th {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #46455c;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+}
+
+/* Scrollbars inside the app's own scroll areas. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c9c7bf transparent;
+}
+
+/* Quote lines on a phone: each line becomes a stacked row so price, band ruler and total stay in view. */
+@media (max-width: 639.98px) {
+  .quote-lines,
+  .quote-lines > tbody,
+  .quote-lines > tbody > tr,
+  .quote-lines > tbody > tr > td {
+    display: block;
+  }
+  .quote-lines > thead {
+    display: none;
+  }
+  .quote-lines > tbody > tr[data-row='section'] {
+    display: flex;
+    align-items: center;
+  }
+  .quote-lines > tbody > tr[data-row='section'] > td:first-child {
+    flex: 1;
+  }
+  .quote-lines > tbody > tr[data-row='line'] {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr) minmax(0, 1.4fr);
+    grid-template-areas: 'no item item' 'del qty price' 'del total total';
+    column-gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #ecebe5;
+  }
+  .quote-lines > tbody > tr[data-row='line'] > td {
+    border: 0;
+    padding: 0.25rem 0;
+  }
+  .quote-lines td[data-cell='no'] { grid-area: no; }
+  .quote-lines td[data-cell='item'] { grid-area: item; }
+  .quote-lines td[data-cell='unit'] { display: none; }
+  .quote-lines td[data-cell='qty'] { grid-area: qty; }
+  .quote-lines td[data-cell='price'] { grid-area: price; }
+  .quote-lines td[data-cell='total'] { grid-area: total; }
+  .quote-lines td[data-cell='del'] { grid-area: del; }
 }

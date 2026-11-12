@@ -154,10 +154,10 @@ export function LibraryPage() {
         ) : !rows.length ? (
           <EmptyState title="Thư viện đang trống" action={<Button icon="upload" onClick={() => setImportOpen(true)}>Nhập file CSV đã chuẩn bị ở Bước 0</Button>} />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[880px] text-left text-[14.5px]">
               <thead className="text-[13px] text-ink-3">
-                <tr className="border-b border-line">
+                <tr className="border-b-2 border-ink">
                   <th className="py-2 pr-3 font-semibold">Hạng mục</th>
                   <th className="py-2 pr-3 font-semibold">Nhóm</th>
                   <th className="py-2 pr-3 font-semibold">Đơn vị</th>
@@ -568,7 +568,7 @@ function TermsCard({ canEdit }: { canEdit: boolean }) {
                   aria-label="Nội dung điều khoản"
                   defaultValue={t.text}
                   onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== t.text && patch(t, { text: e.target.value.trim() })}
-                  className="min-h-[40px] min-w-[240px] flex-1 rounded-lg border border-transparent px-2 text-[14.5px] hover:border-line focus:border-brand"
+                  className="min-h-[40px] min-w-[240px] flex-1 rounded-lg border border-transparent bg-transparent px-2 text-[14.5px] transition-colors duration-150 hover:border-line hover:bg-white focus:border-brand focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/15"
                 />
               ) : (
                 <span className="flex-1 text-[14.5px]">{t.text}</span>

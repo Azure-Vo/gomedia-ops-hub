@@ -31,7 +31,7 @@ import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
 import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadPeople, loadTerms, normLine, normQuote, personName, QUOTE_COLS, QuoteRow, QuoteTerm } from './data';
 import { LibraryPicker } from './LibraryPicker';
-import { BandReasons, companyFromSettings, downloadQuotePdf, PriceTag, QuotePdf, StatusBadge } from './parts';
+import { BandReasons, BandRuler, companyFromSettings, downloadQuotePdf, QuotePdf, StatusBadge } from './parts';
 import { AnchorThreads, CommentTableRow, CommentToggle, copyText, quoteLink, ReviewCard, ReviewProvider } from './review';
 
 interface EditLine {
@@ -643,39 +643,36 @@ export function QuoteBuilderPage() {
       onChange={setOpenComments}
     >
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link to="/quotes" className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-3 hover:bg-white" aria-label="Về danh sách báo giá">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-line pb-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link to="/quotes" className="-ml-2 flex h-10 w-10 items-center justify-center rounded-lg text-ink-3 transition-colors hover:bg-ink/5 hover:text-ink" aria-label="Về danh sách báo giá">
             <Icon name="chevronRight" className="rotate-180" />
           </Link>
-          <div className="min-w-0">
-            <div className="text-[13px] font-bold uppercase tracking-wide text-accent">Báo giá · S2 Quotation Builder</div>
-            <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold text-ink">
-              {quote.code} <StatusBadge status={quote.status} />
-              {quote.source === 'import' && <Badge tone="neutral">Lịch sử (import)</Badge>}
-            </h1>
-          </div>
+          <h1 className="flex flex-wrap items-center gap-2.5 text-[26px] font-bold leading-tight tracking-[-0.02em] text-ink">
+            {quote.code} <StatusBadge status={quote.status} />
+            {quote.source === 'import' && <Badge tone="neutral">Lịch sử (import)</Badge>}
+          </h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm" icon="link" onClick={copyLink}>
-            Sao chép link
-          </Button>
-          <div className="rounded-[10px] border border-line bg-white px-3 py-1.5 text-[13px] leading-tight">
-            <span className="text-ink-3">Thời gian xử lý (giờ làm việc)</span>
-            <br />
-            <b className={elapsed > (settings?.quote_late_hours ?? 8) ? 'text-bad' : 'text-ink'}>{fmtNum(elapsed, 2)} giờ</b>
-            <span className="text-ink-3"> · mục tiêu ≤ {settings?.quote_late_hours ?? 8} giờ</span>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           {editable && (
             <span className="text-[13px] text-ink-3" aria-live="polite">
               {saveState === 'saving' ? 'Đang lưu…' : saveState === 'dirty' ? 'Chưa lưu' : saveState === 'error' ? 'Lỗi lưu' : 'Đã lưu'}
             </span>
           )}
+          <div className="flex flex-wrap items-baseline gap-x-2 leading-tight [&>*]:whitespace-nowrap">
+            <Icon name="clock" size={15} className={`self-center ${elapsed > (settings?.quote_late_hours ?? 8) ? 'text-bad' : 'text-ink-3'}`} />
+            <span className="text-[13px] text-ink-3">Thời gian xử lý (giờ làm việc)</span>
+            <b className={`text-[17px] font-semibold ${elapsed > (settings?.quote_late_hours ?? 8) ? 'text-bad' : 'text-ink'}`}>{fmtNum(elapsed, 2)} giờ</b>
+            <span className="text-[13px] text-ink-3">· mục tiêu ≤ {settings?.quote_late_hours ?? 8} giờ</span>
+          </div>
+          <Button variant="secondary" size="sm" icon="link" onClick={copyLink}>
+            Sao chép link
+          </Button>
         </div>
       </div>
 
       <div className="flex flex-wrap items-start gap-4">
-        <section aria-label="Báo giá" className="flex min-w-0 flex-[999_1_640px] flex-col gap-4 rounded-2xl border border-line bg-white p-5">
+        <section aria-label="Báo giá" className="flex min-w-0 flex-[999_1_920px] flex-col gap-5 rounded-xl border border-line bg-white p-6 shadow-sheet">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <Field label="Kính gửi (khách hàng)">{(fid) => <Input id={fid} value={header.client} disabled={!editable} onChange={(e) => setH({ client: e.target.value })} placeholder="Tên khách / thương hiệu" />}</Field>
             <Field label="Người liên hệ">{(fid) => <Input id={fid} value={header.contact} disabled={!editable} onChange={(e) => setH({ contact: e.target.value })} placeholder="Họ tên, SĐT" />}</Field>
@@ -717,17 +714,17 @@ export function QuoteBuilderPage() {
             <AnchorThreads target={{ anchor: 'client' }} label={ANCHOR_LABEL.client} />
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-separate border-spacing-0 text-[15px]">
+          <div className="relative overflow-x-auto">
+            <table className="quote-lines w-full border-separate border-spacing-0 text-[15px] sm:min-w-[820px]">
               <thead>
-                <tr className="whitespace-nowrap bg-ink text-left text-sm font-semibold text-white">
-                  <th className="w-14 rounded-tl-[10px] px-2 py-3 text-center">STT</th>
-                  <th className="min-w-[280px] px-3 py-3">Hạng mục / phạm vi</th>
-                  <th className="px-3 py-3">Đơn vị</th>
-                  <th className="w-24 min-w-[92px] px-3 py-3 text-center">SL</th>
-                  <th className="px-3 py-3 text-right">Đơn giá (đ)</th>
-                  <th className="px-3 py-3 text-right">Thành tiền (đ)</th>
-                  <th className="w-12 rounded-tr-[10px] px-1 py-3">
+                <tr className="whitespace-nowrap text-left">
+                  <th className="w-12 border-b-2 border-ink px-2 py-2.5 text-center">STT</th>
+                  <th className="min-w-[260px] border-b-2 border-ink px-3 py-2.5">Hạng mục / phạm vi</th>
+                  <th className="border-b-2 border-ink px-3 py-2.5">Đơn vị</th>
+                  <th className="w-24 min-w-[88px] border-b-2 border-ink px-3 py-2.5 text-center">SL</th>
+                  <th className="border-b-2 border-ink px-3 py-2.5 text-right">Đơn giá (đ)</th>
+                  <th className="border-b-2 border-ink px-3 py-2.5 text-right">Thành tiền (đ)</th>
+                  <th className="w-11 border-b-2 border-ink px-1 py-2.5">
                     <span className="sr-only">Xoá</span>
                   </th>
                 </tr>
@@ -761,10 +758,10 @@ export function QuoteBuilderPage() {
                 const before = grouped.slice(0, grouped.findIndex((g) => g.title === title)).reduce((n, g) => n + g.lines.length, 0);
                 return (
                   <tbody key={title}>
-                    <tr className="bg-[#FFF4E5]">
-                      <td colSpan={5} className="border-b border-line-soft px-3 py-2">
+                    <tr data-row="section" className="bg-canvas">
+                      <td colSpan={5} className="border-b border-line px-3 py-1.5">
                         <div className="flex items-center gap-2">
-                          <b className="shrink-0 text-ink">{toRoman(si + 1)}.</b>
+                          <b className="w-6 shrink-0 text-center font-semibold text-ink-3">{toRoman(si + 1)}</b>
                           {editable ? (
                             <input
                               aria-label={`Tên phần ${toRoman(si + 1)}`}
@@ -775,16 +772,16 @@ export function QuoteBuilderPage() {
                                 else e.target.value = title;
                               }}
                               onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                              className="h-9 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 font-bold text-ink hover:border-line focus:border-brand focus:bg-white"
+                              className="h-9 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 font-semibold text-ink transition-colors hover:border-line focus:border-brand focus:bg-white focus:outline-none"
                             />
                           ) : (
-                            <b className="text-ink">{title}</b>
+                            <b className="font-semibold text-ink">{title}</b>
                           )}
                           {sec && <CommentToggle target={{ anchor: 'section', sectionTitle: title }} label={`Phần ${toRoman(si + 1)} · ${title}`} className="shrink-0" />}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap border-b border-line-soft px-3 py-2 text-right font-bold tabular-nums">{fmtVnd(sec?.amount ?? 0, false)}</td>
-                      <td className="border-b border-line-soft px-1 py-1">
+                      <td className="whitespace-nowrap border-b border-line px-3 py-1.5 text-right font-semibold tabular-nums">{fmtVnd(sec?.amount ?? 0, false)}</td>
+                      <td className="border-b border-line px-1 py-1">
                         {editable && <IconButton icon="trash" label={`Xoá phần ${title}`} onClick={() => removeSection(title)} />}
                       </td>
                     </tr>
@@ -794,17 +791,20 @@ export function QuoteBuilderPage() {
                       const pass = l.kind === 'pass_through';
                       const custom = !pass && lp !== null && l.unit_price !== lp;
                       const lineLabel = `Dòng ${before + k + 1} · ${l.item_name}`;
+                      const idx = lines.indexOf(l);
+                      const shownBand = band ?? quote.band_detail ?? null;
+                      const flagged = !!shownBand?.reasons.some((r) => (r.code === 'deviation' || r.code === 'no_library_price') && r.line === idx);
                       return (
                         <Fragment key={l.key}>
-                        <tr className="align-top">
-                          <td className="border-b border-line-soft px-1 py-3 text-center text-ink-3">
+                        <tr data-row="line" className="align-top">
+                          <td data-cell="no" className="border-b border-line-soft px-1 py-3 pt-[18px] text-center text-ink-3">
                             {before + k + 1}
                             {/* First column, so the comment button stays in view when the table scrolls sideways. */}
                             {l.id && <CommentToggle target={{ anchor: 'line', lineId: l.id }} label={lineLabel} className="mx-auto mt-1" />}
                           </td>
-                          <td className="border-b border-line-soft px-3 py-2.5">
-                            <div className="font-semibold">{l.item_name}</div>
-                            <div className="text-[12.5px] text-ink-3">
+                          <td data-cell="item" className="border-b border-line-soft px-3 py-2.5">
+                            <div className="font-medium">{l.item_name}</div>
+                            <div className="text-[13px] text-ink-3">
                               {l.library_item_id ? libMap.get(l.library_item_id)?.service_group : 'Không thuộc thư viện'}
                               {pass && ' · chi hộ: không chiết khấu, không xét khung giá'}
                               {lp !== null && custom && ` · giá thư viện ${fmtVnd(lp)}`}
@@ -817,7 +817,7 @@ export function QuoteBuilderPage() {
                                 disabled={!editable}
                                 placeholder="Mô tả phạm vi (in nghiêng dưới tên hạng mục)"
                                 onChange={(e) => setLine(l.key, { description: e.target.value })}
-                                className="mt-1.5 w-full resize-y rounded-lg border border-line-soft bg-canvas/40 px-2 py-1.5 text-[13.5px] italic text-ink-2 disabled:border-transparent disabled:bg-transparent"
+                                className="mt-1.5 w-full resize-y rounded-lg border border-line-soft bg-canvas/50 px-2 py-1.5 text-[13.5px] italic text-ink-2 placeholder:text-ink-3 focus:border-brand focus:bg-white focus:outline-none disabled:resize-none disabled:border-transparent disabled:bg-transparent disabled:px-0"
                               />
                             )}
                             {(custom || l.override_reason) && (
@@ -848,8 +848,9 @@ export function QuoteBuilderPage() {
                               </select>
                             )}
                           </td>
-                          <td className="whitespace-nowrap border-b border-line-soft px-3 py-2.5 text-ink-2">{l.unit}</td>
-                          <td className="border-b border-line-soft px-3 py-2.5">
+                          <td data-cell="unit" className="whitespace-nowrap border-b border-line-soft px-3 py-2.5 pt-[18px] text-ink-2">{l.unit}</td>
+                          <td data-cell="qty" className="border-b border-line-soft px-3 py-2.5">
+                            <span className="mb-1 block text-[12px] text-ink-3 sm:hidden">Số lượng ({l.unit})</span>
                             <input
                               type="number"
                               min={0.5}
@@ -858,24 +859,28 @@ export function QuoteBuilderPage() {
                               value={l.qty}
                               disabled={!editable}
                               onChange={(e) => setLine(l.key, { qty: Math.max(0, Number(e.target.value) || 0) })}
-                              className="h-10 w-full rounded-lg border-[1.5px] border-[#F5C99A] bg-[#FFF8EC] text-center font-bold disabled:border-line disabled:bg-canvas"
+                              className="h-10 w-full rounded-lg border border-line bg-white text-center font-semibold focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas"
                             />
                           </td>
-                          <td className="border-b border-line-soft px-3 py-2.5">
-                            <div className="flex items-center justify-end gap-2">
-                              <PriceTag unitPrice={l.unit_price} libraryPrice={lp} kind={l.kind} />
+                          <td data-cell="price" className="border-b border-line-soft px-3 py-2.5">
+                            <span className="mb-1 block text-right text-[12px] text-ink-3 sm:hidden">Đơn giá (đ)</span>
+                            <div className="flex flex-col items-end gap-1.5">
                               <input
                                 inputMode="numeric"
                                 aria-label={`Đơn giá: ${l.item_name}`}
                                 value={fmtVnd(l.unit_price, false)}
                                 disabled={!editable}
                                 onChange={(e) => setLine(l.key, { unit_price: parseMoney(e.target.value) })}
-                                className="h-10 w-32 rounded-lg border-[1.5px] border-line px-2 text-right tabular-nums disabled:bg-canvas"
+                                className={`h-10 w-full rounded-lg border px-2.5 sm:w-36 text-right tabular-nums focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas ${flagged ? 'border-accent-line bg-accent-soft/40 focus:border-accent' : 'border-line bg-white focus:border-brand'}`}
                               />
+                              <BandRuler unitPrice={l.unit_price} libraryPrice={lp} kind={l.kind} flagged={flagged} />
                             </div>
                           </td>
-                          <td className="whitespace-nowrap border-b border-line-soft px-3 py-2.5 text-right font-semibold tabular-nums">{fmtVnd(Math.round(l.qty * l.unit_price), false)}</td>
-                          <td className="border-b border-line-soft px-1 py-1.5">
+                          <td data-cell="total" className="whitespace-nowrap border-b border-line-soft px-3 py-2.5 pt-[18px] text-right font-semibold tabular-nums">
+                            <span className="mr-2 font-normal text-ink-3 sm:hidden">Thành tiền</span>
+                            {fmtVnd(Math.round(l.qty * l.unit_price), false)}
+                          </td>
+                          <td data-cell="del" className="border-b border-line-soft px-1 py-1.5">
                             {editable && <IconButton icon="x" label={`Xoá dòng ${l.item_name}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} />}
                           </td>
                         </tr>
@@ -896,7 +901,7 @@ export function QuoteBuilderPage() {
                               onClose={() => setPickerFor(null)}
                             />
                           ) : (
-                            <button type="button" onClick={() => setPickerFor(title)} className="flex min-h-[40px] items-center gap-1.5 rounded-lg px-2 text-[14px] font-bold text-accent hover:bg-accent-soft">
+                            <button type="button" onClick={() => setPickerFor(title)} className="flex min-h-[36px] items-center gap-1.5 rounded-lg px-2 text-[14px] font-semibold text-brand transition-colors hover:bg-brand-soft">
                               <Icon name="plus" size={16} /> Thêm hạng mục vào phần {toRoman(si + 1)}
                             </button>
                           )}
@@ -942,9 +947,9 @@ export function QuoteBuilderPage() {
 
           <div className="flex justify-end">
             <div className="flex w-full max-w-[460px] flex-col gap-2 text-[15px]">
-              <div className="flex justify-between">
+              <div className="flex justify-between border-t-2 border-ink pt-3">
                 <span className="text-ink-2">Cộng tiền hàng</span>
-                <b className="tabular-nums">{fmtVnd(totals.subtotal)}</b>
+                <b className="font-semibold tabular-nums">{fmtVnd(totals.subtotal)}</b>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <label htmlFor="discount" className="text-ink-2">
@@ -960,7 +965,7 @@ export function QuoteBuilderPage() {
                     value={header.discount_pct}
                     disabled={!editable}
                     onChange={(e) => setH({ discount_pct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
-                    className="h-10 w-20 rounded-lg border-[1.5px] border-[#F5C99A] bg-[#FFF8EC] text-center font-bold disabled:border-line disabled:bg-canvas"
+                    className="h-10 w-20 rounded-lg border border-line bg-white text-center font-semibold focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas"
                   />
                   <span className="min-w-[120px] text-right tabular-nums">− {fmtVnd(totals.discountAmount)}</span>
                 </div>
@@ -980,14 +985,14 @@ export function QuoteBuilderPage() {
                     value={header.vat_pct}
                     disabled={!editable}
                     onChange={(e) => setH({ vat_pct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
-                    className="h-10 w-20 rounded-lg border-[1.5px] border-line text-center font-bold disabled:bg-canvas"
+                    className="h-10 w-20 rounded-lg border border-line bg-white text-center font-semibold focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas"
                   />
                   <span className="min-w-[120px] text-right tabular-nums">{fmtVnd(totals.vatAmount)}</span>
                 </div>
               </div>
-              <div className="flex justify-between rounded-lg bg-[#D9822B] px-3 py-2 text-xl text-white">
-                <b>Tổng thanh toán</b>
-                <b className="tabular-nums">{fmtVnd(totals.grandTotal)}</b>
+              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 rounded-lg bg-accent-strong px-4 py-2.5 text-white">
+                <b className="text-[16px] font-semibold">Tổng thanh toán</b>
+                <b className="text-[22px] font-semibold tracking-[-0.01em] tabular-nums">{fmtVnd(totals.grandTotal)}</b>
               </div>
               <Button variant="secondary" icon="file" onClick={() => setPreview(true)} disabled={!lines.length}>
                 Xem trước báo giá (PDF)
@@ -1000,9 +1005,9 @@ export function QuoteBuilderPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-line p-4">
+          <div className="border-t border-line pt-5">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="font-extrabold text-ink">Điều khoản và ghi chú</h2>
+              <h2 className="text-[17px] font-semibold text-ink">Điều khoản và ghi chú</h2>
               <CommentToggle target={{ anchor: 'terms' }} label={ANCHOR_LABEL.terms} />
             </div>
             <p className="mt-0.5 text-[13px] text-ink-3">Tick để đưa vào báo giá. Điều khoản mẫu do PM quản lý ở trang Thư viện giá.</p>
@@ -1010,14 +1015,14 @@ export function QuoteBuilderPage() {
               {libraryTerms.map((t) => (
                 <li key={t.id}>
                   <label className="flex items-start gap-2.5 text-[14.5px]">
-                    <input type="checkbox" className="mt-1 h-4 w-4 accent-[#1800AD]" checked={header.terms.includes(t.text)} disabled={!editable} onChange={(e) => toggleTerm(t.text, e.target.checked)} />
+                    <input type="checkbox" className="mt-1 h-4 w-4" checked={header.terms.includes(t.text)} disabled={!editable} onChange={(e) => toggleTerm(t.text, e.target.checked)} />
                     <span>{t.text}</span>
                   </label>
                 </li>
               ))}
               {customTerms.map((t) => (
                 <li key={t} className="flex items-start gap-2.5 text-[14.5px]">
-                  <input type="checkbox" className="mt-1 h-4 w-4 accent-[#1800AD]" checked disabled={!editable} onChange={() => toggleTerm(t, false)} aria-label={`Bỏ điều khoản: ${t}`} />
+                  <input type="checkbox" className="mt-1 h-4 w-4" checked disabled={!editable} onChange={() => toggleTerm(t, false)} aria-label={`Bỏ điều khoản: ${t}`} />
                   <span>
                     {t} <span className="text-[12px] text-ink-3">(riêng báo giá này)</span>
                   </span>
@@ -1147,12 +1152,12 @@ export function QuoteBuilderPage() {
             </Banner>
           )}
           {quote.status === 'sent' && (
-            <div className="overflow-hidden rounded-[14px] border-[1.5px] border-ink">
-              <div className="flex flex-wrap items-center justify-between gap-2 bg-ink px-4 py-3 font-bold text-white">
+            <div className="border-t-2 border-rail pt-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 font-semibold text-rail">
                 <span>Đã gửi {quote.client} · {quote.sent_at && fmtVnDateTime(quote.sent_at, tz)}</span>
                 <span>Xử lý trong {fmtNum(elapsed, 2)} giờ làm việc</span>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 <span className="font-semibold text-ok-ink">Đã lưu vào Kho tham chiếu để báo giá tương tự sau này dùng lại.</span>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" icon="download" busy={busy === 'pdf'} onClick={() => run('pdf', async () => { if (pdfRef.current) await downloadQuotePdf(pdfRef.current, quote.code); })}>
@@ -1179,12 +1184,12 @@ export function QuoteBuilderPage() {
           </p>
         </section>
 
-        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
+        <div className="flex min-w-0 flex-[1_1_320px] flex-wrap content-start gap-4 [&>*]:flex-[1_1_320px]">
         <ReviewCard quoteId={quote.id} code={quote.code} locked={quote.status === 'sent'} />
-        <aside aria-label="Báo giá tương tự" className="flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-white p-5">
-          <div>
-            <h2 className="text-lg font-extrabold text-ink">Báo giá tương tự đã gửi</h2>
-            <p className="mt-1 text-sm text-ink-3">Từ Kho tham chiếu · cùng nhóm dịch vụ trước, rồi theo số hạng mục trùng</p>
+        <aside aria-label="Báo giá tương tự" className="flex min-w-0 flex-col gap-0 border-t border-ink pt-3.5">
+          <div className="mb-1">
+            <h2 className="text-[17px] font-semibold text-ink">Báo giá tương tự đã gửi</h2>
+            <p className="mt-0.5 text-[13.5px] text-ink-3">Từ Kho tham chiếu · cùng nhóm dịch vụ trước, rồi theo số hạng mục trùng</p>
           </div>
           {!similar.length && <p className="text-sm text-ink-3">Chưa có báo giá tương tự. Chọn nhóm dịch vụ hoặc thêm hạng mục để gợi ý.</p>}
           {similar.map(({ q, sharedItems, sameGroup }) => (
@@ -1199,7 +1204,7 @@ export function QuoteBuilderPage() {
       </div>
 
       <Modal open={preview} onClose={() => setPreview(false)} title={`Xem trước ${quote.code}`} wide>
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <div className="mx-auto w-[190mm] shadow-sm ring-1 ring-line-soft">
             <QuotePdf quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} />
           </div>
@@ -1226,7 +1231,7 @@ export function QuoteBuilderPage() {
         }
       >
         {decision?.kind === 'changes' && openComments > 0 && (
-          <p className="mb-3 rounded-lg bg-[#FFFBEB] px-3 py-2 text-[14px] text-[#8A4B00]">Account sẽ thấy {openComments} góp ý bạn đã ghi trên báo giá, ngay tại dòng cần sửa.</p>
+          <p className="mb-3 rounded-lg bg-warn-soft/50 px-3 py-2 text-[14px] text-warn">Account sẽ thấy {openComments} góp ý bạn đã ghi trên báo giá, ngay tại dòng cần sửa.</p>
         )}
         <Field label={decision?.kind === 'approve' ? 'Nhận xét (không bắt buộc)' : openComments > 0 ? 'Nhận xét chung (không bắt buộc)' : 'Cần sửa gì? (bắt buộc, hoặc góp ý trực tiếp trên từng dòng)'}>
           {(fid) => <Textarea id={fid} value={decision?.comment ?? ''} onChange={(e) => setDecision((d) => (d ? { ...d, comment: e.target.value } : d))} />}
@@ -1274,16 +1279,16 @@ function SimilarCard({
   const [open, setOpen] = useState(false);
   const items = [...q.quote_lines].sort((a, b) => a.position - b.position);
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-line p-3.5">
+    <div className="flex flex-col gap-1.5 border-b border-line-soft py-3.5 last:border-0 last:pb-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-        <Link to={`/quotes/${q.id}`} className="whitespace-nowrap font-bold text-ink hover:text-brand">
+        <Link to={`/quotes/${q.id}`} className="whitespace-nowrap font-semibold text-brand underline-offset-[3px] hover:underline">
           {q.code}
         </Link>
         <span className="whitespace-nowrap text-[12px] text-ink-3">
           {sameGroup ? 'Cùng nhóm' : 'Khác nhóm'} · {sharedItems} hạng mục trùng
         </span>
       </div>
-      <div className="text-[14.5px] font-semibold leading-snug text-ink">{q.client}</div>
+      <div className="text-[14.5px] font-medium leading-snug text-ink">{q.client}</div>
       <div className="text-[13.5px] text-ink-3">
         <span className="whitespace-nowrap">{fmtVnDate(q.sent_at, tz)}</span> · <span className="whitespace-nowrap font-semibold text-ink-2">{fmtVnd(q.total)}</span>
       </div>
@@ -1291,7 +1296,7 @@ function SimilarCard({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex min-h-[36px] items-center justify-between rounded-lg bg-canvas px-3 text-left text-[13.5px] font-semibold text-ink-2 hover:bg-line-soft"
+        className="flex min-h-[34px] items-center justify-between rounded-lg border border-line px-3 text-left text-[13.5px] font-medium text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
       >
         <span>{open ? 'Ẩn' : 'Xem'} {items.length} hạng mục</span>
         <span className={cx('transition-transform', open && 'rotate-180')}><Icon name="chevronDown" size={16} /></span>
@@ -1312,7 +1317,7 @@ function SimilarCard({
       )}
       {editable && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" icon="plus" className="flex-1" onClick={() => onAdd('append')}>
+          <Button size="sm" variant="secondary" icon="plus" className="flex-1" onClick={() => onAdd('append')}>
             Thêm tất cả {items.length} hạng mục
           </Button>
           {hasLines && (

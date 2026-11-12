@@ -89,10 +89,10 @@ export function QuotesPage() {
         ) : !rows.length ? (
           <EmptyState title="Chưa có báo giá nào ở mục này">{me.role === 'account' ? 'Bấm Tạo báo giá để bắt đầu.' : 'Account tạo báo giá trong app thì sẽ hiện ở đây.'}</EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full text-left text-[14.5px] sm:min-w-[860px]">
               <thead className="text-[13px] text-ink-3">
-                <tr className="border-b border-line">
+                <tr className="border-b-2 border-ink">
                   <th className="py-2 pr-3 font-semibold">Mã</th>
                   <th className="py-2 pr-3 font-semibold">Khách</th>
                   {me.role !== 'account' && <th className="hidden py-2 pr-3 font-semibold sm:table-cell">Account</th>}
@@ -107,9 +107,9 @@ export function QuotesPage() {
                 {rows.map((q) => {
                   const h = workingHoursBetween(q.requested_at, q.sent_at ?? Date.now(), calendar);
                   return (
-                    <tr key={q.id} className="border-b border-line-soft hover:bg-canvas">
+                    <tr key={q.id} className="border-b border-line-soft transition-colors hover:bg-canvas/70">
                       <td className="py-2.5 pr-3">
-                        <Link className="whitespace-nowrap font-bold text-brand hover:underline" to={`/quotes/${q.id}`}>
+                        <Link className="whitespace-nowrap font-semibold text-brand underline-offset-[3px] hover:underline" to={`/quotes/${q.id}`}>
                           {q.code}
                         </Link>
                       </td>
@@ -119,7 +119,7 @@ export function QuotesPage() {
                         <span className="flex flex-wrap items-center gap-1.5">
                           <StatusBadge status={q.status} />
                           {(data!.open.get(q.id) ?? 0) > 0 && (
-                            <Badge tone="accent">
+                            <Badge tone="warn">
                               <Icon name="message" size={12} />
                               {data!.open.get(q.id)} góp ý
                             </Badge>

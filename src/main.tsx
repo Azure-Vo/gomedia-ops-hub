@@ -4,6 +4,10 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { ToastProvider } from './components/ui';
 import { SessionProvider } from './lib/session';
+import '@fontsource/archivo/400.css';
+import '@fontsource/archivo/500.css';
+import '@fontsource/archivo/600.css';
+import '@fontsource/archivo/700.css';
 import './index.css';
 
 // GitHub Pages has no rewrite rules: its 404.html sends deep links (e.g. a Telegram button to

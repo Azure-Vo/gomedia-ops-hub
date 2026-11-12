@@ -75,7 +75,7 @@ export function ArchivePage() {
             {rows.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
-                  <Link to={`/quotes/${r.id}`} className="font-bold text-brand hover:underline">
+                  <Link to={`/quotes/${r.id}`} className="font-semibold text-brand underline-offset-[3px] hover:underline">
                     {r.code}
                   </Link>{' '}
                   <span className="text-ink">· {r.client}</span> {r.source === 'import' && <Badge>lịch sử</Badge>}

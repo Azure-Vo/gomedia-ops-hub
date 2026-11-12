@@ -59,7 +59,7 @@ export function MyCheckinsPage() {
           tone="info"
           title="Muốn nhận check-in qua Telegram?"
           actions={
-            <Link to="/profile" className="inline-flex min-h-[44px] items-center rounded-[10px] bg-brand px-4 font-semibold text-white">
+            <Link to="/profile" className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 font-semibold text-white">
               Liên kết Telegram
             </Link>
           }
@@ -78,8 +78,8 @@ export function MyCheckinsPage() {
               const m = ms.find((x) => x.idx === k);
               const d = drafts[cp.id] ?? { mode: null, evidence: '', reason: '' };
               return (
-                <div key={cp.id} className="rounded-xl border-[1.5px] border-brand-line bg-brand-soft/40 p-4">
-                  <div className="text-[12px] font-extrabold tracking-wide text-accent">
+                <div key={cp.id} className="rounded-xl border border-brand-line bg-brand-soft/40 p-4">
+                  <div className="text-[12px] font-semibold text-accent">
                     CHECKPOINT {cp.pct}% · {fmtVnShort(cp.sent_at as string, tz)}
                   </div>
                   <div className="mt-1 text-[16px] font-bold text-ink">{t.name}</div>

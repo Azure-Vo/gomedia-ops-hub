@@ -298,7 +298,7 @@ function Composer({ placeholder, submitLabel, onSubmit, onCancel, autoFocus, lab
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send();
         }}
-        className="w-full resize-y rounded-lg border-[1.5px] border-line bg-white px-3 py-2 text-[14.5px] text-ink placeholder:text-ink-3/70 focus:border-brand focus:outline-none"
+        className="w-full resize-y rounded-lg border border-line bg-white px-3 py-2 text-[14.5px] text-ink placeholder:text-ink-3 focus:border-brand focus:outline-none"
       />
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" busy={sending} disabled={!text.trim()} onClick={send}>
@@ -332,9 +332,9 @@ function Thread({ t, showPlace }: { t: ReviewThread; showPlace?: boolean }) {
   const r = useReview();
   const [replying, setReplying] = useState(false);
   return (
-    <div className={cx('rounded-xl border-[1.5px] p-3', t.open ? 'border-[#F5C27A] bg-[#FFFBEB]' : 'border-line bg-canvas/60')} data-thread={t.root.id} data-open={t.open}>
+    <div className={cx('rounded-xl border p-3', t.open ? 'border-warn-line bg-warn-soft/50' : 'border-line bg-canvas/60')} data-thread={t.root.id} data-open={t.open}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-bold', t.open ? 'bg-[#FDE9C4] text-[#8A4B00]' : 'bg-ok-soft text-ok-ink')}>
+        <span className={cx('inline-flex items-center gap-1 rounded-[4px] px-1.5 py-[1px] text-[12px] font-semibold', t.open ? 'bg-warn-soft text-warn' : 'bg-ok-soft text-ok-ink')}>
           <Icon name={t.open ? 'message' : 'check'} size={13} />
           {t.open ? 'Cần xử lý' : 'Đã xử lý'}
         </span>
@@ -406,8 +406,8 @@ export function CommentToggle({ target, label, className }: { target: AnchorTarg
       aria-expanded={on || open > 0}
       onClick={() => r.toggle(key)}
       className={cx(
-        'relative flex h-10 min-w-[40px] items-center justify-center gap-1 rounded-[10px] px-2 text-[13px] font-bold',
-        open ? 'bg-[#FDE9C4] text-[#8A4B00]' : list.length ? 'bg-ok-soft text-ok-ink' : on ? 'bg-brand-soft text-brand' : 'text-ink-3 hover:bg-canvas hover:text-brand',
+        'relative flex h-10 min-w-[40px] items-center justify-center gap-1 rounded-lg px-2 text-[13px] font-bold',
+        open ? 'bg-warn-soft text-warn' : list.length ? 'bg-ok-soft text-ok-ink' : on ? 'bg-brand-soft text-brand' : 'text-ink-3 hover:bg-canvas hover:text-brand',
         className,
       )}
     >
@@ -459,8 +459,8 @@ export function CommentTableRow({ target, label, colSpan }: { target: AnchorTarg
   if (!visible) return null;
   return (
     <tr>
-      <td colSpan={colSpan} className="border-b border-line-soft bg-[#FFFDF5] px-3 py-3">
-        <div className="mb-1.5 text-[12.5px] font-bold uppercase tracking-wide text-[#8A4B00]">Góp ý · {label}</div>
+      <td colSpan={colSpan} className="border-b border-line-soft bg-warn-soft/30 px-3 py-3">
+        <div className="mb-1.5 text-[12.5px] font-bold text-warn">Góp ý · {label}</div>
         <div className="sticky left-3 max-w-[min(640px,calc(100vw-3.5rem))]">
           <AnchorThreads target={target} label={label} />
         </div>
@@ -477,11 +477,11 @@ export function ReviewCard({ quoteId, code, locked }: { quoteId: string; code: s
   const [showDone, setShowDone] = useState(false);
   const elsewhere = r.threads.filter((t) => t.open && !general.includes(t));
   return (
-    <section aria-label="Góp ý trên báo giá" className="flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-white p-5">
+    <section aria-label="Góp ý trên báo giá" className="flex min-w-0 flex-col gap-3 border-t border-ink pt-3.5">
       <div>
-        <h2 className="flex flex-wrap items-center gap-2 text-lg font-extrabold text-ink">
+        <h2 className="flex flex-wrap items-center gap-2 text-[17px] font-semibold text-ink">
           Góp ý trên báo giá
-          {r.openCount > 0 && <span className="rounded-full bg-[#FDE9C4] px-2.5 py-0.5 text-[12px] font-bold text-[#8A4B00]">{r.openCount} cần xử lý</span>}
+          {r.openCount > 0 && <span className="rounded-full bg-warn-soft px-2.5 py-0.5 text-[12px] font-bold text-warn">{r.openCount} cần xử lý</span>}
           {r.openCount === 0 && r.resolvedCount > 0 && <span className="rounded-full bg-ok-soft px-2.5 py-0.5 text-[12px] font-bold text-ok-ink">Đã xử lý hết</span>}
         </h2>
         <p className="mt-1 text-sm text-ink-3">
@@ -501,14 +501,14 @@ export function ReviewCard({ quoteId, code, locked }: { quoteId: string; code: s
 
       {elsewhere.length > 0 && (
         <div>
-          <h3 className="text-[13px] font-bold uppercase tracking-wide text-ink-3">Đang mở trên các dòng</h3>
+          <h3 className="text-[13px] font-bold text-ink-3">Đang mở trên các dòng</h3>
           <ul className="mt-1.5 flex flex-col gap-1.5">
             {elsewhere.map((t) => {
               const place = t.root.anchor === 'line' ? `line:${t.root.lineId}` : t.root.anchor === 'section' ? `section:${t.root.sectionTitle}` : t.root.anchor;
               return (
                 <li key={t.root.id}>
-                  <button type="button" onClick={() => r.focus(place)} className="w-full rounded-lg border border-[#F5C27A] bg-[#FFFBEB] px-3 py-2 text-left hover:bg-[#FFF3D1]">
-                    <span className="block text-[13px] font-bold text-[#8A4B00]">{t.root.anchorLabel}</span>
+                  <button type="button" onClick={() => r.focus(place)} className="w-full rounded-lg border border-warn-line bg-warn-soft/50 px-3 py-2 text-left hover:bg-warn-soft">
+                    <span className="block text-[13px] font-bold text-warn">{t.root.anchorLabel}</span>
                     <span className="block truncate text-[14px] text-ink">{t.root.body}</span>
                     <span className="block text-[12.5px] text-ink-3">
                       {personName(r.people, t.root.authorId)}
@@ -523,7 +523,7 @@ export function ReviewCard({ quoteId, code, locked }: { quoteId: string; code: s
       )}
 
       <div id="cmt-general" className="flex flex-col gap-2">
-        <h3 className="text-[13px] font-bold uppercase tracking-wide text-ink-3">Góp ý chung</h3>
+        <h3 className="text-[13px] font-bold text-ink-3">Góp ý chung</h3>
         {general
           .filter((t) => t.open || showDone)
           .map((t) => (
