@@ -159,6 +159,21 @@ await step('After closing, a PM write to October is refused by the database', as
   assert.equal(q[0].quality, 5);
 });
 
+await step('Dashboard S1 reads M1 from the Lark sub-tasks (same figure as the Lark page)', async () => {
+  // Sub-tasks above, due 01/10–12/11: 7 judged (S08 is due 25/11), late = S03 done late + S04 and S07 still open past due.
+  await sql(`update public.settings set pilot_start = '2026-10-01', pilot_end = '2026-11-12'`);
+  const p = await login('pm');
+  await p.goto(`${WEB}/dashboard`);
+  await p.getByText('Tỷ lệ task con trễ hạn (M1)').waitFor();
+  assert.equal(await p.getByLabel('Từ ngày').inputValue(), '2026-10-01'); // follows the pilot period
+  await p.getByText('42,9%', { exact: true }).waitFor();
+  await p.getByText('3/7 task con · 1 xong trễ, 2 quá hạn chưa xong').waitFor();
+  await p.getByText('4/7', { exact: true }).waitFor();
+  await p.screenshot({ path: `${SHOTS}/dashboard-s1-lark.png`, fullPage: true });
+  await p.goto(`${WEB}/lark`);
+  await p.getByText('42,9%', { exact: true }).waitFor();
+});
+
 await step('Mobile width: the board stays usable at 390 px', async () => {
   const s = await login('s1');
   await s.setViewportSize({ width: 390, height: 900 });

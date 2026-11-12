@@ -1,21 +1,12 @@
-import { useMemo, useState } from 'react';
-import {
-  checkpointResponseRate,
-  earlyWarningRate,
-  fmtNum,
-  localToMs,
-  overdueRate,
-  quoteKpis,
-  turnaroundByBand,
-  weeklyTurnaround,
-} from '@/domain';
+import { useEffect, useMemo, useState } from 'react';
+import { fmtNum, larkDueStatus, larkPeriodKpis, localToMs, quoteKpis, turnaroundByBand, weeklyTurnaround } from '@/domain';
 import { Banner, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, Select, useAsync } from '@/components/ui';
 import { downloadText, toCsv } from '@/lib/csv';
 import { fmtVnDateTime, toDateInput } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
-import { ALERT_COLS, AlertRow, CP_COLS, CheckpointRow, TASK_COLS, TaskRow } from '../tasks/data';
+import { LARK_TASK_COLS, LarkTaskRow } from '../lark/data';
 import { WeeklyChart } from './WeeklyChart';
 import { DEFAULT_BASE, DEFAULT_TARGET, KpiTile, QuoteKpiTiles } from '../quotes/QuoteKpiTiles';
 
@@ -29,6 +20,20 @@ interface QuoteLite {
   band_result: 'send_now' | 'pm' | 'ceo' | null;
   source: string;
 }
+
+interface LarkNotifLite {
+  task_id: string;
+  local_date: string;
+  kind: 'reminder' | 'completion';
+  milestone: string | null;
+  status: 'sent' | 'simulated' | 'failed';
+  sent_at: string | null;
+}
+
+const DUE_LABEL = { on_time: 'đúng hạn', late: 'xong trễ', overdue: 'quá hạn chưa xong', open: 'chưa đến hạn' } as const;
+
+/** A sub-task counts as done only when Completed with valid codes (same rule as the Lark page and the bot). */
+const larkDone = (t: LarkTaskRow) => (t.completed_at && !t.code_errors.length ? Date.parse(t.completed_at) : null);
 
 function dayStart(date: string, tz: string): number {
   const [y, m, d] = date.split('-').map(Number);
@@ -44,6 +49,14 @@ export function DashboardPage() {
   const defTo = settings?.pilot_end ?? toDateInput(Date.now(), tz);
   const [from, setFrom] = useState(defFrom);
   const [to, setTo] = useState(defTo);
+  // Settings can arrive after the first render: follow the pilot period until the user picks dates.
+  const [touched, setTouched] = useState(false);
+  useEffect(() => {
+    if (touched) return;
+    setFrom(defFrom);
+    setTo(defTo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defFrom, defTo]);
   const [source, setSource] = useState<'app' | 'import'>('app');
   const [table, setTable] = useState(false);
   const late = settings?.quote_late_hours ?? 8;
@@ -58,41 +71,39 @@ export function DashboardPage() {
 
   const { data, error, loading } = useAsync(async () => {
     if (!range.ok) return null;
-    const [quotes, tasks] = await Promise.all([
+    const [quotes, lark, notes] = await Promise.all([
       seeQuotes
         ? supabase.from('quotes').select('id, code, client, service_group, requested_at, sent_at, band_result, source').eq('status', 'sent').eq('source', source).gte('sent_at', range.a).lt('sent_at', range.b).order('sent_at')
         : Promise.resolve({ data: [], error: null }),
-      seeTasks ? supabase.from('tasks').select(TASK_COLS).gte('due_at', range.a).lt('due_at', range.b).neq('status', 'cancelled') : Promise.resolve({ data: [], error: null }),
-    ]);
-    const ts = check(tasks) as TaskRow[];
-    const ids = ts.map((t) => t.id);
-    const [cps, als, ppl] = await Promise.all([
-      seeTasks ? supabase.from('checkpoints').select(CP_COLS).gte('sent_at', range.a).lt('sent_at', range.b) : Promise.resolve({ data: [], error: null }),
-      ids.length ? supabase.from('alerts').select(ALERT_COLS).in('task_id', ids) : Promise.resolve({ data: [], error: null }),
-      supabase.from('profiles').select('id, full_name, email'),
+      seeTasks ? supabase.from('lark_tasks').select(LARK_TASK_COLS).eq('kind', 'child').is('deleted_at', null).order('due_date') : Promise.resolve({ data: [], error: null }),
+      seeTasks
+        ? supabase.from('lark_notifications').select('task_id, local_date, kind, milestone, status, sent_at').gte('local_date', from).lte('local_date', to).order('local_date')
+        : Promise.resolve({ data: [], error: null }),
     ]);
     return {
       quotes: check(quotes) as QuoteLite[],
-      tasks: ts,
-      cps: check(cps) as CheckpointRow[],
-      alerts: check(als) as AlertRow[],
-      names: new Map((check(ppl) as { id: string; full_name: string; email: string }[]).map((p) => [p.id, p.full_name || p.email])),
+      lark: check(lark) as LarkTaskRow[],
+      notes: check(notes) as LarkNotifLite[],
     };
-  }, [range.a, range.b, source, seeQuotes, seeTasks]);
+  }, [range.a, range.b, from, to, source, seeQuotes, seeTasks]);
 
   const k = useMemo(() => {
     if (!data) return null;
     const qs = data.quotes.map((q) => ({ id: q.id, requestedAt: Date.parse(q.requested_at), sentAt: Date.parse(q.sent_at), bandResult: q.band_result }));
-    const tasks = data.tasks.map((t) => ({ id: t.id, dueAt: Date.parse(t.due_at), closedAs: t.closed_as, status: t.status }));
     return {
       quote: quoteKpis(qs, calendar, late),
       weekly: weeklyTurnaround(qs, calendar, late),
       byBand: turnaroundByBand(qs, calendar, late),
-      response: checkpointResponseRate(data.cps.map((c) => ({ id: c.id, taskId: c.task_id, sentAt: c.sent_at ? Date.parse(c.sent_at) : null, answeredAt: c.answered_at ? Date.parse(c.answered_at) : null }))),
-      early: earlyWarningRate(tasks, data.alerts.map((a) => ({ taskId: a.task_id, kind: a.kind, createdAt: Date.parse(a.created_at) }))),
-      overdue: overdueRate(tasks),
+      s1: larkPeriodKpis(
+        data.lark.map((t) => ({ id: t.id, dueDate: t.due_date, completedAt: larkDone(t) })),
+        data.notes.map((n) => ({ taskId: n.task_id, localDate: n.local_date, kind: n.kind, status: n.status })),
+        from,
+        to,
+        Date.now(),
+        tz,
+      ),
     };
-  }, [data, calendar, late]);
+  }, [data, calendar, late, from, to, tz]);
 
   const fileTag = `${from}_${to}`;
   const exportQuotes = () =>
@@ -108,36 +119,41 @@ export function DashboardPage() {
         ['code', 'client', 'service_group', 'requested_at', 'sent_at', 'working_hours', 'late', 'band_result'],
       ),
     );
-  const exportCheckpoints = () =>
-    data &&
-    downloadText(
-      `kpi_checkpoint_${fileTag}.csv`,
-      toCsv(
-        data.cps.map((c) => ({ task_id: c.task_id, pct: c.pct, scheduled_at: fmtVnDateTime(c.scheduled_at, tz), sent_at: c.sent_at ? fmtVnDateTime(c.sent_at, tz) : '', sent_via: c.sent_via ?? '', answered_at: c.answered_at ? fmtVnDateTime(c.answered_at, tz) : '', answer: c.answer ?? '', answer_via: c.answer_via ?? '', answered: c.answered_at ? 1 : 0 })),
-        ['task_id', 'pct', 'scheduled_at', 'sent_at', 'sent_via', 'answered_at', 'answer', 'answer_via', 'answered'],
-      ),
-    );
-  const exportTasks = () =>
+  const exportLarkTasks = () =>
     k &&
     data &&
     downloadText(
-      `kpi_task_${fileTag}.csv`,
+      `kpi_lark_task_con_${fileTag}.csv`,
       toCsv(
-        data.tasks.map((t) => {
-          const ew = k.early.rows.find((r) => r.taskId === t.id);
-          return {
-            task_id: t.id,
-            name: t.name,
-            owner: data.names.get(t.owner_id) ?? '',
-            due_at: fmtVnDateTime(t.due_at, tz),
-            status: t.status,
-            closed_as: t.closed_as ?? '',
-            ever_risky: ew ? 1 : 0,
-            first_alert_at: ew?.firstAlertAt ? fmtVnDateTime(ew.firstAlertAt, tz) : '',
-            warned_early: ew?.early ? 1 : 0,
-          };
+        data.lark
+          .filter((t) => k.s1.taskIds.includes(t.id))
+          .map((t) => {
+            const done = larkDone(t);
+            return {
+              code: t.code,
+              parent_code: t.parent_code ?? '',
+              name: t.name,
+              assignee: t.assignee_name ?? '',
+              due_date: t.due_date,
+              completed_at: t.completed_at ? fmtVnDateTime(t.completed_at, tz) : '',
+              code_errors: t.code_errors.join('; '),
+              status: DUE_LABEL[larkDueStatus({ dueDate: t.due_date, completedAt: done }, Date.now(), tz)],
+              late: ['late', 'overdue'].includes(larkDueStatus({ dueDate: t.due_date, completedAt: done }, Date.now(), tz)) ? 1 : 0,
+            };
+          }),
+        ['code', 'parent_code', 'name', 'assignee', 'due_date', 'completed_at', 'code_errors', 'status', 'late'],
+      ),
+    );
+  const exportLarkNotes = () =>
+    data &&
+    downloadText(
+      `kpi_lark_nhac_viec_${fileTag}.csv`,
+      toCsv(
+        data.notes.map((n) => {
+          const t = data.lark.find((x) => x.id === n.task_id);
+          return { local_date: n.local_date, code: t?.code ?? '', assignee: t?.assignee_name ?? '', kind: n.kind, milestone: n.milestone ?? '', status: n.status, sent_at: n.sent_at ? fmtVnDateTime(n.sent_at, tz) : '' };
         }),
-        ['task_id', 'name', 'owner', 'due_at', 'status', 'closed_as', 'ever_risky', 'first_alert_at', 'warned_early'],
+        ['local_date', 'code', 'assignee', 'kind', 'milestone', 'status', 'sent_at'],
       ),
     );
 
@@ -145,8 +161,8 @@ export function DashboardPage() {
     <div className="flex flex-col gap-4">
       <PageHeader title="Dashboard KPI" subtitle="Mọi con số tính tự động từ mốc thời gian đã lưu, bằng giờ làm việc, theo đúng định nghĩa trong PRD." />
       <div className="flex flex-wrap items-end gap-3">
-        <Field label="Từ ngày">{(id) => <Input id={id} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />}</Field>
-        <Field label="Đến ngày">{(id) => <Input id={id} type="date" value={to} onChange={(e) => setTo(e.target.value)} />}</Field>
+        <Field label="Từ ngày">{(id) => <Input id={id} type="date" value={from} onChange={(e) => { setTouched(true); setFrom(e.target.value); }} />}</Field>
+        <Field label="Đến ngày">{(id) => <Input id={id} type="date" value={to} onChange={(e) => { setTouched(true); setTo(e.target.value); }} />}</Field>
         {seeQuotes && (
           <Field label="Nguồn báo giá">
             {(id) => (
@@ -157,7 +173,7 @@ export function DashboardPage() {
             )}
           </Field>
         )}
-        <Button variant="ghost" onClick={() => { setFrom(defFrom); setTo(defTo); }}>
+        <Button variant="ghost" onClick={() => { setTouched(false); setFrom(defFrom); setTo(defTo); }}>
           Về khoảng pilot
         </Button>
       </div>
@@ -173,50 +189,43 @@ export function DashboardPage() {
           <>
             {seeTasks && (
               <Card
-                title="Task e-commerce (S1)"
-                subtitle={`${data!.tasks.length} task có deadline trong khoảng · ${k.response.sent} checkpoint đã gửi`}
+                title="Task e-commerce trên Lark (S1)"
+                subtitle={`${k.s1.judged} task con đến hạn trong khoảng · ${k.s1.open} chưa đến hạn · tính từ task con Lark${settings?.lark_mode === 'simulation' ? ' (đang chạy chế độ mô phỏng)' : ''}`}
                 actions={
                   <>
-                    <Button size="sm" variant="secondary" icon="download" onClick={exportCheckpoints}>
-                      CSV checkpoint
+                    <Button size="sm" variant="secondary" icon="download" onClick={exportLarkTasks}>
+                      CSV task con
                     </Button>
-                    <Button size="sm" variant="secondary" icon="download" onClick={exportTasks}>
-                      CSV task
+                    <Button size="sm" variant="secondary" icon="download" onClick={exportLarkNotes}>
+                      CSV nhắc việc
                     </Button>
                   </>
                 }
               >
                 <div className="grid gap-x-8 gap-y-6 md:grid-cols-3">
                   <KpiTile
-                    label="Tỷ lệ task trễ hạn"
-                    value={k.overdue.rate === null ? '–' : `${fmtNum(k.overdue.rate, 1)}%`}
+                    label="Tỷ lệ task con trễ hạn (M1)"
+                    value={k.s1.latePct === null ? '–' : `${fmtNum(k.s1.latePct, 1)}%`}
                     base={`${fmtNum(base.task_overdue_pct, 1)}%`}
                     target={`< ${fmtNum(tgt.overdue_pct, 0)}%`}
-                    good={k.overdue.rate === null ? null : k.overdue.rate < tgt.overdue_pct}
-                    bar={{ base: base.task_overdue_pct, now: k.overdue.rate, target: tgt.overdue_pct }}
+                    good={k.s1.latePct === null ? null : k.s1.latePct < tgt.overdue_pct}
+                    bar={{ base: base.task_overdue_pct, now: k.s1.latePct, target: tgt.overdue_pct }}
                   >
                     <div className="text-[13px] text-ink-3">
-                      {k.overdue.overdue}/{k.overdue.closed} task đã chốt
+                      {k.s1.late + k.s1.openLate}/{k.s1.judged} task con · {k.s1.late} xong trễ, {k.s1.openLate} quá hạn chưa xong
                     </div>
                   </KpiTile>
                   <KpiTile
-                    label="Tỷ lệ trả lời checkpoint"
-                    value={k.response.rate === null ? '–' : `${fmtNum(k.response.rate, 1)}%`}
-                    target={`≥ ${fmtNum(tgt.response_rate, 0)}%`}
-                    good={k.response.rate === null ? null : k.response.rate >= tgt.response_rate}
+                    label="Hoàn thành đúng hạn"
+                    value={k.s1.judged ? `${k.s1.onTime}/${k.s1.judged}` : '–'}
+                    good={null}
                   >
-                    <div className="text-[13px] text-ink-3">
-                      {k.response.answered}/{k.response.sent} checkpoint
-                    </div>
+                    <div className="text-[13px] text-ink-3">Task con Completed với mã hợp lệ, xong trước hoặc đúng ngày deadline.</div>
                   </KpiTile>
-                  <KpiTile
-                    label="Tỷ lệ rủi ro được cảnh báo sớm"
-                    value={k.early.rate === null ? '–' : `${fmtNum(k.early.rate, 1)}%`}
-                    target={`≥ ${fmtNum(tgt.early_warning, 0)}%`}
-                    good={k.early.rate === null ? null : k.early.rate >= tgt.early_warning}
-                  >
+                  <KpiTile label="Bot đã nhắc" value={`${k.s1.reminders} lần`} good={null}>
                     <div className="text-[13px] text-ink-3">
-                      {k.early.early}/{k.early.risky} task có rủi ro được báo trước deadline
+                      {k.s1.remindedTasks} task con được nhắc · {k.s1.completions} xác nhận hoàn thành
+                      {k.s1.failed ? <span className="text-bad"> · {k.s1.failed} lỗi gửi</span> : null}
                     </div>
                   </KpiTile>
                 </div>

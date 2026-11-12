@@ -35,7 +35,7 @@ export function KpiTile({
   label: string;
   value: string;
   base?: string;
-  target: string;
+  target?: string;
   good: boolean | null;
   bar?: { base: number; now: number | null; target: number };
   children?: ReactNode;
@@ -52,9 +52,13 @@ export function KpiTile({
       </div>
       <div className="text-[34px] font-semibold leading-none tracking-[-0.02em] text-ink">{value}</div>
       {bar && <BaselineBar base={bar.base} now={bar.now} target={bar.target} good={good} />}
-      <div className="text-[13px] text-ink-3">
-        {base && <>Baseline {base} · </>}Mục tiêu {target}
-      </div>
+      {(base || target) && (
+        <div className="text-[13px] text-ink-3">
+          {base && <>Baseline {base}</>}
+          {base && target && ' · '}
+          {target && <>Mục tiêu {target}</>}
+        </div>
+      )}
       {children}
     </div>
   );

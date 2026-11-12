@@ -479,11 +479,13 @@ await step('Task board and detail show risk order and the checkpoint timeline', 
 
 await step('Dashboard computes KPIs from timestamps and exports CSV', async () => {
   await sql(`update public.settings set pilot_start = (now() at time zone 'Asia/Ho_Chi_Minh')::date - 3, pilot_end = (now() at time zone 'Asia/Ho_Chi_Minh')::date + 20`);
-  const c = await cron('close-tasks', vn(4, '17:45'));
-  assert.equal(c.closed, 1);
   await ceo.goto(`${WEB}/dashboard`);
   await ceo.getByText('Thời gian báo giá trung bình').first().waitFor({ timeout: 15000 });
-  await ceo.getByText('Tỷ lệ trả lời checkpoint').waitFor();
+  // S1 on the dashboard is read from Lark sub-tasks (M1), no longer from the old checkpoint module.
+  await ceo.getByText('Tỷ lệ task con trễ hạn (M1)').waitFor();
+  const dlLark = ceo.waitForEvent('download');
+  await ceo.getByRole('button', { name: 'CSV task con' }).click();
+  assert.match((await dlLark).suggestedFilename(), /^kpi_lark_task_con_/);
   const dl = ceo.waitForEvent('download');
   await ceo.getByRole('button', { name: 'Xuất CSV' }).click();
   const f = await dl;

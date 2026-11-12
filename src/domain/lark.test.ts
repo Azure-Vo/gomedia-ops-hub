@@ -8,7 +8,9 @@ import {
   DEFAULT_LARK_CODE_RULES,
   DraftContext,
   findCodeInTitle,
+  larkDueStatus,
   larkLateStats,
+  larkPeriodKpis,
   LarkTracked,
   larkTitle,
   milestoneFor,
@@ -181,5 +183,29 @@ describe('S1 Lark · CEO card layout', () => {
       TZ,
     );
     expect(s).toMatchObject({ onTime: 1, late: 1, openLate: 1, open: 1, latePct: 66.7 });
+  });
+
+  it('period KPIs for the dashboard: M1 over sub-tasks due in the range, reminders sent in it', () => {
+    const now = Date.parse('2026-11-12T03:00:00Z'); // 10:00 in Vietnam
+    const at = (d: string) => Date.parse(`${d}T03:00:00Z`);
+    const tasks = [
+      { id: 'a', dueDate: '2026-11-03', completedAt: at('2026-11-03') }, // on time
+      { id: 'b', dueDate: '2026-11-05', completedAt: at('2026-11-07') }, // late
+      { id: 'c', dueDate: '2026-11-06', completedAt: null }, // overdue
+      { id: 'd', dueDate: '2026-11-20', completedAt: null }, // not due yet
+      { id: 'e', dueDate: '2026-10-20', completedAt: at('2026-10-19') }, // outside the range
+    ];
+    const notes = [
+      { taskId: 'c', localDate: '2026-11-07', kind: 'reminder' as const, status: 'simulated' as const },
+      { taskId: 'c', localDate: '2026-11-08', kind: 'reminder' as const, status: 'sent' as const },
+      { taskId: 'b', localDate: '2026-11-07', kind: 'completion' as const, status: 'sent' as const },
+      { taskId: 'c', localDate: '2026-11-09', kind: 'reminder' as const, status: 'failed' as const },
+      { taskId: 'e', localDate: '2026-10-18', kind: 'reminder' as const, status: 'sent' as const },
+    ];
+    const k = larkPeriodKpis(tasks, notes, '2026-11-01', '2026-11-30', now, TZ);
+    expect(k).toMatchObject({ total: 4, onTime: 1, late: 1, openLate: 1, open: 1, judged: 3, latePct: 66.7, reminders: 2, remindedTasks: 1, completions: 1, failed: 1 });
+    expect(larkDueStatus(tasks[1], now, TZ)).toBe('late');
+    expect(larkDueStatus(tasks[2], now, TZ)).toBe('overdue');
+    expect(larkDueStatus(tasks[3], now, TZ)).toBe('open');
   });
 });

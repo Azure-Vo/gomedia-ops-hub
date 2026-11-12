@@ -247,6 +247,48 @@ export function larkLateStats(tasks: Pick<LarkTracked, 'dueDate' | 'completedAt'
   return { total: tasks.length, onTime, late, openLate, open, latePct: judged ? Math.round(((late + openLate) / judged) * 1000) / 10 : null };
 }
 
+export type LarkDueStatus = 'on_time' | 'late' | 'overdue' | 'open';
+
+/** Where one sub-task stands against its deadline, by the same rule as larkLateStats. */
+export function larkDueStatus(t: Pick<LarkTracked, 'dueDate' | 'completedAt'>, now: number, timeZone: string): LarkDueStatus {
+  if (t.completedAt !== null) return localDateKey(t.completedAt, timeZone) <= t.dueDate ? 'on_time' : 'late';
+  return t.dueDate < localDateKey(now, timeZone) ? 'overdue' : 'open';
+}
+
+export interface LarkNotificationLite {
+  taskId: string;
+  localDate: string;
+  kind: 'reminder' | 'completion';
+  status: 'sent' | 'simulated' | 'failed';
+}
+
+/**
+ * S1 KPIs for the dashboard over a date range (both ends included, local dates "YYYY-MM-DD"):
+ * M1 over the sub-tasks due in the range, and the bot's reminders and completion notes sent in it.
+ */
+export function larkPeriodKpis(
+  tasks: (Pick<LarkTracked, 'dueDate' | 'completedAt'> & { id: string })[],
+  notifications: LarkNotificationLite[],
+  from: string,
+  to: string,
+  now: number,
+  timeZone: string,
+) {
+  const due = tasks.filter((t) => t.dueDate >= from && t.dueDate <= to);
+  const late = larkLateStats(due, now, timeZone);
+  const inRange = notifications.filter((n) => n.localDate >= from && n.localDate <= to);
+  const delivered = inRange.filter((n) => n.status !== 'failed');
+  return {
+    ...late,
+    judged: late.onTime + late.late + late.openLate,
+    taskIds: due.map((t) => t.id),
+    reminders: delivered.filter((n) => n.kind === 'reminder').length,
+    remindedTasks: new Set(delivered.filter((n) => n.kind === 'reminder').map((n) => n.taskId)).size,
+    completions: delivered.filter((n) => n.kind === 'completion').length,
+    failed: inRange.filter((n) => n.status === 'failed').length,
+  };
+}
+
 // ---------------------------------------------------------------------------- bot messages --------
 
 /** A bot message in neutral form: the web app draws it, and toLarkCard turns it into a Lark card. */
