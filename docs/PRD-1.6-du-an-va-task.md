@@ -62,7 +62,7 @@
 
 ## 3. Vai trò và quyền
 
-Quy tắc của Long: **chỉ PM quản lý dự án và công việc. Ngoài PM và CEO, tất cả là nhân sự.** (P)
+Quy tắc của Long: **chỉ PM quản lý dự án và công việc. Ngoài PM và CEO, tất cả là nhân sự.** (quyết định của Long, 22/11)
 
 | Vai trò hệ thống | Không gian Công việc | Ghi chú |
 |---|---|---|
