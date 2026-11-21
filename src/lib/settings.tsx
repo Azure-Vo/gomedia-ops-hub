@@ -35,6 +35,9 @@ export interface SettingsRow {
   lark_notify_d0: boolean;
   lark_notify_time: string;
   lark_status: Record<string, unknown> | null;
+  summary_morning_time?: string;
+  summary_evening_time?: string;
+  summary_evening_on?: boolean;
   telegram_bot_username: string | null;
   app_url: string | null;
   system_status: Record<string, { at?: string } & Record<string, unknown>>;

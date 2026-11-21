@@ -6,33 +6,24 @@
 // shown on the web page "S1 · Nhắc task Lark".
 import {
   BotMessage,
-  completionMessage,
-  decideLarkAction,
-  DEFAULT_LARK_SCHEDULE,
-  draftPreviewMessage,
   errorMessage,
-  findCodeInTitle,
-  LARK_HELP_TEXT,
+  PROJECT_HELP_TEXT,
   LarkCodeRules,
   LarkDraft,
   larkTitle,
   localDateKey,
   normalizeCode,
   parentCodeOf,
-  parseCreateCommand,
-  reminderMessage,
-  stripCodeFromTitle,
   toLarkCard,
   toLocalParts,
   pad2,
   validateCodeRules,
   validateDraft,
-  checkChildCode,
-  checkParentCode,
   fmtDueDate,
 } from '../../../src/domain/index';
 import { Ctx, loadSettings, Profile } from './context';
 import { ApiError, must, safeEqual } from './http';
+import { handleWorkCommand, isWorkDraft, progressFromCard, settleWorkDraft, workTick } from './work';
 
 // ----------------------------------------------------------------------------- configuration --------
 
@@ -152,16 +143,56 @@ export class LarkApi {
   replyCard(messageId: string, card: unknown) {
     return this.call<{ message_id: string }>('POST', `/im/v1/messages/${encodeURIComponent(messageId)}/reply`, { msg_type: 'interactive', content: JSON.stringify(card) });
   }
+  // ---- 1.6 (PRD 10.3, U: permissions to confirm on a real Lark app) ----
+  /** Direct message to one person (receive_id_type open_id). */
+  sendCardToUser(openId: string, card: unknown, uuid: string) {
+    return this.call<{ message_id: string }>('POST', '/im/v1/messages?receive_id_type=open_id', {
+      receive_id: openId,
+      msg_type: 'interactive',
+      content: JSON.stringify(card),
+      uuid,
+    });
+  }
+  /** Groups the bot is a member of. */
+  async listChats(): Promise<{ chat_id: string; name: string }[]> {
+    const out: { chat_id: string; name: string }[] = [];
+    let token = '';
+    for (let i = 0; i < 20; i++) {
+      const d = await this.call<{ items?: { chat_id: string; name?: string }[]; has_more?: boolean; page_token?: string }>('GET', `/im/v1/chats?page_size=100${token ? `&page_token=${encodeURIComponent(token)}` : ''}`);
+      for (const c of d.items ?? []) out.push({ chat_id: c.chat_id, name: c.name ?? '' });
+      if (!d.has_more || !d.page_token) break;
+      token = d.page_token;
+    }
+    return out;
+  }
+  async chatMembers(chatId: string): Promise<{ openId: string; name: string }[]> {
+    const out: { openId: string; name: string }[] = [];
+    let token = '';
+    for (let i = 0; i < 20; i++) {
+      const d = await this.call<{ items?: { member_id: string; name?: string }[]; has_more?: boolean; page_token?: string }>(
+        'GET',
+        `/im/v1/chats/${encodeURIComponent(chatId)}/members?member_id_type=open_id&page_size=100${token ? `&page_token=${encodeURIComponent(token)}` : ''}`,
+      );
+      for (const m of d.items ?? []) out.push({ openId: m.member_id, name: m.name ?? '' });
+      if (!d.has_more || !d.page_token) break;
+      token = d.page_token;
+    }
+    return out;
+  }
+  /** Changes fields of a task the bot created (Completed state, deadline, title). */
+  patchTask(guid: string, task: Record<string, unknown>, fields: string[]) {
+    return this.call<{ task: LarkTaskData }>('PATCH', `/task/v2/tasks/${encodeURIComponent(guid)}?user_id_type=open_id`, { task, update_fields: fields }).then((d) => d.task);
+  }
 }
 
-function apiOf(ctx: Ctx, cfg: LarkConfig): LarkApi {
+export function apiOf(ctx: Ctx, cfg: LarkConfig): LarkApi {
   if (!cfg.appId || !cfg.appSecret) throw new ApiError(400, 'lark_config', 'Chưa có App ID / App Secret của Lark (Admin → S1 · Nhắc task Lark → Cấu hình).');
   return new LarkApi(cfg.apiBase, cfg.appId, cfg.appSecret, ctx.fetchImpl ?? fetch);
 }
 
 /** All-day due dates go to Lark as 00:00 UTC of that day; timed dues are read in the company time zone. */
-const dueToLark = (dueDate: string) => ({ timestamp: String(Date.parse(`${dueDate}T00:00:00Z`)), is_all_day: true });
-function dueFromLark(due: LarkTaskData['due'], timeZone: string): string | null {
+export const dueToLark = (dueDate: string) => ({ timestamp: String(Date.parse(`${dueDate}T00:00:00Z`)), is_all_day: true });
+export function dueFromLark(due: LarkTaskData['due'], timeZone: string): string | null {
   const ms = Number(due?.timestamp ?? 0);
   if (!ms) return null;
   return due?.is_all_day ? new Date(ms).toISOString().slice(0, 10) : localDateKey(ms, timeZone);
@@ -209,7 +240,7 @@ async function draftContext(ctx: Ctx, cfg: LarkConfig) {
   };
 }
 
-async function rememberPeople(ctx: Ctx, people: { openId: string; name: string }[]) {
+export async function rememberPeople(ctx: Ctx, people: { openId: string; name: string }[]) {
   const rows = people.filter((p) => p.openId && p.name).map((p) => ({ open_id: p.openId, name: p.name, updated_at: new Date().toISOString() }));
   if (rows.length) await ctx.db.from('lark_people').upsert(rows, { onConflict: 'open_id' });
 }
@@ -365,10 +396,10 @@ interface LarkEventBody {
 const LEADING_MENTIONS = /^(\s*@_user_\d+\s*)+/;
 
 async function onMessage(ctx: Ctx, cfg: LarkConfig, ev: Record<string, unknown>, api: LarkApi) {
-  const message = (ev.message ?? {}) as { message_id: string; message_type?: string; content?: string; chat_type?: string; mentions?: { key: string; id?: { open_id?: string }; name?: string }[] };
+  const message = (ev.message ?? {}) as { message_id: string; chat_id?: string; message_type?: string; content?: string; chat_type?: string; mentions?: { key: string; id?: { open_id?: string }; name?: string }[] };
   const sender = ((ev.sender as { sender_id?: { open_id?: string } })?.sender_id?.open_id ?? '') as string;
   const reply = (m: BotMessage) => api.replyCard(message.message_id, toLarkCard(m)).catch((e) => console.error('lark reply failed', e));
-  if (message.message_type !== 'text') return reply({ tone: 'blue', title: 'Hướng dẫn tạo task', lines: [{ icon: 'ℹ️', text: LARK_HELP_TEXT }] });
+  if (message.message_type !== 'text') return reply({ tone: 'blue', title: 'Hướng dẫn', lines: [{ icon: 'ℹ️', text: PROJECT_HELP_TEXT }] });
   const raw = String((JSON.parse(message.content ?? '{}') as { text?: string }).text ?? '');
   const mentions = (message.mentions ?? []).map((m) => ({ key: m.key, openId: m.id?.open_id ?? '', name: m.name ?? '' })).filter((m) => m.openId);
   await rememberPeople(ctx, mentions);
@@ -383,16 +414,8 @@ async function onMessage(ctx: Ctx, cfg: LarkConfig, ev: Record<string, unknown>,
     if (!pending) return reply({ tone: 'grey', title: 'Không có bản nháp nào đang chờ', lines: [{ icon: 'ℹ️', text: 'Gửi lệnh /taomoi để tạo task.' }] });
     return reply(await settleDraft(ctx, cfg, pending, sender, /^(huỷ|hủy|huy|cancel)$/.test(low) ? 'cancel' : 'confirm'));
   }
-  const parsed = parseCreateCommand(text, mentions, ctx.now(), cfg.timeZone);
-  if (parsed.help || !parsed.draft) return reply({ tone: 'blue', title: 'Hướng dẫn tạo task', lines: [{ icon: 'ℹ️', text: LARK_HELP_TEXT }] });
-  const d = parsed.draft;
-  if (d.kind === 'child') d.parentCode = parentCodeOf(d.code, cfg.rules);
-  const { ctx: dctx, rows } = await draftContext(ctx, cfg);
-  const errors = [...parsed.errors, ...validateDraft(d, dctx)];
-  if (errors.length) return reply(errorMessage(d.kind === 'parent' ? 'Chưa tạo task mẹ' : 'Chưa tạo task con', errors));
-  const saved = must(await ctx.db.from('lark_drafts').insert({ open_id: sender, draft: d }).select('id').single(), 'save draft') as { id: string };
-  const parentName = d.kind === 'child' ? rows.find((r) => r.kind === 'parent' && normalizeCode(r.code) === normalizeCode(d.parentCode ?? ''))?.name : null;
-  return reply(draftPreviewMessage(d, saved.id, parentName));
+  // 1.6: "/taomoi duan|task" (and the 1.5 forms "me|con"), PM only, codes generated by the bot.
+  await handleWorkCommand(ctx, { sender, chatId: message.chat_id ?? null, text, mentions, reply });
 }
 
 interface DraftRow {
@@ -412,6 +435,11 @@ async function settleDraft(ctx: Ctx, cfg: LarkConfig, row: DraftRow, operator: s
   // Claim the draft first so a double click creates one task only.
   const claimed = must(await ctx.db.from('lark_drafts').update({ status: 'confirmed' }).eq('id', row.id).eq('status', 'pending').select('id'), 'claim draft') as unknown[];
   if (!claimed.length) return { tone: 'grey', title: 'Bản nháp này đã được xử lý', lines: [] };
+  if (isWorkDraft(row.draft)) {
+    const msg = await settleWorkDraft(ctx, row.draft);
+    if (msg.tone === 'red') await ctx.db.from('lark_drafts').update({ status: 'cancelled' }).eq('id', row.id);
+    return msg;
+  }
   const res = await createFromDraft(ctx, cfg, row.draft, { openId: operator, source: 'bot' });
   if (!res.ok) {
     await ctx.db.from('lark_drafts').update({ status: 'cancelled' }).eq('id', row.id);
@@ -449,6 +477,11 @@ export async function handleLarkEvent(ctx: Ctx, req: Request): Promise<unknown> 
   const isNew = type === 'card.action.trigger';
   const operator = isNew ? String(((body.event?.operator ?? {}) as { open_id?: string }).open_id ?? '') : String(body.open_id ?? '');
   const value = isNew ? ((body.event?.action ?? {}) as { value?: Record<string, string> }).value : body.action?.value;
+  if (value?.op === 'progress' && value.task) {
+    const msg = await progressFromCard(ctx, operator, value);
+    const card = toLarkCard(msg);
+    return isNew ? { toast: { type: msg.tone === 'red' ? 'error' : 'success', content: msg.title }, card: { type: 'raw', data: card } } : card;
+  }
   if (value?.draft) {
     const row = must(await ctx.db.from('lark_drafts').select('id, open_id, draft, status').eq('id', value.draft).maybeSingle(), 'load draft') as DraftRow | null;
     const msg = row ? await settleDraft(ctx, cfg, row, operator, value.op === 'cancel' ? 'cancel' : 'confirm') : { tone: 'grey' as const, title: 'Không tìm thấy bản nháp', lines: [] };
@@ -465,25 +498,38 @@ function localHM(now: number, timeZone: string): string {
   return `${pad2(p.hour)}:${pad2(p.minute)}`;
 }
 
-/** Pulls title, deadline, assignee and Completed state from Lark. A broken code in the title is kept as is. */
+/**
+ * Pulls deadline, assignee and Completed state from Lark (1.6, PRD 10.2). The task is identified by its
+ * Lark guid: the code and name stay as Ops Hub set them, whatever the title says on Lark. A task deadline
+ * moved on Lark past the project deadline is put back; a project deadline is only changed in Ops Hub.
+ */
 async function syncFromLark(ctx: Ctx, cfg: LarkConfig, api: LarkApi, t: TaskRow): Promise<TaskRow> {
   const lt = await api.getTask(t.lark_guid!);
   const title = lt.summary ?? t.lark_title ?? '';
-  const found = findCodeInTitle(title, t.kind, cfg.rules);
   const assignee = (lt.members ?? []).find((m) => m.role === 'assignee');
-  const due = dueFromLark(lt.due, cfg.timeZone) ?? t.due_date;
+  let due = dueFromLark(lt.due, cfg.timeZone) ?? t.due_date;
   const completedMs = Number(lt.completed_at ?? 0);
   let assigneeName = t.assignee_name;
+  let assigneeId: string | null | undefined;
   if (assignee && assignee.id !== t.assignee_open_id) {
-    const p = must(await ctx.db.from('lark_people').select('name').eq('open_id', assignee.id).maybeSingle(), 'load person') as { name: string } | null;
+    const p = must(await ctx.db.from('lark_people').select('name, profile_id').eq('open_id', assignee.id).maybeSingle(), 'load person') as { name: string; profile_id: string | null } | null;
     assigneeName = assignee.name ?? p?.name ?? null;
+    assigneeId = p?.profile_id ?? null;
   }
-  // Codes are read from the current title: if someone edits it on Lark and breaks the code, completion is refused.
-  const code = found ?? (title.match(/\(([^()]+)\)\s*$/)?.[1] ?? title.match(/^\s*\[([^\]]+)\]/)?.[1] ?? t.code);
-  const patch = {
+  if (t.kind === 'parent') due = t.due_date;
+  else if (due !== t.due_date && t.parent_id) {
+    const parent = must(await ctx.db.from('lark_tasks').select('due_date').eq('id', t.parent_id).maybeSingle(), 'load project') as { due_date: string } | null;
+    if (parent && due > parent.due_date) {
+      try {
+        await api.patchTask(t.lark_guid!, { due: dueToLark(t.due_date) }, ['due']);
+      } catch (e) {
+        console.error('lark due revert failed', (e as Error).message);
+      }
+      due = t.due_date;
+    }
+  }
+  const patch: Record<string, unknown> = {
     lark_title: title,
-    name: stripCodeFromTitle(title, code) || t.name,
-    code: normalizeCode(code),
     due_date: due,
     assignee_open_id: assignee?.id ?? t.assignee_open_id,
     assignee_name: assigneeName,
@@ -491,56 +537,13 @@ async function syncFromLark(ctx: Ctx, cfg: LarkConfig, api: LarkApi, t: TaskRow)
     lark_url: lt.url ?? t.lark_url,
     synced_at: new Date(ctx.now()).toISOString(),
   };
+  if (assigneeId !== undefined) patch.assignee_id = assigneeId;
+  if (assigneeId && t.kind === 'child' && t.parent_id) {
+    await ctx.db.from('project_members').insert({ project_id: t.parent_id, profile_id: assigneeId, open_id: assignee!.id, name: assigneeName ?? '', source: 'task' });
+  }
   return must(await ctx.db.from('lark_tasks').update(patch).eq('id', t.id).select(TASK_COLS).single(), 'save sync') as TaskRow;
 }
 
-interface NotifRow {
-  id: string;
-  task_id: string;
-  kind: 'reminder' | 'completion';
-  status: string;
-  attempts: number;
-}
-const MAX_ATTEMPTS = 5;
-
-/**
- * Claims today's slot for (task, kind) before sending, so two overlapping runs never both send.
- * Returns the row to fill in, or null when today's message is already out or has failed too often.
- */
-async function claim(ctx: Ctx, taskId: string, today: string, kind: 'reminder' | 'completion', msg: BotMessage, milestone: string | null, assignee: string | null): Promise<NotifRow | null> {
-  const base = { task_id: taskId, local_date: today, kind, milestone, assignee_open_id: assignee, message: msg };
-  const ins = await ctx.db.from('lark_notifications').insert({ ...base, status: 'failed', attempts: 1, last_error: 'đang gửi' }).select('id, task_id, kind, status, attempts').maybeSingle();
-  if (!ins.error && ins.data) return ins.data as NotifRow;
-  const cur = must(await ctx.db.from('lark_notifications').select('id, task_id, kind, status, attempts').eq('task_id', taskId).eq('local_date', today).eq('kind', kind).maybeSingle(), 'load notification') as NotifRow | null;
-  if (!cur || cur.status !== 'failed' || cur.attempts >= MAX_ATTEMPTS) return null;
-  const upd = must(
-    await ctx.db.from('lark_notifications').update({ attempts: cur.attempts + 1, message: msg, milestone, assignee_open_id: assignee }).eq('id', cur.id).eq('attempts', cur.attempts).select('id, task_id, kind, status, attempts'),
-    'claim retry',
-  ) as NotifRow[];
-  return upd[0] ?? null;
-}
-
-async function deliver(ctx: Ctx, cfg: LarkConfig, api: LarkApi | null, slot: NotifRow, msg: BotMessage, today: string): Promise<boolean> {
-  try {
-    let messageId: string | null = null;
-    if (cfg.mode === 'live') {
-      if (!cfg.chatId) throw new Error('Chưa cấu hình group Lark nhận thông báo (chat_id).');
-      const r = await api!.sendCard(cfg.chatId, toLarkCard(msg), `${slot.id.slice(0, 18)}-${today}-${slot.attempts}`);
-      messageId = r.message_id;
-    }
-    must(
-      await ctx.db
-        .from('lark_notifications')
-        .update({ status: cfg.mode === 'live' ? 'sent' : 'simulated', last_error: null, sent_at: new Date(ctx.now()).toISOString(), lark_message_id: messageId })
-        .eq('id', slot.id),
-      'save notification',
-    );
-    return true;
-  } catch (e) {
-    await ctx.db.from('lark_notifications').update({ status: 'failed', last_error: (e as Error).message.slice(0, 500) }).eq('id', slot.id);
-    return false;
-  }
-}
 
 export interface LarkTickResult {
   mode: string;
@@ -551,13 +554,17 @@ export interface LarkTickResult {
   completions: number;
   failed: number;
   waitingForTime: number;
+  checkins?: number;
+  nudges?: number;
+  summaries?: number;
+  fromLark?: number;
   note?: string;
 }
 
 /**
- * Runs every 15 minutes from pg_cron and on "Chạy kiểm tra ngay". Completion is confirmed on any run;
- * reminders go out from the configured time (09:00) — `force` sends them now. Restart-safe: the state
- * lives in lark_tasks / lark_notifications.
+ * Runs every 15 minutes from pg_cron (and from Admin → "Chạy nhắc việc ngay"). Syncs open tasks from Lark,
+ * then runs the 1.6 jobs (work.ts): reminders by task length, progress questions, review nudges and the
+ * PM summaries. Restart-safe: every message has a unique key in bot_messages.
  */
 export async function larkTick(ctx: Ctx, opts: { force?: boolean } = {}): Promise<LarkTickResult> {
   const cfg = await loadLarkConfig(ctx);
@@ -572,69 +579,28 @@ export async function larkTick(ctx: Ctx, opts: { force?: boolean } = {}): Promis
       return res;
     }
     api = new LarkApi(cfg.apiBase, cfg.appId, cfg.appSecret, ctx.fetchImpl ?? fetch);
-  }
-  let tasks = must(await ctx.db.from('lark_tasks').select(TASK_COLS).is('closed_at', null).is('deleted_at', null), 'load open lark tasks') as TaskRow[];
-  if (api) {
-    const synced: TaskRow[] = [];
+    const tasks = must(await ctx.db.from('lark_tasks').select(TASK_COLS).is('closed_at', null).is('deleted_at', null).eq('mode', 'live'), 'load open lark tasks') as TaskRow[];
     for (const t of tasks) {
-      if (t.mode !== 'live' || !t.lark_guid) continue;
+      if (!t.lark_guid) continue;
       try {
-        synced.push(await syncFromLark(ctx, cfg, api, t));
+        await syncFromLark(ctx, cfg, api, t);
         res.synced++;
       } catch (e) {
         res.syncErrors++;
         console.error('lark sync failed', t.code, (e as Error).message);
-        synced.push(t);
       }
-    }
-    tasks = synced;
-  } else tasks = tasks.filter((t) => t.mode === 'simulation');
-
-  const parents = new Map(
-    (must(await ctx.db.from('lark_tasks').select('id, code, name').eq('kind', 'parent'), 'load parents') as { id: string; code: string; name: string }[]).map((p) => [p.id, p]),
-  );
-  const todays = must(await ctx.db.from('lark_notifications').select('task_id, kind, status, attempts').eq('local_date', today), 'load today') as NotifRow[];
-  const done = new Set(todays.filter((n) => n.status !== 'failed' || n.attempts >= MAX_ATTEMPTS).map((n) => `${n.task_id}|${n.kind}`));
-  const inWindow = opts.force || localHM(now, cfg.timeZone) >= cfg.notifyTime;
-  const schedule = { ...DEFAULT_LARK_SCHEDULE, notifyD0: cfg.notifyD0 };
-
-  for (const t of tasks.filter((x) => x.kind === 'child')) {
-    const p = t.parent_id ? parents.get(t.parent_id) : undefined;
-    const tracked = {
-      parentCode: p?.code ?? t.parent_code ?? '',
-      parentName: p ? stripCodeFromTitle(p.name, p.code) : '',
-      childCode: t.code,
-      childName: t.name,
-      assigneeOpenId: t.assignee_open_id,
-      assigneeName: t.assignee_name,
-      dueDate: t.due_date,
-      completedAt: t.completed_at ? Date.parse(t.completed_at) : null,
-      closedAt: t.closed_at ? Date.parse(t.closed_at) : null,
-    };
-    const action = decideLarkAction(tracked, now, cfg.timeZone, { rules: cfg.rules, schedule, sentToday: done.has(`${t.id}|reminder`) });
-    const codeErrors = [...checkParentCode(tracked.parentCode, cfg.rules), ...checkChildCode(t.code, tracked.parentCode, cfg.rules)];
-    await ctx.db.from('lark_tasks').update({ code_errors: codeErrors }).eq('id', t.id);
-    if (action.type === 'complete') {
-      if (done.has(`${t.id}|completion`)) continue;
-      const msg = completionMessage(tracked, cfg.timeZone);
-      const slot = await claim(ctx, t.id, today, 'completion', msg, 'DONE', t.assignee_open_id);
-      if (!slot) continue;
-      if (await deliver(ctx, cfg, api, slot, msg, today)) {
-        res.completions++;
-        await ctx.db.from('lark_tasks').update({ closed_at: new Date(now).toISOString() }).eq('id', t.id);
-      } else res.failed++;
-    } else if (action.type === 'remind') {
-      if (!inWindow) {
-        res.waitingForTime++;
-        continue;
-      }
-      const msg = reminderMessage(tracked, action.milestone, action.codeErrors);
-      const slot = await claim(ctx, t.id, today, 'reminder', msg, action.milestone.label, t.assignee_open_id);
-      if (!slot) continue;
-      if (await deliver(ctx, cfg, api, slot, msg, today)) res.reminders++;
-      else res.failed++;
     }
   }
+  const work = await workTick(ctx, api, opts);
+  res.reminders = work.reminders;
+  res.completions = work.closed;
+  res.checkins = work.checkins;
+  res.nudges = work.nudges;
+  res.summaries = work.summaries;
+  res.fromLark = work.fromLark;
+  if (!opts.force && localHM(now, cfg.timeZone) < cfg.notifyTime) res.waitingForTime = 1;
+  const failed = await ctx.db.from('bot_messages').select('id', { count: 'exact', head: true }).eq('local_date', today).eq('status', 'failed');
+  res.failed = failed.count ?? 0;
   await saveStatus(ctx, res);
   return res;
 }
@@ -645,7 +611,6 @@ async function saveStatus(ctx: Ctx, res: LarkTickResult) {
 
 // ----------------------------------------------------------------------- web-only actions --------
 
-const MANAGERS = ['admin', 'ecom_exec', 'pm', 'ceo'];
 
 /**
  * Simulation controls (what staff would do on Lark Tasks): complete / reopen a sub-task, move the
@@ -655,8 +620,8 @@ export async function simulateLark(ctx: Ctx, user: Profile, body: Record<string,
   const t = must(await ctx.db.from('lark_tasks').select(TASK_COLS).eq('id', String(body.task_id ?? '')).maybeSingle(), 'load task') as TaskRow | null;
   if (!t) throw new ApiError(404, 'not_found', 'Không tìm thấy task.');
   if (t.mode !== 'simulation') throw new ApiError(400, 'live', 'Task này nằm trên Lark thật: hãy sửa trên Lark Tasks, hệ thống tự đồng bộ.');
-  const own = t.assignee_open_id === `sim:${user.id}`;
-  if (!own && !MANAGERS.includes(user.role)) throw new ApiError(403, 'forbidden', 'Chỉ người thực hiện hoặc quản lý mới làm được.');
+  // 1.6: a test tool that plays what someone does on Lark Tasks; nobody completes work for someone else in the app.
+  if (user.role !== 'admin') throw new ApiError(403, 'forbidden', 'Chỉ admin dùng công cụ mô phỏng Lark.');
   const patch: Record<string, unknown> = {};
   switch (body.op) {
     case 'complete':
@@ -711,6 +676,13 @@ export async function saveLarkConfig(ctx: Ctx, user: Profile, body: Record<strin
   }
   if (body.lark_mode !== undefined) patch.lark_mode = body.lark_mode === 'live' ? 'live' : 'simulation';
   if (body.lark_notify_d0 !== undefined) patch.lark_notify_d0 = !!body.lark_notify_d0;
+  for (const k of ['summary_morning_time', 'summary_evening_time']) {
+    const v = str(k);
+    if (v === undefined) continue;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) throw new ApiError(400, 'invalid', 'Giờ gửi tóm tắt phải dạng HH:MM.');
+    patch[k] = v;
+  }
+  if (body.summary_evening_on !== undefined) patch.summary_evening_on = !!body.summary_evening_on;
   if (patch.lark_notify_time !== undefined && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(patch.lark_notify_time))) throw new ApiError(400, 'invalid', 'Giờ gửi phải dạng HH:MM.');
   const cfg = await loadLarkConfig(ctx);
   const rules = {
@@ -744,7 +716,23 @@ export async function testLark(ctx: Ctx, user: Profile) {
   return { ok: true, note: 'Đã gửi tin thử vào group.' };
 }
 
+/** Admin links a Lark account (learnt from group members and @mentions) to an Ops Hub user. */
+export async function linkLarkPerson(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
+  if (user.role !== 'admin') throw new ApiError(403, 'forbidden', 'Chỉ admin.');
+  const openId = String(body.open_id ?? '');
+  if (!openId || openId.startsWith('sim:')) throw new ApiError(400, 'invalid', 'Chọn một tài khoản Lark.');
+  const profileId = body.profile_id ? String(body.profile_id) : null;
+  if (profileId) await ctx.db.from('lark_people').update({ profile_id: null }).eq('profile_id', profileId).not('open_id', 'like', 'sim:%').neq('open_id', openId);
+  must(await ctx.db.from('lark_people').update({ profile_id: profileId, updated_at: new Date(ctx.now()).toISOString() }).eq('open_id', openId), 'link person');
+  if (profileId) {
+    await ctx.db.from('lark_tasks').update({ assignee_id: profileId }).eq('assignee_open_id', openId).is('assignee_id', null);
+    await ctx.db.from('project_members').update({ profile_id: profileId }).eq('open_id', openId).is('profile_id', null);
+  }
+  return { ok: true };
+}
+
+/** Admin → Kết nối Lark → "Chạy nhắc việc ngay (kiểm thử)" (PRD 4.3). */
 export async function runLarkNow(ctx: Ctx, user: Profile) {
-  if (!MANAGERS.includes(user.role)) throw new ApiError(403, 'forbidden', 'Chỉ quản lý hoặc admin.');
+  if (user.role !== 'admin') throw new ApiError(403, 'forbidden', 'Chỉ admin.');
   return larkTick(ctx, { force: true });
 }

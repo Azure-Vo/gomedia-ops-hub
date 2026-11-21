@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
+  kpiTracked,
+  TaskStage,
   DEFAULT_GOSTAR_RULES,
   employeeOfMonth,
   fmtVnd,
@@ -70,6 +72,15 @@ function Stars({ n, px = 15 }: { n: number; px?: number }) {
   );
 }
 
+interface FactRow {
+  assignee_open_id: string | null;
+  kpi_due_date: string | null;
+  due_date: string;
+  state: TaskStage;
+  accepted_at: string | null;
+  pending_at: string | null;
+}
+
 export function GoStarPage() {
   const me = useProfile();
   const { tz } = useSettings();
@@ -83,14 +94,20 @@ export function GoStarPage() {
   const { data, error, loading, reload } = useAsync(async () => {
     const [people, tasks, scores, months, profiles] = await Promise.all([
       supabase.from('lark_people').select('open_id, name, profile_id'),
-      supabase.from('lark_tasks').select('assignee_open_id, due_date, closed_at, completed_at').eq('kind', 'child').is('deleted_at', null),
+      // 1.6: one row per task with the KPI deadline and the approved submission (view task_kpi_facts).
+      supabase.from('task_kpi_facts').select('assignee_open_id, kpi_due_date, due_date, state, accepted_at, pending_at'),
       supabase.from('gostar_scores').select('month, open_id, kpi_name, kpi_pct, quality, teamwork, note, updated_by, updated_at'),
       supabase.from('gostar_months').select('month, result, finalized_by, finalized_at'),
       supabase.from('profiles').select('id, full_name, email, role'),
     ]);
     return {
       people: check(people) as { open_id: string; name: string; profile_id: string | null }[],
-      tasks: check(tasks) as { assignee_open_id: string | null; due_date: string; closed_at: string | null; completed_at: string | null }[],
+      tasks: (check(tasks) as FactRow[])
+        .map((t) => {
+          const k = kpiTracked({ state: t.state, kpiDueDate: t.kpi_due_date ?? t.due_date, acceptedAt: t.accepted_at ? Date.parse(t.accepted_at) : null, pendingAt: t.pending_at ? Date.parse(t.pending_at) : null }, now, tz);
+          return k ? { assignee_open_id: t.assignee_open_id, due_date: k.dueDate, completedAt: k.completedAt } : null;
+        })
+        .filter((t): t is { assignee_open_id: string | null; due_date: string; completedAt: number | null } => t !== null),
       scores: (check(scores) as ScoreRow[]).map((s) => ({ ...s, kpi_pct: s.kpi_pct === null ? null : Number(s.kpi_pct) })),
       months: check(months) as MonthRow[],
       profiles: check(profiles) as { id: string; full_name: string; email: string; role: string }[],
@@ -122,7 +139,7 @@ export function GoStarPage() {
     const scores = new Map<string, GoStarScore>(scored.map((s) => [s.open_id, { kpiPct: s.kpi_pct, quality: s.quality, teamwork: s.teamwork }]));
     return rankGoStar(
       roster,
-      data.tasks.map((t) => ({ assigneeOpenId: t.assignee_open_id, dueDate: t.due_date, completedAt: t.closed_at ? Date.parse(t.completed_at ?? t.closed_at) : null })),
+      data.tasks.map((t) => ({ assigneeOpenId: t.assignee_open_id, dueDate: t.due_date, completedAt: t.completedAt })),
       scores,
       month,
       now,
@@ -215,13 +232,13 @@ export function GoStarPage() {
             </Banner>
           ) : (
             <Banner tone="info" title="Đang tạm tính" className="mb-4">
-              Hai sao Task Completion và Deadline tự tính từ task con trên Lark đến hôm nay
-              {notYetDue ? ` (còn ${notYetDue} task con chưa đến hạn trong tháng, chưa tính)` : ''}. Ba sao còn lại theo điểm quản lý chấm. CEO chốt sau ngày cuối tháng.
+              Hai sao Task Completion và Deadline tự tính từ các task đã được PM duyệt, đến hôm nay
+              {notYetDue ? ` (còn ${notYetDue} task chưa đến hạn hoặc đang chờ duyệt, chưa tính)` : ''}. Ba sao còn lại theo điểm quản lý chấm. CEO chốt sau ngày cuối tháng.
             </Banner>
           )}
 
           {!rows.length ? (
-            <EmptyState title="Chưa có nhân viên nào trong tháng này">Bảng xếp hạng gồm nhân viên và những ai có task con đến hạn trong tháng trên Lark.</EmptyState>
+            <EmptyState title="Chưa có nhân viên nào trong tháng này">Bảng xếp hạng gồm nhân viên và những ai có task đến hạn trong tháng.</EmptyState>
           ) : (
             <>
               <div className="mb-8 grid border-y border-ink md:grid-cols-3">
@@ -291,8 +308,8 @@ export function GoStarPage() {
                         const t = r.tally;
                         const sc = scoreOf(r.openId);
                         const detail: Record<GoStarCriterion, string> = {
-                          completion: t.judged ? `${t.done}/${t.judged} task con đã xong` : 'Không có task con đến hạn',
-                          deadline: t.judged ? `Trễ ${t.late + t.openLate}/${t.judged} (${t.latePct}%)` : 'Không có task con đến hạn',
+                          completion: t.judged ? `${t.done}/${t.judged} task đã được duyệt` : 'Không có task đến hạn',
+                          deadline: t.judged ? `Trễ ${t.late + t.openLate}/${t.judged} (${t.latePct}%)` : 'Không có task đến hạn',
                           quality: r.score.quality !== null ? `${r.score.quality}/5` : 'Chưa chấm',
                           kpi: r.score.kpiPct !== null ? `${r.score.kpiPct}%` : 'Chưa nhập',
                           teamwork: r.score.teamwork !== null ? `${r.score.teamwork}/5` : 'Chưa chấm',
@@ -340,10 +357,10 @@ export function GoStarPage() {
                 <Card title="Cách tính sao" subtitle="Ngưỡng hiện tại là giả định của nhóm, chờ CEO chốt">
                   <ul className="flex flex-col gap-2.5 text-[14px] text-ink-2">
                     <li>
-                      <b className="text-ink">1. Task Completion</b> (tự tính từ Lark): mọi task con đến hạn trong tháng đều Completed với mã hợp lệ (≥ {rules.completionMinPct}%).
+                      <b className="text-ink">1. Task Completion</b> (tự tính): mọi task đến hạn trong tháng đều đã được PM duyệt (≥ {rules.completionMinPct}%).
                     </li>
                     <li>
-                      <b className="text-ink">2. Deadline</b> (tự tính từ Lark): tỷ lệ task con trễ trong tháng dưới {rules.deadlineMaxLatePct}%, cùng chuẩn với chỉ số M1 của S1.
+                      <b className="text-ink">2. Deadline</b> (tự tính): tỷ lệ task trễ trong tháng (theo lúc nộp, so với deadline tính KPI) dưới {rules.deadlineMaxLatePct}%, cùng chuẩn với chỉ số M1 của S1.
                     </li>
                     <li>
                       <b className="text-ink">3. Work Quality</b> (quản lý chấm): điểm chất lượng đầu ra từ {rules.qualityMinScore}/5 trở lên.
@@ -481,7 +498,7 @@ function ScoreModal({
         <Stat label="Đúng hạn" value={t.onTime} />
         <Stat label="Tỷ lệ trễ" value={t.latePct === null ? '—' : `${t.latePct}%`} tone={t.latePct === null ? null : t.latePct < 20 ? 'ok' : 'bad'} />
       </div>
-      <p className="mb-4 text-[13px] text-ink-3">Hai sao Task Completion và Deadline tự tính từ Lark, không chấm tay.</p>
+      <p className="mb-4 text-[13px] text-ink-3">Hai sao Task Completion và Deadline tự tính từ task đã duyệt, không chấm tay. Tham khảo thêm số task phải sửa ở trang Báo cáo khi chấm Work Quality.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="KPI cá nhân của tháng" hint="Vd: 4 video đăng đúng lịch, doanh số shop…">
           {(id) => <Input id={id} value={kpiName} onChange={(e) => setKpiName(e.target.value)} maxLength={120} />}

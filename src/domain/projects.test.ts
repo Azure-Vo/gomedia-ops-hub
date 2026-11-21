@@ -1,0 +1,265 @@
+import { describe, expect, it } from 'vitest';
+import {
+  applyExtension,
+  autoTier,
+  chatMatchesCode,
+  checkinDates,
+  checkinToSend,
+  checkProjectCode,
+  cleanLinks,
+  evidenceErrors,
+  extensionErrors,
+  isNoUpdate,
+  kpiStatus,
+  kpiTracked,
+  loadLevel,
+  monthGrid,
+  morningSummaryMessage,
+  normalizeProjectCode,
+  parseProjectCommand,
+  projectRollup,
+  reminderToday,
+  reviewIsLate,
+  summarizeProject,
+  taskCode,
+  taskHealth,
+  weekOf,
+  whyNot,
+  workDaysAfter,
+  eveningSummaryMessage,
+  type SummaryTask,
+} from './projects';
+
+const CAL = { workDays: [1, 2, 3, 4, 5], holidays: [] as string[] };
+const TZ = 'Asia/Ho_Chi_Minh';
+const at = (local: string) => Date.parse(`${local}+07:00`);
+
+describe('codes (PRD 5.1, 6.1)', () => {
+  it('normalises and checks project codes', () => {
+    expect(normalizeProjectCode('mt 35')).toBe('MT35');
+    expect(checkProjectCode('mt 35')).toEqual([]);
+    expect(checkProjectCode('DA056')).toEqual([]);
+    expect(checkProjectCode('M35')[0]).toMatch(/chưa đúng/);
+    expect(checkProjectCode('MT35', ['mt35'])[0]).toMatch(/đã có/);
+    expect(checkProjectCode('')[0]).toMatch(/Thiếu/);
+  });
+  it('builds task codes with two digits, three past 99', () => {
+    expect(taskCode('MT35', 8)).toBe('MT35-08');
+    expect(taskCode('mt35', 100)).toBe('MT35-100');
+  });
+  it('matches a Lark group by the project code', () => {
+    expect(chatMatchesCode('MT35 · Ra mắt BST Tết', 'MT35')).toBe(true);
+    expect(chatMatchesCode('Nhóm mt35', 'MT35')).toBe(true);
+    expect(chatMatchesCode('MT350 khác', 'MT35')).toBe(false);
+  });
+});
+
+describe('reminder tiers (PRD 7.1, AC 18–19)', () => {
+  it('picks the tier from the duration', () => {
+    expect(autoTier('2026-12-01', '2026-12-03')).toBe('short');
+    expect(autoTier('2026-12-01', '2026-12-04')).toBe('short');
+    expect(autoTier('2026-12-01', '2026-12-05')).toBe('medium');
+    expect(autoTier('2026-12-01', '2026-12-08')).toBe('medium');
+    expect(autoTier('2026-12-01', '2026-12-09')).toBe('long');
+  });
+  it('AC18: short task — no check-in, reminder on D0 only, overdue daily', () => {
+    const t = { state: 'doing' as const, startDate: '2026-12-01', dueDate: '2026-12-03' };
+    expect(checkinDates(t.startDate, t.dueDate, 'short', CAL)).toEqual([]);
+    expect(reminderToday(t, '2026-12-01')).toBeNull();
+    expect(reminderToday(t, '2026-12-02')).toBeNull();
+    expect(reminderToday(t, '2026-12-03')).toMatchObject({ kind: 'due', label: 'D0' });
+    expect(reminderToday(t, '2026-12-04')).toMatchObject({ kind: 'overdue', label: 'D+1' });
+    expect(reminderToday(t, '2026-12-06')).toMatchObject({ kind: 'overdue', label: 'D+3' });
+  });
+  it('AC19: long task — check-ins 08/12 and 14/12 (75% falls on Saturday), reminders 13–15/12', () => {
+    expect(checkinDates('2026-12-01', '2026-12-15', 'long', CAL)).toEqual([
+      { pct: 50, date: '2026-12-08' },
+      { pct: 75, date: '2026-12-14' },
+    ]);
+    const t = { state: 'doing' as const, startDate: '2026-12-01', dueDate: '2026-12-15' };
+    expect(reminderToday(t, '2026-12-12')).toBeNull();
+    expect(reminderToday(t, '2026-12-13')).toMatchObject({ label: 'D-2' });
+    expect(reminderToday(t, '2026-12-14')).toMatchObject({ label: 'D-1' });
+    expect(reminderToday(t, '2026-12-15')).toMatchObject({ label: 'D0' });
+  });
+  it('medium task: one check-in at 50%, D-1 and D0', () => {
+    expect(checkinDates('2026-12-01', '2026-12-07', 'medium', CAL)).toEqual([{ pct: 50, date: '2026-12-04' }]);
+    const t = { state: 'doing' as const, startDate: '2026-12-01', dueDate: '2026-12-07' };
+    expect(reminderToday(t, '2026-12-05')).toBeNull();
+    expect(reminderToday(t, '2026-12-06')).toMatchObject({ label: 'D-1' });
+  });
+  it('the PM can override the tier', () => {
+    const t = { state: 'doing' as const, startDate: '2026-12-01', dueDate: '2026-12-03', tier: 'medium' as const };
+    expect(reminderToday(t, '2026-12-02')).toMatchObject({ label: 'D-1' });
+  });
+  it('no reminders while waiting for the PM or once closed; "Cần sửa" gets D-1, D0, overdue', () => {
+    const base = { startDate: '2026-12-01', dueDate: '2026-12-15' };
+    expect(reminderToday({ ...base, state: 'review' }, '2026-12-16')).toBeNull();
+    expect(reminderToday({ ...base, state: 'done' }, '2026-12-16')).toBeNull();
+    expect(reminderToday({ ...base, state: 'cancelled' }, '2026-12-16')).toBeNull();
+    expect(reminderToday({ ...base, state: 'changes' }, '2026-12-13')).toBeNull();
+    expect(reminderToday({ ...base, state: 'changes' }, '2026-12-14')).toMatchObject({ label: 'D-1' });
+  });
+  it('sends the latest due check-in once, only on working days and while "Đang làm"', () => {
+    const t = { state: 'doing' as const, startDate: '2026-12-01', dueDate: '2026-12-15' };
+    expect(checkinToSend(t, [], '2026-12-07', CAL)).toBeNull();
+    expect(checkinToSend(t, [], '2026-12-08', CAL)).toEqual({ pct: 50, date: '2026-12-08' });
+    expect(checkinToSend(t, [50], '2026-12-09', CAL)).toBeNull();
+    expect(checkinToSend(t, [50], '2026-12-12', CAL)).toBeNull(); // Saturday
+    expect(checkinToSend(t, [], '2026-12-14', CAL)).toEqual({ pct: 75, date: '2026-12-14' });
+    expect(checkinToSend({ ...t, state: 'changes' }, [], '2026-12-08', CAL)).toBeNull();
+  });
+  it('AC21: unanswered until 09:00 of the next working day → no update', () => {
+    expect(isNoUpdate('2026-12-08', '2026-12-08', '17:00', CAL)).toBe(false);
+    expect(isNoUpdate('2026-12-08', '2026-12-09', '08:59', CAL)).toBe(false);
+    expect(isNoUpdate('2026-12-08', '2026-12-09', '09:00', CAL)).toBe(true);
+    // Friday question → Monday 09:00
+    expect(isNoUpdate('2026-12-11', '2026-12-12', '10:00', CAL)).toBe(false);
+    expect(isNoUpdate('2026-12-11', '2026-12-14', '09:00', CAL)).toBe(true);
+  });
+  it('AC22: review nudge after more than one working day', () => {
+    expect(workDaysAfter('2026-12-07', '2026-12-08', CAL)).toBe(1);
+    expect(reviewIsLate('2026-12-07', '2026-12-08', CAL)).toBe(false);
+    expect(reviewIsLate('2026-12-07', '2026-12-09', CAL)).toBe(true);
+    expect(reviewIsLate('2026-12-11', '2026-12-14', CAL)).toBe(false);
+  });
+});
+
+describe('lifecycle (PRD 6.3, AC 5, 11, 13)', () => {
+  const staff = { role: 'staff', isAssignee: true, isProjectPm: false };
+  const pm = { role: 'pm', isAssignee: false, isProjectPm: true };
+  const otherPm = { role: 'pm', isAssignee: false, isProjectPm: false };
+  const admin = { role: 'admin', isAssignee: false, isProjectPm: false };
+  it('only the assignee submits; only the project PM reviews', () => {
+    expect(whyNot('submit', 'doing', staff)).toBeNull();
+    expect(whyNot('submit', 'changes', staff)).toBeNull();
+    expect(whyNot('submit', 'review', staff)).toMatch(/Chờ duyệt/);
+    expect(whyNot('submit', 'doing', pm)).toMatch(/người được giao/);
+    expect(whyNot('approve', 'review', pm)).toBeNull();
+    expect(whyNot('approve', 'review', otherPm)).toMatch(/PM phụ trách/);
+    expect(whyNot('approve', 'doing', pm)).toMatch(/chưa được nộp/);
+  });
+  it('nobody, admin included, can complete a task on someone\'s behalf', () => {
+    for (const a of ['submit', 'approve'] as const) expect(whyNot(a, 'doing', admin)).not.toBeNull();
+    expect(whyNot('approve', 'review', admin)).not.toBeNull();
+  });
+  it('requires evidence and valid links', () => {
+    expect(evidenceErrors({ links: [], files: [] })[0]).toMatch(/ít nhất 1/);
+    expect(cleanLinks(['https://drive.google.com/x', 'not a link', 'https://drive.google.com/x'])).toEqual(['https://drive.google.com/x']);
+    expect(evidenceErrors({ links: cleanLinks('https://a.vn/b'), files: [] })).toEqual([]);
+  });
+});
+
+describe('extensions and KPI (PRD 6.4, 9.1, AC 14–16)', () => {
+  it('AC14: "chưa đạt" keeps the KPI deadline → late if approved after it', () => {
+    const t = applyExtension({ dueDate: '2026-12-10', kpiDueDate: '2026-12-10' }, '2026-12-14', 'quality');
+    expect(t).toEqual({ dueDate: '2026-12-14', kpiDueDate: '2026-12-10' });
+    expect(kpiStatus({ state: 'done', kpiDueDate: t.kpiDueDate, acceptedAt: at('2026-12-13T10:00:00'), pendingAt: null }, at('2026-12-15T10:00:00'), TZ)).toBe('late');
+  });
+  it('AC15: "yêu cầu thay đổi" moves the KPI deadline → on time', () => {
+    const t = applyExtension({ dueDate: '2026-12-10', kpiDueDate: '2026-12-10' }, '2026-12-14', 'scope');
+    expect(kpiStatus({ state: 'done', kpiDueDate: t.kpiDueDate, acceptedAt: at('2026-12-13T10:00:00'), pendingAt: null }, at('2026-12-15T10:00:00'), TZ)).toBe('on_time');
+  });
+  it('AC16: submitted before the deadline, approved two days after → on time', () => {
+    const facts = { state: 'done' as const, kpiDueDate: '2026-12-10', acceptedAt: at('2026-12-10T16:00:00'), pendingAt: null };
+    expect(kpiStatus(facts, at('2026-12-12T10:00:00'), TZ)).toBe('on_time');
+  });
+  it('an on-time submission waiting for review is not judged yet; a late one counts as overdue', () => {
+    expect(kpiStatus({ state: 'review', kpiDueDate: '2026-12-10', acceptedAt: null, pendingAt: at('2026-12-09T10:00:00') }, at('2026-12-12T10:00:00'), TZ)).toBe('pending');
+    expect(kpiStatus({ state: 'review', kpiDueDate: '2026-12-10', acceptedAt: null, pendingAt: at('2026-12-11T10:00:00') }, at('2026-12-12T10:00:00'), TZ)).toBe('overdue');
+    expect(kpiTracked({ state: 'review', kpiDueDate: '2026-12-10', acceptedAt: null, pendingAt: at('2026-12-09T10:00:00') }, at('2026-12-12T10:00:00'), TZ)).toBeNull();
+    expect(kpiTracked({ state: 'cancelled', kpiDueDate: '2026-12-10', acceptedAt: null, pendingAt: null }, at('2026-12-12T10:00:00'), TZ)).toBeNull();
+    expect(kpiTracked({ state: 'doing', kpiDueDate: '2026-12-10', acceptedAt: null, pendingAt: null }, at('2026-12-12T10:00:00'), TZ)).toEqual({ dueDate: '2026-12-10', completedAt: null });
+  });
+  it('checks a new deadline against the project deadline', () => {
+    expect(extensionErrors({ dueDate: '2026-12-10' }, '2026-12-20', 'scope', '2026-12-31', '2026-12-05')).toEqual([]);
+    expect(extensionErrors({ dueDate: '2026-12-10' }, '2027-01-05', 'scope', '2026-12-31', '2026-12-05')[0]).toMatch(/sau deadline dự án/);
+    expect(extensionErrors({ dueDate: '2026-12-10' }, '2026-12-20', null, '2026-12-31', '2026-12-05')[0]).toMatch(/lý do/);
+  });
+});
+
+describe('health and project roll-up (PRD 5.4, 6.6)', () => {
+  const base = { state: 'doing' as const, dueDate: '2026-12-10', progress: null, noUpdate: false, hasEvidence: false };
+  it('takes the worst signal', () => {
+    expect(taskHealth(base, '2026-12-05').health).toBe('green');
+    expect(taskHealth({ ...base, progress: 'behind' }, '2026-12-05').health).toBe('amber');
+    expect(taskHealth({ ...base, noUpdate: true }, '2026-12-05').health).toBe('amber');
+    expect(taskHealth({ ...base, progress: 'blocked', progressNote: 'chờ logo' }, '2026-12-05')).toEqual({ health: 'red', reason: 'Bị chặn: chờ logo' });
+    expect(taskHealth({ ...base, progress: 'on_plan' }, '2026-12-11')).toEqual({ health: 'red', reason: 'Quá hạn 1 ngày' });
+    expect(taskHealth({ ...base, state: 'review', hasEvidence: true }, '2026-12-11').health).toBe('blue');
+    expect(taskHealth({ ...base, state: 'review', hasEvidence: false }, '2026-12-11').health).toBe('amber');
+    expect(taskHealth({ ...base, state: 'changes' }, '2026-12-09').health).toBe('amber');
+    expect(taskHealth({ ...base, state: 'done' }, '2026-12-20').health).toBe('done');
+  });
+  const p = { state: 'active' as const, startDate: '2026-12-01', dueDate: '2026-12-11' };
+  it('AC10: done when every live task is approved', () => {
+    const r = projectRollup(p, [{ state: 'done', health: 'done' }, { state: 'cancelled', health: 'cancelled' }], '2026-12-05');
+    expect(r).toMatchObject({ status: 'done', total: 1, done: 1, pct: 100 });
+  });
+  it('late, red, risk, ok in that order', () => {
+    expect(projectRollup(p, [{ state: 'doing', health: 'green' }], '2026-12-12').status).toBe('late');
+    expect(projectRollup(p, [{ state: 'doing', health: 'red' }, { state: 'doing', health: 'amber' }], '2026-12-05').status).toBe('red');
+    expect(projectRollup(p, [{ state: 'doing', health: 'amber' }], '2026-12-05').status).toBe('risk');
+    expect(projectRollup(p, [{ state: 'doing', health: 'green' }], '2026-12-02').status).toBe('ok');
+  });
+  it('risk when time runs ahead of approved tasks by more than 25 points', () => {
+    const tasks = [{ state: 'done' as const, health: 'done' as const }, { state: 'doing' as const, health: 'green' as const }, { state: 'doing' as const, health: 'green' as const }];
+    expect(projectRollup(p, tasks, '2026-12-05').status).toBe('ok'); // 40% time, 33% done
+    const r = projectRollup(p, tasks, '2026-12-08'); // 70% time, 33% done
+    expect(r.status).toBe('risk');
+    expect(r.reason).toMatch(/70%/);
+  });
+  it('a project with no task is not done', () => {
+    expect(projectRollup(p, [], '2026-12-02').status).toBe('ok');
+    expect(projectRollup({ ...p, state: 'cancelled' }, [], '2026-12-02').status).toBe('cancelled');
+  });
+});
+
+describe('summaries (PRD 7.6, AC 23–24)', () => {
+  const T = (over: Partial<SummaryTask>): SummaryTask => ({ code: 'MT35-01', name: 'Task', state: 'doing', dueDate: '2026-12-10', health: 'green', reason: '', progress: null, noUpdate: false, reviewSince: null, submittedOn: null, approvedOn: null, ...over });
+  const tasks = [
+    T({ code: 'MT35-01', dueDate: '2026-12-08' }),
+    T({ code: 'MT35-02', dueDate: '2026-12-09' }),
+    T({ code: 'MT35-03', dueDate: '2026-12-10' }),
+    T({ code: 'MT35-04', state: 'review', reviewSince: '2026-12-07', submittedOn: '2026-12-07' }),
+    T({ code: 'MT35-05', dueDate: '2026-12-20', progress: 'blocked' }),
+    T({ code: 'MT35-06', state: 'done', approvedOn: '2026-12-09' }),
+  ];
+  it('lists what needs the PM per project', () => {
+    const s = summarizeProject({ code: 'MT35', name: 'Tết', status: 'red', reason: '' }, tasks, '2026-12-09', CAL);
+    expect(s.overdue.map((t) => t.code)).toEqual(['MT35-01']);
+    expect(s.dueToday.map((t) => t.code)).toEqual(['MT35-02']);
+    expect(s.dueTomorrow.map((t) => t.code)).toEqual(['MT35-03']);
+    expect(s.review).toMatchObject([{ code: 'MT35-04', waitDays: 2 }]);
+    expect(s.blocked.map((t) => t.code)).toEqual(['MT35-05']);
+    expect(s.approvedToday).toBe(1);
+    expect(morningSummaryMessage([s], '2026-12-09').lines[0].text).toMatch(/1 quá hạn \(MT35-01\)/);
+    const evening = eveningSummaryMessage([s], '2026-12-09');
+    expect(evening.lines.find((l) => l.label?.startsWith('Đến hạn'))?.text).toMatch(/MT35-03/);
+    expect(evening.lines.find((l) => l.label?.startsWith('Sẽ quá hạn'))?.text).toBe('MT35-02');
+  });
+});
+
+describe('bot commands (PRD 10.1)', () => {
+  const now = at('2026-12-01T10:00:00');
+  it('reads /taomoi duan and /taomoi task', () => {
+    expect(parseProjectCommand('/taomoi duan mt35 | Ra mắt BST Tết | 30/01/2027', [], now, TZ)).toEqual({ kind: 'project', code: 'MT35', name: 'Ra mắt BST Tết', dueDate: '2027-01-30', errors: [] });
+    const t = parseProjectCommand('/taomoi task MT35 | Push KOC | @_user_1 | 20/12 | 50 video', [{ key: '@_user_1', openId: 'ou_1', name: 'Trâm' }], now, TZ);
+    expect(t).toMatchObject({ kind: 'task', projectCode: 'MT35', name: 'Push KOC', assigneeOpenId: 'ou_1', dueDate: '2026-12-20', expectedOutput: '50 video', errors: [] });
+  });
+  it('still accepts the 1.5 forms', () => {
+    expect(parseProjectCommand('/taomoi me DA056 | Quản lý KOC | @Trâm | 30/12/2026', [], now, TZ)).toMatchObject({ kind: 'project', code: 'DA056', dueDate: '2026-12-30' });
+    expect(parseProjectCommand('/taomoi con DA056-04-S44 | Push | @Trâm | 20/12/2026', [], now, TZ)).toMatchObject({ kind: 'task', projectCode: 'DA056', legacy: true });
+    expect(parseProjectCommand('xin chào', [], now, TZ)).toEqual({ kind: 'help' });
+  });
+});
+
+describe('calendar helpers', () => {
+  it('builds Monday-first month grids and weeks', () => {
+    const g = monthGrid('2026-12');
+    expect(g[0][0]).toBe('2026-11-30');
+    expect(g[g.length - 1][6] >= '2026-12-31').toBe(true);
+    expect(weekOf('2026-12-12')).toEqual(['2026-12-07', '2026-12-08', '2026-12-09', '2026-12-10', '2026-12-11', '2026-12-12', '2026-12-13']);
+    expect([0, 1, 2, 5].map(loadLevel)).toEqual([0, 1, 2, 3]);
+  });
+});

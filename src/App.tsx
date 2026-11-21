@@ -10,7 +10,6 @@ import { SettingsPage } from '@/pages/admin/SettingsPage';
 import { UsersPage } from '@/pages/admin/UsersPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { GoStarPage } from '@/pages/lark/GoStarPage';
-import { LarkPage } from '@/pages/lark/LarkPage';
 import { LarkSetupPage } from '@/pages/lark/LarkSetupPage';
 import { LibraryPage } from '@/pages/library/LibraryPage';
 import { PriceRulesPage } from '@/pages/library/PriceRulesPage';
@@ -25,10 +24,21 @@ import { MyCheckinsPage } from '@/pages/tasks/MyCheckinsPage';
 import { TaskDetailPage } from '@/pages/tasks/TaskDetailPage';
 import { TasksPage } from '@/pages/tasks/TasksPage';
 import { TaskTypesPage } from '@/pages/tasks/TaskTypesPage';
+import { CalendarPage } from '@/pages/work/CalendarPage';
+import { InboxPage } from '@/pages/work/InboxPage';
+import { PeoplePage } from '@/pages/work/PeoplePage';
+import { ProjectDetailPage } from '@/pages/work/ProjectDetailPage';
+import { ProjectsPage } from '@/pages/work/ProjectsPage';
+import { ReviewPage } from '@/pages/work/ReviewPage';
+import { SummaryPage } from '@/pages/work/SummaryPage';
 import type { Role } from '@/domain';
 
 const QUOTES: Role[] = ['account', 'pm', 'ceo', 'admin'];
-const TASKS: Role[] = ['ecom_exec', 'staff', 'admin', 'pm', 'ceo'];
+const TASKS: Role[] = ['admin'];
+// 1.6 (PRD 3–4): PM manages, CEO looks on, everyone else is "nhân sự".
+const STAFF: Role[] = ['account', 'ecom_exec', 'staff'];
+const MGR: Role[] = ['pm', 'ceo'];
+const EVERYONE: Role[] = ['account', 'ecom_exec', 'staff', 'pm', 'ceo', 'admin'];
 
 function guard(roles: Role[], el: JSX.Element) {
   return <RequireRole roles={roles}>{el}</RequireRole>;
@@ -77,15 +87,22 @@ export function App() {
           <Route path="archive" element={guard(QUOTES, <ArchivePage />)} />
           <Route path="library" element={guard(['pm', 'ceo', 'admin'], <LibraryPage />)} />
           <Route path="rules" element={guard(['ceo'], <PriceRulesPage />)} />
-          <Route path="lark" element={guard(['ecom_exec', 'staff', 'pm', 'ceo', 'admin'], <LarkPage />)} />
-          <Route path="gostar" element={guard(['ecom_exec', 'staff', 'pm', 'ceo', 'admin'], <GoStarPage />)} />
+          <Route path="inbox" element={guard(STAFF, <InboxPage />)} />
+          <Route path="du-an" element={guard(EVERYONE, <ProjectsPage />)} />
+          <Route path="du-an/:code" element={guard(EVERYONE, <ProjectDetailPage />)} />
+          <Route path="lich" element={guard([...STAFF, ...MGR], <CalendarPage />)} />
+          <Route path="tom-tat" element={guard(MGR, <SummaryPage />)} />
+          <Route path="cho-duyet" element={guard(MGR, <ReviewPage />)} />
+          <Route path="nhan-su" element={guard(MGR, <PeoplePage />)} />
+          <Route path="lark" element={<Navigate to="/du-an" replace />} />
+          <Route path="gostar" element={guard(EVERYONE, <GoStarPage />)} />
           <Route path="lark/setup" element={guard(['admin'], <LarkSetupPage />)} />
-          <Route path="tasks" element={guard(['ecom_exec', 'staff', 'admin'], <TasksPage />)} />
+          <Route path="tasks" element={guard(TASKS, <TasksPage />)} />
           <Route path="tasks/:id" element={guard(TASKS, <TaskDetailPage />)} />
           <Route path="checkins" element={guard(['staff', 'ecom_exec', 'pm', 'ceo', 'account', 'admin'], <MyCheckinsPage />)} />
-          <Route path="alerts" element={guard(['ecom_exec', 'admin'], <AlertsPage />)} />
-          <Route path="task-types" element={guard(['ecom_exec', 'admin'], <TaskTypesPage />)} />
-          <Route path="dashboard" element={guard(['ceo', 'pm', 'ecom_exec', 'admin'], <DashboardPage />)} />
+          <Route path="alerts" element={guard(TASKS, <AlertsPage />)} />
+          <Route path="task-types" element={guard(TASKS, <TaskTypesPage />)} />
+          <Route path="dashboard" element={guard(['ceo', 'pm', 'admin'], <DashboardPage />)} />
           <Route path="admin/users" element={guard(['admin'], <UsersPage />)} />
           <Route path="admin/settings" element={guard(['admin'], <SettingsPage />)} />
           <Route path="admin/diagnostics" element={guard(['admin'], <DiagnosticsPage />)} />
