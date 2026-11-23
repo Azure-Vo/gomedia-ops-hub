@@ -614,6 +614,36 @@ export async function linkQuote(ctx: Ctx, user: Profile, body: Record<string, un
   return { ok: true, quote: q.code };
 }
 
+/** 1.7 · Take a quote off a project (linked by mistake). The quote goes back to "won, waiting for a project". */
+export async function unlinkQuote(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
+  const project = await loadRow(ctx, String(body.project_id ?? ''));
+  if (!project || project.kind !== 'parent') throw new ApiError(404, 'not_found', 'Không tìm thấy dự án.');
+  requireProjectPm(user, project);
+  if (project.state !== 'active') throw new ApiError(409, 'closed', 'Dự án đã đóng.');
+  const quoteId = String(body.quote_id ?? '');
+  const gone = must(await ctx.db.from('project_quotes').delete().eq('project_id', project.id).eq('quote_id', quoteId).select('quote_id'), 'unlink quote') as { quote_id: string }[];
+  if (!gone.length) throw new ApiError(404, 'not_found', 'Báo giá này không gắn với dự án.');
+  must(await ctx.db.from('events').insert({ actor: user.id, entity: 'quotes', entity_id: quoteId, action: 'quote.unlinked', payload: { project_id: project.id, project_code: project.code } }), 'log unlink');
+  return { ok: true };
+}
+
+/** 1.7 · The CEO (or Admin) sets when the PM summaries go out; the rest of the Lark setup stays Admin-only. */
+export async function setSummarySchedule(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
+  if (user.role !== 'ceo' && user.role !== 'admin') throw new ApiError(403, 'forbidden', 'Chỉ CEO hoặc Admin đổi giờ gửi tóm tắt.');
+  const hm = (v: unknown) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v ?? ''));
+  const morning = String(body.summary_morning_time ?? '');
+  const evening = String(body.summary_evening_time ?? '');
+  const on = body.summary_evening_on !== false;
+  const errs: string[] = [];
+  if (!hm(morning)) errs.push('Giờ tóm tắt sáng không hợp lệ.');
+  if (!hm(evening)) errs.push('Giờ tổng kết cuối ngày không hợp lệ.');
+  if (!errs.length && on && evening <= morning) errs.push('Giờ tổng kết cuối ngày phải sau giờ tóm tắt sáng.');
+  if (errs.length) throw new ApiError(400, 'invalid', errs.join(' '));
+  must(await ctx.db.from('settings').update({ summary_morning_time: morning, summary_evening_time: evening, summary_evening_on: on }).eq('id', 1), 'save schedule');
+  must(await ctx.db.from('events').insert({ actor: user.id, entity: 'settings', entity_id: '1', action: 'summary.schedule', payload: { morning, evening, on } }), 'log schedule');
+  return { ok: true };
+}
+
 export async function updateProject(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
   const w = await workEnv(ctx);
   const project = await loadRow(ctx, String(body.project_id ?? ''));

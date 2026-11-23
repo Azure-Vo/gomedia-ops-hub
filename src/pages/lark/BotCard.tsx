@@ -118,11 +118,11 @@ function splitLead(text: string): [string | null, string] {
 }
 
 /** A Lark message card drawn like the CEO's sample (bot name, coloured title, task lines, @mention, badge). */
-export function BotCard({ message: m, time, botName = 'GO MEDIA Task Bot', className }: { message: BotMessage; time?: string; botName?: string; className?: string }) {
+export function BotCard({ message: m, time, botName = 'GO MEDIA Task Bot', className, footer }: { message: BotMessage; time?: string; botName?: string; className?: string; footer?: ReactNode }) {
   const badgeTone: BotMessage['tone'] = m.badge?.startsWith('D-') ? 'blue' : m.badge === 'D0' ? 'grey' : m.tone;
   const [titleGlyph, title] = splitLead(m.title);
   return (
-    <div className={cx('rounded-2xl border border-line bg-paper p-3', className)}>
+    <div className={cx('flex flex-col rounded-2xl border border-line bg-paper p-3', className)}>
       <div className="mb-2 flex items-center gap-2 text-[12.5px] text-ink-3">
         <span className="grid h-6 w-6 place-items-center rounded-full bg-ink text-[10.5px] font-semibold text-white" aria-hidden>
           GM
@@ -164,6 +164,7 @@ export function BotCard({ message: m, time, botName = 'GO MEDIA Task Bot', class
           {m.badge && <span className={cx('rounded-full border px-2.5 py-0.5 text-[12px] font-semibold', BADGE[badgeTone])}>{m.badge}</span>}
         </div>
       )}
+      {footer && <div className="mt-auto pt-3"><div className="-mx-3 -mb-3 flex flex-wrap items-center gap-1.5 rounded-b-2xl border-t border-line bg-canvas/50 px-3 py-2 text-[12px] text-ink-3">{footer}</div></div>}
     </div>
   );
 }

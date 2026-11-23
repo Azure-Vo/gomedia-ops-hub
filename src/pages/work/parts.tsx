@@ -1057,14 +1057,22 @@ export function MessageHistory({ messages }: { messages: BotMessageRow[] }) {
             {list
               .filter((m) => m.local_date === d)
               .map((m) => (
-                <div key={m.id}>
-                  <BotCard message={m.message} time={m.sent_at ? new Date(m.sent_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : undefined} />
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5 px-1 text-[12px] text-ink-3">
-                    <Badge tone={m.channel === 'dm' ? 'accent' : 'neutral'}>{m.channel === 'dm' ? `Riêng: ${m.to_name ?? '—'}` : 'Group dự án'}</Badge>
-                    {m.status === 'sent' ? <Badge tone="ok">Đã gửi lên Lark</Badge> : m.status === 'failed' ? <Badge tone="bad">Lỗi gửi, lần {m.attempts}</Badge> : <Badge>Mô phỏng</Badge>}
-                    {m.last_error && m.status === 'failed' && <span className="text-bad">{m.last_error}</span>}
-                  </div>
-                </div>
+                <BotCard
+                  key={m.id}
+                  className="h-full"
+                  message={m.message}
+                  time={m.sent_at ? new Date(m.sent_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : undefined}
+                  footer={
+                    <>
+                      <Badge tone={m.channel === 'dm' ? 'brand' : 'neutral'}>
+                        <Icon name={m.channel === 'dm' ? 'user' : 'users'} size={12} />
+                        {m.channel === 'dm' ? `Riêng: ${m.to_name ?? '—'}` : 'Group dự án'}
+                      </Badge>
+                      {m.status === 'sent' ? <Badge tone="ok">Đã gửi lên Lark</Badge> : m.status === 'failed' ? <Badge tone="bad">Lỗi gửi, lần {m.attempts}</Badge> : <Badge>Mô phỏng</Badge>}
+                      {m.last_error && m.status === 'failed' && <span className="w-full text-bad">{m.last_error}</span>}
+                    </>
+                  }
+                />
               ))}
           </div>
         </section>

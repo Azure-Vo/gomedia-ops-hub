@@ -33,7 +33,7 @@ import {
   setMembers,
   submitTask,
   updateProject,
-  updateTask as updateWorkTask, linkQuote, deleteSimChat } from './work';
+  updateTask as updateWorkTask, linkQuote, deleteSimChat, unlinkQuote, setSummarySchedule } from './work';
 import { decideQuote, importQuotes, previewBand, reopenQuote, sendQuote, submitQuote, setQuoteOutcome, setSignature, signQuote } from './quotes';
 import { addComment, resolveComment } from './review';
 import { connectTelegram, inviteUser, systemHealth, testMessage } from './system';
@@ -135,6 +135,10 @@ async function handleApi(ctx: Ctx, req: Request) {
       return createProject(ctx, user, body);
     case 'work.link_quote':
       return linkQuote(ctx, user, body);
+    case 'work.unlink_quote':
+      return unlinkQuote(ctx, user, body);
+    case 'work.summary_schedule':
+      return setSummarySchedule(ctx, user, body);
     case 'work.project_update':
       return updateProject(ctx, user, body);
     case 'work.project_cancel':

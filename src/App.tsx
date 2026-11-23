@@ -11,6 +11,7 @@ import { UsersPage } from '@/pages/admin/UsersPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { GoStarPage } from '@/pages/lark/GoStarPage';
 import { LarkSetupPage } from '@/pages/lark/LarkSetupPage';
+import { RemindersPage } from '@/pages/work/RemindersPage';
 import { LibraryPage } from '@/pages/library/LibraryPage';
 import { PriceRulesPage } from '@/pages/library/PriceRulesPage';
 import { LoginPage, NotConfiguredPage, RETURN_KEY, takeReturnPath } from '@/pages/LoginPage';
@@ -97,6 +98,7 @@ export function App() {
           <Route path="lark" element={<Navigate to="/du-an" replace />} />
           <Route path="gostar" element={guard(EVERYONE, <GoStarPage />)} />
           <Route path="lark/setup" element={guard(['admin'], <LarkSetupPage />)} />
+          <Route path="nhac-viec" element={guard(['pm', 'ceo'], <RemindersPage />)} />
           <Route path="tasks" element={guard(TASKS, <TasksPage />)} />
           <Route path="tasks/:id" element={guard(TASKS, <TaskDetailPage />)} />
           <Route path="checkins" element={guard(['staff', 'ecom_exec', 'pm', 'ceo', 'account', 'admin'], <MyCheckinsPage />)} />

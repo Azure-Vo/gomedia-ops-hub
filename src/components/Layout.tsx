@@ -32,6 +32,7 @@ export const NAV: NavItem[] = [
   { group: 'Quản lý dự án', to: '/du-an', label: 'Dự án', icon: 'folder', roles: MGR },
   { group: 'Quản lý dự án', to: '/lich', label: 'Calendar', icon: 'calendar', roles: MGR },
   { group: 'Quản lý dự án', to: '/nhan-su', label: 'Nhân sự', icon: 'users', roles: MGR },
+  { group: 'Quản lý dự án', to: '/nhac-viec', label: 'Nhắc việc', icon: 'bell', roles: MGR },
   { group: 'Quản lý dự án', to: '/dashboard', label: 'Báo cáo', icon: 'chart', roles: MGR },
   { group: 'Quản lý dự án', to: '/gostar', label: 'Go Star', icon: 'star', roles: MGR },
   // Báo giá (S2), unchanged
