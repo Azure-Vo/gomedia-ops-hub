@@ -49,7 +49,7 @@ export function TasksPage() {
     <div>
       <PageHeader
         title={manager ? 'Task e-commerce' : 'Task của tôi'}
-        subtitle={manager ? 'Sắp theo rủi ro: bị chặn, không cập nhật, có rủi ro lên trước. Mỗi task có 4 mốc kiểm chứng; bot hỏi ở 25/50/75/99% thời gian làm việc.' : 'Các task bạn phụ trách. Bị chặn bất cứ lúc nào thì báo ngay, không cần đợi checkpoint.'}
+        subtitle={manager ? 'Task rủi ro xếp trước. Bot hỏi ở 25/50/75/99% thời gian.' : 'Task của bạn. Bị chặn thì báo ngay.'}
         actions={
           manager && (
             <>

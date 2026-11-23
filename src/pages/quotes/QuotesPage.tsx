@@ -50,9 +50,9 @@ export function QuotesPage() {
   // Only the Account role creates quotes (the database enforces it too), so other roles are told why there is no button.
   const subtitle =
     me.role === 'account'
-      ? 'Báo giá của bạn. Thời gian tính bằng giờ làm việc, từ lúc khách gửi yêu cầu đến lúc gửi báo giá.'
+      ? 'Báo giá của bạn.'
       : me.role === 'pm' || me.role === 'ceo'
-        ? 'Mọi báo giá tạo trong app. Chỉ vai trò Account tạo được báo giá mới; báo giá chờ bạn duyệt nằm ở trang Duyệt báo giá.'
+        ? 'Mọi báo giá. Báo giá chờ bạn duyệt nằm ở trang Duyệt báo giá.'
         : 'Mọi báo giá tạo trong app. Chỉ vai trò Account tạo được báo giá mới.';
   return (
     <div>
@@ -174,7 +174,8 @@ function KpiCard() {
     <Card
       className="mb-4"
       title="Chỉ số báo giá (S2)"
-      subtitle={`${k.count} báo giá đã gửi${period} · thời gian = giờ làm việc từ lúc khách yêu cầu đến lúc gửi`}
+      subtitle={`${k.count} báo giá đã gửi${period}`}
+      info="Thời gian báo giá = giờ làm việc từ lúc khách yêu cầu đến lúc gửi."
       actions={
         ['pm', 'ceo', 'admin'].includes(me.role) ? (
           <Link to="/dashboard" className="text-[14px] font-bold text-brand underline">

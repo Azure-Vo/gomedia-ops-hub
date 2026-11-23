@@ -12,8 +12,29 @@ import { seedDemo, clearDemo } from './demo';
 import type { Env } from './env';
 import { ApiError, fail, json, preflight, safeEqual } from './http';
 import { closeTasks, dispatchCheckpoints } from './jobs';
-import { createLarkTaskFromWeb, ensureSimPeople, handleLarkEvent, larkAdminStatus, larkTick, runLarkNow, saveLarkConfig, simulateLark, testLark } from './lark';
+import { createLarkTaskFromWeb, ensureSimPeople, handleLarkEvent, larkAdminStatus, larkTick, linkLarkPerson, runLarkNow, saveLarkConfig, simulateLark, testLark } from './lark';
 import { makeChannel, Notifier } from './notify';
+import {
+  answerProgress,
+  cancelProject,
+  cancelTask as cancelWorkTask,
+  checkProjectChat,
+  clearBlocked,
+  createProject,
+  createSimChat,
+  createTask as createWorkTask,
+  evidenceFileUrl,
+  evidenceUploadUrl,
+  extendTask,
+  listChats,
+  reopenTask,
+  respondInvitation,
+  reviewTask,
+  setMembers,
+  submitTask,
+  updateProject,
+  updateTask as updateWorkTask,
+} from './work';
 import { decideQuote, importQuotes, previewBand, reopenQuote, sendQuote, submitQuote } from './quotes';
 import { addComment, resolveComment } from './review';
 import { connectTelegram, inviteUser, systemHealth, testMessage } from './system';
@@ -100,8 +121,49 @@ async function handleApi(ctx: Ctx, req: Request) {
       return larkAdminStatus(ctx, user);
     case 'lark.config':
       return saveLarkConfig(ctx, user, body);
+    case 'lark.link_person':
+      return linkLarkPerson(ctx, user, body);
     case 'lark.test':
       return testLark(ctx, user);
+    // 1.6 · Dự án & Task (work.ts)
+    case 'work.project_create':
+      return createProject(ctx, user, body);
+    case 'work.project_update':
+      return updateProject(ctx, user, body);
+    case 'work.project_cancel':
+      return cancelProject(ctx, user, body);
+    case 'work.project_check_chat':
+      return checkProjectChat(ctx, user, body);
+    case 'work.invitation_respond':
+      return respondInvitation(ctx, user, body);
+    case 'work.members':
+      return setMembers(ctx, user, body);
+    case 'work.chats':
+      return listChats(ctx, user, body);
+    case 'work.chat_create_sim':
+      return createSimChat(ctx, user, body);
+    case 'work.task_create':
+      return createWorkTask(ctx, user, body);
+    case 'work.task_update':
+      return updateWorkTask(ctx, user, body);
+    case 'work.submit':
+      return submitTask(ctx, user, body);
+    case 'work.review':
+      return reviewTask(ctx, user, body);
+    case 'work.extend':
+      return extendTask(ctx, user, body);
+    case 'work.cancel':
+      return cancelWorkTask(ctx, user, body);
+    case 'work.reopen':
+      return reopenTask(ctx, user, body);
+    case 'work.progress':
+      return answerProgress(ctx, user, body);
+    case 'work.unblock':
+      return clearBlocked(ctx, user, body);
+    case 'work.upload_url':
+      return evidenceUploadUrl(ctx, user, body);
+    case 'work.file_url':
+      return evidenceFileUrl(ctx, user, body);
     case 'demo.seed':
       return seedDemo(ctx, user);
     case 'demo.clear':

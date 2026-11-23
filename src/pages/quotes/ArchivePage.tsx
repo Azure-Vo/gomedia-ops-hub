@@ -49,7 +49,7 @@ export function ArchivePage() {
 
   return (
     <div>
-      <PageHeader title="Kho tham chiếu" subtitle="Mọi báo giá đã gửi, kể cả dữ liệu lịch sử đã import. Mở một báo giá để xem chi tiết hoặc tải PDF." />
+      <PageHeader title="Kho tham chiếu" subtitle="Mọi báo giá đã gửi, kể cả dữ liệu lịch sử." />
       <Card
         actions={
           <div className="flex flex-wrap gap-2">

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fmtNum, larkDueStatus, larkPeriodKpis, localToMs, quoteKpis, turnaroundByBand, weeklyTurnaround } from '@/domain';
+import { EXTEND_REASON_LABEL, fmtNum, kpiTracked, larkDueStatus, larkPeriodKpis, localToMs, quoteKpis, TaskStage, turnaroundByBand, weeklyTurnaround, workingHoursBetween } from '@/domain';
 import { Banner, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, Select, useAsync } from '@/components/ui';
 import { downloadText, toCsv } from '@/lib/csv';
 import { fmtVnDateTime, toDateInput } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
-import { LARK_TASK_COLS, LarkTaskRow } from '../lark/data';
+import type { BotMessageRow } from '../work/data';
+import { MessageHistory } from '../work/parts';
 import { WeeklyChart } from './WeeklyChart';
 import { DEFAULT_BASE, DEFAULT_TARGET, KpiTile, QuoteKpiTiles } from '../quotes/QuoteKpiTiles';
 
@@ -30,10 +31,26 @@ interface LarkNotifLite {
   sent_at: string | null;
 }
 
-const DUE_LABEL = { on_time: 'đúng hạn', late: 'xong trễ', overdue: 'quá hạn chưa xong', open: 'chưa đến hạn' } as const;
+const DUE_LABEL = { on_time: 'đúng hạn', late: 'nộp trễ', overdue: 'quá hạn chưa xong', open: 'chưa đến hạn' } as const;
 
-/** A sub-task counts as done only when Completed with valid codes (same rule as the Lark page and the bot). */
-const larkDone = (t: LarkTaskRow) => (t.completed_at && !t.code_errors.length ? Date.parse(t.completed_at) : null);
+interface TaskLite {
+  id: string;
+  code: string;
+  parent_code: string | null;
+  name: string;
+  assignee_name: string | null;
+  due_date: string;
+  kpi_due_date: string | null;
+  state: TaskStage;
+  accepted_at: string | null;
+}
+interface SubLite {
+  task_id: string;
+  round: number;
+  submitted_at: string;
+  decision: 'approved' | 'changes' | null;
+  decided_at: string | null;
+}
 
 function dayStart(date: string, tz: string): number {
   const [y, m, d] = date.split('-').map(Number);
@@ -44,7 +61,7 @@ export function DashboardPage() {
   const me = useProfile();
   const { settings, calendar, tz } = useSettings();
   const seeQuotes = ['pm', 'ceo', 'admin'].includes(me.role);
-  const seeTasks = ['ecom_exec', 'pm', 'ceo', 'admin'].includes(me.role);
+  const seeTasks = ['pm', 'ceo', 'admin'].includes(me.role);
   const defFrom = settings?.pilot_start ?? toDateInput(Date.now() - 27 * 86_400_000, tz);
   const defTo = settings?.pilot_end ?? toDateInput(Date.now(), tz);
   const [from, setFrom] = useState(defFrom);
@@ -71,37 +88,79 @@ export function DashboardPage() {
 
   const { data, error, loading } = useAsync(async () => {
     if (!range.ok) return null;
-    const [quotes, lark, notes] = await Promise.all([
+    const none = Promise.resolve({ data: [], error: null });
+    const [quotes, lark, notes, subs, msgs, exts, checkins] = await Promise.all([
       seeQuotes
         ? supabase.from('quotes').select('id, code, client, service_group, requested_at, sent_at, band_result, source').eq('status', 'sent').eq('source', source).gte('sent_at', range.a).lt('sent_at', range.b).order('sent_at')
         : Promise.resolve({ data: [], error: null }),
-      seeTasks ? supabase.from('lark_tasks').select(LARK_TASK_COLS).eq('kind', 'child').is('deleted_at', null).order('due_date') : Promise.resolve({ data: [], error: null }),
-      seeTasks
-        ? supabase.from('lark_notifications').select('task_id, local_date, kind, milestone, status, sent_at').gte('local_date', from).lte('local_date', to).order('local_date')
-        : Promise.resolve({ data: [], error: null }),
+      seeTasks ? supabase.from('lark_tasks').select('id, code, parent_code, name, assignee_name, due_date, kpi_due_date, state, accepted_at').eq('kind', 'child').is('deleted_at', null).order('due_date') : none,
+      // 1.5 reminders (before 1.6) are still counted.
+      seeTasks ? supabase.from('lark_notifications').select('task_id, local_date, kind, milestone, status, sent_at').gte('local_date', from).lte('local_date', to).order('local_date') : none,
+      seeTasks ? supabase.from('task_submissions').select('task_id, round, submitted_at, decision, decided_at') : none,
+      seeTasks ? supabase.from('bot_messages').select('id, project_id, task_id, kind, channel, to_name, local_date, status, attempts, last_error, message, sent_at, created_at').gte('local_date', from).lte('local_date', to).order('created_at', { ascending: false }) : none,
+      seeTasks ? supabase.from('task_extensions').select('task_id, reason, created_at').gte('created_at', range.a).lt('created_at', range.b) : none,
+      seeTasks ? supabase.from('task_checkins').select('task_id, sent_at, answered_at, answer').gte('sent_at', range.a).lt('sent_at', range.b) : none,
     ]);
+    const msgRows = check(msgs) as BotMessageRow[];
+    const newNotes: LarkNotifLite[] = msgRows
+      .filter((m) => m.task_id && (m.kind === 'reminder' || m.kind === 'approved'))
+      .map((m) => ({ task_id: m.task_id!, local_date: m.local_date, kind: m.kind === 'reminder' ? 'reminder' : 'completion', milestone: m.message.badge ?? null, status: m.status, sent_at: m.sent_at }));
     return {
       quotes: check(quotes) as QuoteLite[],
-      lark: check(lark) as LarkTaskRow[],
-      notes: check(notes) as LarkNotifLite[],
+      lark: check(lark) as TaskLite[],
+      notes: [...(check(notes) as LarkNotifLite[]), ...newNotes],
+      subs: check(subs) as SubLite[],
+      summaries: msgRows.filter((m) => m.kind.startsWith('summary_')),
+      exts: check(exts) as { task_id: string; reason: 'scope' | 'quality' }[],
+      checkins: check(checkins) as { task_id: string; sent_at: string; answered_at: string | null; answer: string | null }[],
     };
   }, [range.a, range.b, from, to, source, seeQuotes, seeTasks]);
 
   const k = useMemo(() => {
     if (!data) return null;
+    // 1.6 (PRD 9.1): on time = the approved submission was made by the KPI deadline; an on-time
+    // submission still waiting for review is not judged yet.
+    const pendingAt = new Map<string, number>();
+    for (const sub of data.subs) if (!sub.decision) pendingAt.set(sub.task_id, Date.parse(sub.submitted_at));
+    const tracked = data.lark
+      .map((t) => {
+        const r = kpiTracked({ state: t.state, kpiDueDate: t.kpi_due_date ?? t.due_date, acceptedAt: t.accepted_at ? Date.parse(t.accepted_at) : null, pendingAt: pendingAt.get(t.id) ?? null }, Date.now(), tz);
+        return r ? { id: t.id, ...r } : null;
+      })
+      .filter((t): t is { id: string; dueDate: string; completedAt: number | null } => t !== null);
     const qs = data.quotes.map((q) => ({ id: q.id, requestedAt: Date.parse(q.requested_at), sentAt: Date.parse(q.sent_at), bandResult: q.band_result }));
     return {
       quote: quoteKpis(qs, calendar, late),
       weekly: weeklyTurnaround(qs, calendar, late),
       byBand: turnaroundByBand(qs, calendar, late),
       s1: larkPeriodKpis(
-        data.lark.map((t) => ({ id: t.id, dueDate: t.due_date, completedAt: larkDone(t) })),
+        tracked,
         data.notes.map((n) => ({ taskId: n.task_id, localDate: n.local_date, kind: n.kind, status: n.status })),
         from,
         to,
         Date.now(),
         tz,
       ),
+      tracked,
+      extra: (() => {
+        const due = new Set(tracked.filter((t) => t.dueDate >= from && t.dueDate <= to).map((t) => t.id));
+        const decided = data.subs.filter((s) => due.has(s.task_id) && s.decision);
+        const reviewed = new Set(decided.map((s) => s.task_id));
+        const sentBack = new Set(decided.filter((s) => s.decision === 'changes').map((s) => s.task_id));
+        const hours = decided.filter((s) => s.decided_at).map((s) => workingHoursBetween(s.submitted_at, s.decided_at!, calendar));
+        const answered = data.checkins.filter((c) => c.answered_at).length;
+        return {
+          changesPct: reviewed.size ? Math.round((sentBack.size / reviewed.size) * 1000) / 10 : null,
+          sentBack: sentBack.size,
+          reviewed: reviewed.size,
+          reviewHours: hours.length ? hours.reduce((a, b) => a + b, 0) / hours.length : null,
+          asked: data.checkins.length,
+          answered,
+          blocked: data.checkins.filter((c) => c.answer === 'blocked').length,
+          extScope: data.exts.filter((e) => e.reason === 'scope').length,
+          extQuality: data.exts.filter((e) => e.reason === 'quality').length,
+        };
+      })(),
     };
   }, [data, calendar, late, from, to, tz]);
 
@@ -123,25 +182,26 @@ export function DashboardPage() {
     k &&
     data &&
     downloadText(
-      `kpi_lark_task_con_${fileTag}.csv`,
+      `kpi_task_${fileTag}.csv`,
       toCsv(
-        data.lark
-          .filter((t) => k.s1.taskIds.includes(t.id))
-          .map((t) => {
-            const done = larkDone(t);
+        k.tracked
+          .filter((x) => k.s1.taskIds.includes(x.id))
+          .map((x) => {
+            const t = data.lark.find((y) => y.id === x.id)!;
+            const st = larkDueStatus({ dueDate: x.dueDate, completedAt: x.completedAt }, Date.now(), tz);
             return {
               code: t.code,
-              parent_code: t.parent_code ?? '',
+              project: t.parent_code ?? '',
               name: t.name,
               assignee: t.assignee_name ?? '',
               due_date: t.due_date,
-              completed_at: t.completed_at ? fmtVnDateTime(t.completed_at, tz) : '',
-              code_errors: t.code_errors.join('; '),
-              status: DUE_LABEL[larkDueStatus({ dueDate: t.due_date, completedAt: done }, Date.now(), tz)],
-              late: ['late', 'overdue'].includes(larkDueStatus({ dueDate: t.due_date, completedAt: done }, Date.now(), tz)) ? 1 : 0,
+              kpi_due_date: x.dueDate,
+              accepted_submitted_at: x.completedAt ? fmtVnDateTime(new Date(x.completedAt).toISOString(), tz) : '',
+              status: DUE_LABEL[st],
+              late: st === 'late' || st === 'overdue' ? 1 : 0,
             };
           }),
-        ['code', 'parent_code', 'name', 'assignee', 'due_date', 'completed_at', 'code_errors', 'status', 'late'],
+        ['code', 'project', 'name', 'assignee', 'due_date', 'kpi_due_date', 'accepted_submitted_at', 'status', 'late'],
       ),
     );
   const exportLarkNotes = () =>
@@ -159,7 +219,8 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Dashboard KPI" subtitle="Mọi con số tính tự động từ mốc thời gian đã lưu, bằng giờ làm việc, theo đúng định nghĩa trong PRD." />
+      <PageHeader title="Dashboard KPI" subtitle="Tự tính từ dữ liệu, theo giờ làm việc."
+        info="Mỗi chỉ số dùng đúng định nghĩa trong PRD. Mẫu nhỏ (khoảng 6 báo giá và 15 task mỗi tháng) nên kết quả 4 tuần chỉ mang tính chỉ báo: gắn nhãn P/A khi đưa vào báo cáo." />
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Từ ngày">{(id) => <Input id={id} type="date" value={from} onChange={(e) => { setTouched(true); setFrom(e.target.value); }} />}</Field>
         <Field label="Đến ngày">{(id) => <Input id={id} type="date" value={to} onChange={(e) => { setTouched(true); setTo(e.target.value); }} />}</Field>
@@ -177,7 +238,6 @@ export function DashboardPage() {
           Về khoảng pilot
         </Button>
       </div>
-      <Banner tone="info">Mẫu nhỏ (khoảng 6 báo giá và 15 task mỗi tháng): kết quả 4 tuần chỉ mang tính chỉ báo. Trong báo cáo, gắn nhãn P/A cho kết luận rút ra từ đây.</Banner>
       {!range.ok ? (
         <Banner tone="warn">Ngày kết thúc phải sau ngày bắt đầu.</Banner>
       ) : loading ? (
@@ -189,12 +249,13 @@ export function DashboardPage() {
           <>
             {seeTasks && (
               <Card
-                title="Task e-commerce trên Lark (S1)"
-                subtitle={`${k.s1.judged} task con đến hạn trong khoảng · ${k.s1.open} chưa đến hạn · tính từ task con Lark${settings?.lark_mode === 'simulation' ? ' (đang chạy chế độ mô phỏng)' : ''}`}
+                title="Dự án & Task (S1)"
+                subtitle={`${k.s1.judged} task đã tính · ${k.s1.open} chưa tính${settings?.lark_mode === 'simulation' ? ' · mô phỏng' : ''}`}
+                info="Task tính khi có deadline tính KPI trong khoảng ngày. Chưa tính: chưa đến hạn hoặc đang chờ duyệt."
                 actions={
                   <>
                     <Button size="sm" variant="secondary" icon="download" onClick={exportLarkTasks}>
-                      CSV task con
+                      CSV task
                     </Button>
                     <Button size="sm" variant="secondary" icon="download" onClick={exportLarkNotes}>
                       CSV nhắc việc
@@ -204,7 +265,7 @@ export function DashboardPage() {
               >
                 <div className="grid gap-x-8 gap-y-6 md:grid-cols-3">
                   <KpiTile
-                    label="Tỷ lệ task con trễ hạn (M1)"
+                    label="Tỷ lệ task trễ hạn (M1)"
                     value={k.s1.latePct === null ? '–' : `${fmtNum(k.s1.latePct, 1)}%`}
                     base={`${fmtNum(base.task_overdue_pct, 1)}%`}
                     target={`< ${fmtNum(tgt.overdue_pct, 0)}%`}
@@ -212,7 +273,7 @@ export function DashboardPage() {
                     bar={{ base: base.task_overdue_pct, now: k.s1.latePct, target: tgt.overdue_pct }}
                   >
                     <div className="text-[13px] text-ink-3">
-                      {k.s1.late + k.s1.openLate}/{k.s1.judged} task con · {k.s1.late} xong trễ, {k.s1.openLate} quá hạn chưa xong
+                      {k.s1.late + k.s1.openLate}/{k.s1.judged} task · {k.s1.late} nộp trễ, {k.s1.openLate} quá hạn chưa xong
                     </div>
                   </KpiTile>
                   <KpiTile
@@ -220,21 +281,45 @@ export function DashboardPage() {
                     value={k.s1.judged ? `${k.s1.onTime}/${k.s1.judged}` : '–'}
                     good={null}
                   >
-                    <div className="text-[13px] text-ink-3">Task con Completed với mã hợp lệ, xong trước hoặc đúng ngày deadline.</div>
+                    <div className="text-[13px] text-ink-3">Nộp đúng deadline tính KPI, được duyệt.</div>
                   </KpiTile>
                   <KpiTile label="Bot đã nhắc" value={`${k.s1.reminders} lần`} good={null}>
                     <div className="text-[13px] text-ink-3">
-                      {k.s1.remindedTasks} task con được nhắc · {k.s1.completions} xác nhận hoàn thành
+                      {k.s1.remindedTasks} task được nhắc · {k.s1.completions} task được duyệt
                       {k.s1.failed ? <span className="text-bad"> · {k.s1.failed} lỗi gửi</span> : null}
+                    </div>
+                  </KpiTile>
+                </div>
+                <div className="mt-6 grid gap-x-8 gap-y-6 border-t border-line-soft pt-5 md:grid-cols-4">
+                  <KpiTile label="Phải sửa ít nhất 1 lần" value={k.extra.changesPct === null ? '–' : `${fmtNum(k.extra.changesPct, 1)}%`} good={null}>
+                    <div className="text-[13px] text-ink-3">
+                      {k.extra.sentBack}/{k.extra.reviewed} task đã được xét duyệt
+                    </div>
+                  </KpiTile>
+                  <KpiTile label="Thời gian duyệt TB" value={k.extra.reviewHours === null ? '–' : `${fmtNum(k.extra.reviewHours, 1)} giờ`} good={null}>
+                    <div className="text-[13px] text-ink-3">Giờ làm việc từ lúc nộp đến lúc PM quyết định.</div>
+                  </KpiTile>
+                  <KpiTile label="Trả lời hỏi tiến độ" value={k.extra.asked ? `${k.extra.answered}/${k.extra.asked}` : '–'} good={null}>
+                    <div className="text-[13px] text-ink-3">{k.extra.blocked} lần báo bị chặn</div>
+                  </KpiTile>
+                  <KpiTile label="Gia hạn" value={`${k.extra.extScope + k.extra.extQuality} lần`} good={null}>
+                    <div className="text-[13px] text-ink-3">
+                      {EXTEND_REASON_LABEL.scope}: {k.extra.extScope} · {EXTEND_REASON_LABEL.quality}: {k.extra.extQuality}
                     </div>
                   </KpiTile>
                 </div>
               </Card>
             )}
+            {seeTasks && data && (
+              <Card title="Lịch sử bản tóm tắt gửi PM" subtitle="Số liệu lúc gửi tin 08:30 và 17:30.">
+                <MessageHistory messages={data.summaries} />
+              </Card>
+            )}
             {seeQuotes && (
               <Card
                 title="Báo giá (S2)"
-                subtitle={`${k.quote.count} báo giá gửi trong khoảng đã chọn · thời gian = giờ làm việc từ lúc khách yêu cầu đến lúc gửi`}
+                subtitle={`${k.quote.count} báo giá đã gửi`}
+                info="Thời gian báo giá = giờ làm việc từ lúc khách yêu cầu đến lúc gửi."
                 actions={
                   <>
                     <Button size="sm" variant="ghost" onClick={() => setTable((v) => !v)}>

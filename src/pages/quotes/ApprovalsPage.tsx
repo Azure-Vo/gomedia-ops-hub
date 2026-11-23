@@ -49,14 +49,14 @@ export function ApprovalsPage() {
     <div>
       <PageHeader
         title="Duyệt báo giá"
-        subtitle={`Hàng chờ của ${ROLE_LABEL[level]}. Chỉ báo giá ngoài khung giá cần đúng cấp của bạn mới hiện ở đây. Mở báo giá để góp ý ngay tại dòng cần sửa.`}
+        subtitle={`Báo giá ngoài khung giá cần ${ROLE_LABEL[level]} duyệt.`}
       />
       {loading ? (
         <Loading />
       ) : error ? (
         <ErrorBox error={error} />
       ) : !data!.qs.length ? (
-        <EmptyState title="Không có báo giá nào chờ bạn duyệt">Khi Account gửi duyệt, bạn nhận tin nhắn Telegram (nếu đã liên kết) và báo giá hiện ở đây.</EmptyState>
+        <EmptyState title="Không có báo giá nào chờ bạn duyệt" />
       ) : (
         <div className="flex flex-col gap-4">
           {data!.qs.map((q) => {
@@ -168,8 +168,8 @@ export function ApprovalsPage() {
             decision?.kind === 'approve'
               ? 'Nhận xét (không bắt buộc)'
               : (data?.open.get(decision?.quote.id ?? '') ?? 0) > 0
-                ? 'Nhận xét chung (không bắt buộc, Account đã thấy các góp ý trên báo giá)'
-                : 'Account cần sửa gì? (bắt buộc, hoặc mở báo giá để góp ý từng dòng)'
+                ? 'Nhận xét chung (không bắt buộc)'
+                : 'Cần sửa gì? (bắt buộc)'
           }
         >
           {(id) => <Textarea id={id} value={decision?.comment ?? ''} onChange={(e) => setDecision((d) => (d ? { ...d, comment: e.target.value } : d))} />}

@@ -20,9 +20,9 @@ export function takeReturnPath(): string | null {
 }
 
 function friendly(msg: string): string {
-  if (/signups not allowed|otp_disabled|user not found/i.test(msg)) return 'Email này chưa được Admin mời vào app. Nhờ Admin thêm bạn ở trang Người dùng.';
+  if (/signups not allowed|otp_disabled|user not found/i.test(msg)) return 'Email này chưa được mời. Nhờ Admin thêm bạn.';
   if (/only request this after|rate limit|too many/i.test(msg)) return 'Bạn vừa yêu cầu email. Đợi khoảng 1 phút rồi thử lại.';
-  if (/error sending|smtp|email address not authorized/i.test(msg)) return 'Supabase chưa gửi được email. Admin cần kiểm tra cài đặt SMTP riêng (tab Hướng dẫn triển khai, Bước A5).';
+  if (/error sending|smtp|email address not authorized/i.test(msg)) return 'Chưa gửi được email. Báo Admin kiểm tra cài đặt SMTP.';
   if (/expired|invalid/i.test(msg)) return 'Mã không đúng hoặc đã hết hạn. Gửi lại email để lấy mã mới.';
   return msg;
 }
@@ -83,11 +83,11 @@ export function LoginPage() {
           <dl className="mt-10 flex flex-col border-t border-white/15 text-[14.5px]">
             <div className="flex gap-4 border-b border-white/15 py-3.5">
               <dt className="w-8 shrink-0 font-semibold text-white">S2</dt>
-              <dd className="text-rail-text">Báo giá theo Thư viện giá, kiểm tra khung giá, góp ý ngay trên từng dòng.</dd>
+              <dd className="text-rail-text">Báo giá theo Thư viện giá, duyệt ngay trên từng dòng.</dd>
             </div>
             <div className="flex gap-4 border-b border-white/15 py-3.5">
               <dt className="w-8 shrink-0 font-semibold text-white">S1</dt>
-              <dd className="text-rail-text">Nhắc task trên Lark và ghi nhận nhân viên hằng tháng với Go Star.</dd>
+              <dd className="text-rail-text">Dự án, task, nhắc việc trên Lark và Go Star.</dd>
             </div>
           </dl>
         </div>
@@ -103,7 +103,7 @@ export function LoginPage() {
             <form onSubmit={sendLink} className="flex flex-col gap-4">
               <div>
                 <h2 className="text-[20px] font-semibold tracking-[-0.01em] text-ink">Đăng nhập bằng email công việc</h2>
-                <p className="mt-1 text-sm text-ink-3">App gửi cho bạn một email có link đăng nhập và mã 6 số. Không cần mật khẩu.</p>
+                <p className="mt-1 text-sm text-ink-3">Nhận link hoặc mã 6 số qua email. Không cần mật khẩu.</p>
               </div>
               <Field label="Email">{(id) => <Input id={id} type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ten@gomedia.vn" />}</Field>
               {error && <Banner tone="bad">{error}</Banner>}
@@ -137,7 +137,7 @@ export function LoginPage() {
             </form>
           )}
         </div>
-        <p className="text-center text-[13px] text-ink-3">Chỉ tài khoản do Admin mời mới đăng nhập được. Không thấy email? Kiểm tra mục Spam.</p>
+        <p className="text-center text-[13px] text-ink-3">Không thấy email? Xem mục Spam.</p>
       </div>
     </div>
   );

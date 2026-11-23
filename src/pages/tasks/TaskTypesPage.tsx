@@ -49,7 +49,7 @@ export function TaskTypesPage() {
     <div>
       <PageHeader
         title="Loại task & 4 mốc chuẩn"
-        subtitle="Mỗi loại task có 4 mốc kiểm chứng được (có sản phẩm hoặc bằng chứng). Bot hỏi mốc 1 ở 25% thời gian, mốc 2 ở 50%, mốc 3 ở 75%, mốc 4 ở 99%."
+        subtitle="Mỗi loại task có 4 mốc có bằng chứng. Bot hỏi ở 25/50/75/99% thời gian."
         actions={
           <Button icon="plus" onClick={() => setEdit({ name: '', ms: ['', '', '', ''] })}>
             Thêm loại task

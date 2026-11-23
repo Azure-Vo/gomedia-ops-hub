@@ -32,7 +32,7 @@ export function UsersPage() {
     setBusy(true);
     try {
       await callApi('admin.invite', form);
-      toast(`Đã tạo tài khoản cho ${form.email}. Người đó đăng nhập bằng email ở trang đăng nhập.`);
+      toast(`Đã tạo tài khoản cho ${form.email}.`);
       setForm({ email: '', full_name: '', role: form.role });
       reload();
     } catch (err) {
@@ -55,7 +55,8 @@ export function UsersPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Người dùng" subtitle="Chỉ người được mời mới đăng nhập được. Mỗi người một vai trò; vai trò quyết định màn hình và dữ liệu họ thấy." />
+      <PageHeader title="Người dùng" subtitle="Chỉ người được mời mới đăng nhập được."
+        info="Mỗi người một vai trò. Vai trò quyết định màn hình và dữ liệu họ thấy." />
       <Card title="Mời người dùng">
         <form onSubmit={invite} className="grid gap-3 md:grid-cols-[2fr_2fr_1.3fr_auto] md:items-end">
           <Field label="Email công việc">{(id) => <Input id={id} type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />}</Field>

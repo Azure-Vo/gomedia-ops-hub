@@ -76,7 +76,7 @@ export function PriceRulesPage() {
 
   return (
     <div>
-      <PageHeader title="Luật khung giá" subtitle="Chỉ CEO xem và sửa được trang này. Account chỉ thấy kết quả: Gửi ngay / Cần PM / Cần CEO." />
+      <PageHeader title="Luật khung giá" subtitle="Chỉ CEO sửa. Account chỉ thấy kết quả: Gửi ngay / Cần PM / Cần CEO." />
       <Banner tone="info" className="mb-4" title="Giá trị đang là mức tạm thời chờ CEO chốt">
         Mặc định: tự gửi nếu chiết khấu ≤ 10% và mọi đơn giá lệch ≤ ±10% so với thư viện; PM duyệt nếu ≤ 20%; còn lại CEO duyệt. Mọi thay đổi được ghi vào nhật ký (ai, lúc nào). Nếu đổi giữa pilot, ghi ngày đổi vào báo cáo.
       </Banner>
@@ -88,14 +88,14 @@ export function PriceRulesPage() {
               <Field label="Đơn giá lệch thư viện tối đa (± %)" hint={l === 'send_now' ? 'Hạng mục có khung tự gửi riêng thì dùng khung đó' : undefined}>
                 {(id) => <Input id={id} inputMode="decimal" value={form[l].dev} onChange={(e) => set(l, 'dev', e.target.value)} />}
               </Field>
-              <Field label="Sàn tổng giá (% giá trị theo thư viện)" hint="Ví dụ 85: tổng sau chiết khấu phải ≥ 85% tổng tính theo giá thư viện. Để trống = tắt.">
+              <Field label="Sàn tổng giá (% giá trị theo thư viện)" hint="VD 85: tổng sau chiết khấu ≥ 85% giá thư viện. Trống = tắt">
                 {(id) => <Input id={id} inputMode="decimal" value={form[l].floor} onChange={(e) => set(l, 'floor', e.target.value)} placeholder="tắt" />}
               </Field>
             </div>
           </Card>
         ))}
-        <Card title="CEO duyệt" subtitle="Mọi báo giá vượt mức PM, hoặc có hạng mục ngoài thư viện">
-          <p className="text-[15px] text-ink-2">Không có giới hạn trên. Báo giá cấp CEO không hiện trong hàng chờ của PM, và ngược lại.</p>
+        <Card title="CEO duyệt" subtitle="Vượt mức PM, hoặc có hạng mục ngoài thư viện">
+          <p className="text-[15px] text-ink-2">Không giới hạn trên. Mỗi cấp chỉ thấy báo giá của cấp mình.</p>
           <p className="mt-3 text-[13px] text-ink-3">
             Biên lợi nhuận theo giá vốn cần cột giá vốn trong thư viện; bản này dùng "sàn tổng giá" theo giá thư viện. Muốn tính theo giá vốn thì cần sửa PRD.
           </p>

@@ -108,7 +108,8 @@ export function LibraryPage() {
     <div>
       <PageHeader
         title="Thư viện giá"
-        subtitle={`Nguồn giá chuẩn duy nhất cho Quotation Builder. Hạng mục chưa rà soát quá ${reviewMonths} tháng được đánh dấu.`}
+        subtitle="Nguồn giá chuẩn cho mọi báo giá."
+        info={`Hạng mục chưa rà soát quá ${reviewMonths} tháng được đánh dấu.`}
         actions={
           <>
             {canHistory && (
@@ -246,7 +247,7 @@ export function LibraryPage() {
                 </>
               )}
             </Field>
-            <Field label="Đơn giá (đ)" hint="Đổi giá sẽ tự đánh dấu đã rà soát hôm nay">
+            <Field label="Đơn giá (đ)" hint="Đổi giá = đã rà soát hôm nay">
               {(id) => <Input id={id} inputMode="numeric" value={edit.unit_price ? fmtVnd(num(edit.unit_price), false) : ''} onChange={(e) => setEdit({ ...edit, unit_price: e.target.value })} />}
             </Field>
             <Field label="Mã hạng mục (không bắt buộc)">{(id) => <Input id={id} value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} placeholder="SOC-TT-01" />}</Field>
@@ -256,7 +257,7 @@ export function LibraryPage() {
             <Field label="Khung tự gửi: cao nhất (đ)">
               {(id) => <Input id={id} inputMode="numeric" value={edit.band_high ? fmtVnd(num(edit.band_high), false) : ''} onChange={(e) => setEdit({ ...edit, band_high: e.target.value })} />}
             </Field>
-            <Field label="Loại" hint="Chi hộ = tiền trả hộ khách (VD ngân sách quảng cáo): không chiết khấu, không xét khung giá, không tính VAT (trừ khi Admin bật)">
+            <Field label="Loại" hint="Chi hộ: không chiết khấu, không xét khung giá, không VAT">
               {(id) => (
                 <Select id={id} value={edit.kind} onChange={(e) => setEdit({ ...edit, kind: e.target.value as LineKind })}>
                   <option value="service">{LINE_KIND_LABEL.service}</option>
@@ -264,7 +265,7 @@ export function LibraryPage() {
                 </Select>
               )}
             </Field>
-            <Field label="Mô tả phạm vi mặc định" hint="In nghiêng dưới tên hạng mục trên báo giá; Account sửa được từng báo giá" className="sm:col-span-2">
+            <Field label="Mô tả phạm vi mặc định" hint="In dưới tên hạng mục, sửa được trên từng báo giá" className="sm:col-span-2">
               {(id) => <Textarea id={id} value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} placeholder="VD: Chụp toàn bộ chương trình, bàn giao ảnh đã chỉnh màu" className="min-h-[64px]" />}
             </Field>
           </div>
@@ -554,7 +555,7 @@ function TermsCard({ canEdit }: { canEdit: boolean }) {
   };
 
   return (
-    <Card className="mt-4" title="Điều khoản mẫu trên báo giá" subtitle="Account tick chọn trên từng báo giá. Mục “Mặc định” được tick sẵn khi tạo báo giá mới.">
+    <Card className="mt-4" title="Điều khoản mẫu trên báo giá" subtitle="Mục “Mặc định” được chọn sẵn ở báo giá mới.">
       {loading ? (
         <Loading />
       ) : error ? (

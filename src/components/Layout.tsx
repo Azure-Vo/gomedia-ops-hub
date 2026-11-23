@@ -1,7 +1,8 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ROLE_LABEL, Role } from '@/domain';
 import { useSession } from '@/lib/session';
+import { supabase } from '@/lib/supabase';
 import { cx, EmptyState, Icon } from './ui';
 
 export interface NavItem {
@@ -10,38 +11,82 @@ export interface NavItem {
   icon: string;
   roles: Role[];
   group: string;
+  /** Count shown next to the label. */
+  badge?: 'inbox' | 'review';
 }
 
 const ALL: Role[] = ['account', 'pm', 'ceo', 'ecom_exec', 'staff', 'admin'];
+/** PRD 3: only the PM manages projects; the CEO looks on; everyone else is "nhân sự". */
+const STAFF: Role[] = ['account', 'ecom_exec', 'staff'];
+const MGR: Role[] = ['pm', 'ceo'];
 
 export const NAV: NavItem[] = [
-  { group: 'S1 · Task Lark & ghi nhận', to: '/lark', label: 'Nhắc task Lark', icon: 'bell', roles: ['ecom_exec', 'staff', 'pm', 'ceo', 'admin'] },
-  { group: 'S1 · Task Lark & ghi nhận', to: '/gostar', label: 'Go Star · Ghi nhận', icon: 'star', roles: ['ecom_exec', 'staff', 'pm', 'ceo', 'admin'] },
-  { group: 'S1 · Task Lark & ghi nhận', to: '/lark/setup', label: 'Kết nối Lark', icon: 'link', roles: ['admin'] },
-  { group: 'Task checkpoint (bản cũ)', to: '/checkins', label: 'Check-in của tôi', icon: 'clock', roles: ['staff', 'ecom_exec'] },
-  { group: 'Task checkpoint (bản cũ)', to: '/tasks', label: 'Task', icon: 'tasks', roles: ['ecom_exec', 'staff', 'admin'] },
-  { group: 'Task checkpoint (bản cũ)', to: '/alerts', label: 'Cảnh báo', icon: 'bell', roles: ['ecom_exec', 'admin'] },
-  { group: 'Task checkpoint (bản cũ)', to: '/task-types', label: 'Loại task & mốc', icon: 'list', roles: ['ecom_exec', 'admin'] },
-  { group: 'Báo giá (S2)', to: '/quotes', label: 'Báo giá', icon: 'file', roles: ['account', 'pm', 'ceo', 'admin'] },
-  { group: 'Báo giá (S2)', to: '/approvals', label: 'Duyệt báo giá', icon: 'check', roles: ['pm', 'ceo'] },
-  { group: 'Báo giá (S2)', to: '/archive', label: 'Kho tham chiếu', icon: 'archive', roles: ['account', 'pm', 'ceo', 'admin'] },
-  { group: 'Báo giá (S2)', to: '/library', label: 'Thư viện giá', icon: 'tag', roles: ['pm', 'ceo', 'admin'] },
-  { group: 'Báo giá (S2)', to: '/rules', label: 'Luật khung giá', icon: 'shield', roles: ['ceo'] },
-  { group: 'Đo lường', to: '/dashboard', label: 'Dashboard KPI', icon: 'chart', roles: ['ceo', 'pm', 'ecom_exec', 'admin'] },
+  // Trang nhân sự (PRD 4.1)
+  { group: 'Công việc', to: '/inbox', label: 'Inbox', icon: 'inbox', roles: STAFF, badge: 'inbox' },
+  { group: 'Công việc', to: '/du-an', label: 'Dự án của tôi', icon: 'folder', roles: STAFF },
+  { group: 'Công việc', to: '/lich', label: 'Calendar', icon: 'calendar', roles: STAFF },
+  { group: 'Công việc', to: '/gostar', label: 'Go Star', icon: 'star', roles: STAFF },
+  // Trang quản lý (PRD 4.2)
+  { group: 'Quản lý dự án', to: '/tom-tat', label: 'Tóm tắt hôm nay', icon: 'sun', roles: MGR },
+  { group: 'Quản lý dự án', to: '/cho-duyet', label: 'Chờ duyệt', icon: 'check', roles: MGR, badge: 'review' },
+  { group: 'Quản lý dự án', to: '/du-an', label: 'Dự án', icon: 'folder', roles: MGR },
+  { group: 'Quản lý dự án', to: '/lich', label: 'Calendar', icon: 'calendar', roles: MGR },
+  { group: 'Quản lý dự án', to: '/nhan-su', label: 'Nhân sự', icon: 'users', roles: MGR },
+  { group: 'Quản lý dự án', to: '/dashboard', label: 'Báo cáo', icon: 'chart', roles: MGR },
+  { group: 'Quản lý dự án', to: '/gostar', label: 'Go Star', icon: 'star', roles: MGR },
+  // Báo giá (S2), unchanged
+  { group: 'Báo giá', to: '/quotes', label: 'Báo giá', icon: 'file', roles: ['account', 'pm', 'ceo', 'admin'] },
+  { group: 'Báo giá', to: '/approvals', label: 'Duyệt báo giá', icon: 'check', roles: ['pm', 'ceo'] },
+  { group: 'Báo giá', to: '/archive', label: 'Kho tham chiếu', icon: 'archive', roles: ['account', 'pm', 'ceo', 'admin'] },
+  { group: 'Báo giá', to: '/library', label: 'Thư viện giá', icon: 'tag', roles: ['pm', 'ceo', 'admin'] },
+  { group: 'Báo giá', to: '/rules', label: 'Luật khung giá', icon: 'shield', roles: ['ceo'] },
+  // Quản trị
   { group: 'Quản trị', to: '/admin/users', label: 'Người dùng', icon: 'user', roles: ['admin'] },
   { group: 'Quản trị', to: '/admin/settings', label: 'Cài đặt', icon: 'settings', roles: ['admin'] },
+  { group: 'Quản trị', to: '/lark/setup', label: 'Kết nối Lark & nhắc việc', icon: 'link', roles: ['admin'] },
+  { group: 'Quản trị', to: '/dashboard', label: 'Dashboard KPI', icon: 'chart', roles: ['admin'] },
   { group: 'Quản trị', to: '/admin/diagnostics', label: 'Diagnostics', icon: 'shield', roles: ['admin'] },
+  { group: 'Task checkpoint (bản cũ)', to: '/tasks', label: 'Task', icon: 'tasks', roles: ['admin'] },
+  { group: 'Task checkpoint (bản cũ)', to: '/alerts', label: 'Cảnh báo', icon: 'bell', roles: ['admin'] },
+  { group: 'Task checkpoint (bản cũ)', to: '/task-types', label: 'Loại task & mốc', icon: 'list', roles: ['admin'] },
   { group: 'Cá nhân', to: '/profile', label: 'Hồ sơ & Telegram', icon: 'telegram', roles: ALL },
 ];
 
 export const HOME: Record<Role, string> = {
-  account: '/quotes',
-  pm: '/approvals',
+  account: '/inbox',
+  pm: '/tom-tat',
   ceo: '/dashboard',
-  ecom_exec: '/tasks',
-  staff: '/checkins',
-  admin: '/admin/diagnostics',
+  ecom_exec: '/inbox',
+  staff: '/inbox',
+  admin: '/admin/users',
 };
+
+/** Sidebar counts: my overdue / due today / to fix (staff) and tasks waiting for my review (PM). */
+function useNavCounts(role: Role, userId: string, pathname: string) {
+  const [counts, setCounts] = useState<{ inbox: number; review: number }>({ inbox: 0, review: 0 });
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+      if (STAFF.includes(role)) {
+        const { data } = await supabase.from('lark_tasks').select('state, due_date').eq('kind', 'child').is('deleted_at', null).in('state', ['doing', 'changes']).or(`assignee_id.eq.${userId},assignee_open_id.eq.sim:${userId}`);
+        const n = (data ?? []).filter((t: { state: string; due_date: string }) => t.state === 'changes' || t.due_date <= today).length;
+        const { count: invites } = await supabase.from('project_members').select('id', { count: 'exact', head: true }).eq('profile_id', userId).eq('status', 'invited');
+        if (alive) setCounts((c) => ({ ...c, inbox: n + (invites ?? 0) }));
+      } else if (role === 'pm') {
+        const { data: mine } = await supabase.from('lark_tasks').select('id').eq('kind', 'parent').is('deleted_at', null).eq('pm_id', userId);
+        const ids = (mine ?? []).map((p: { id: string }) => p.id);
+        if (!ids.length) return alive && setCounts((c) => ({ ...c, review: 0 }));
+        const { count } = await supabase.from('lark_tasks').select('id', { count: 'exact', head: true }).eq('kind', 'child').eq('state', 'review').in('parent_id', ids);
+        if (alive) setCounts((c) => ({ ...c, review: count ?? 0 }));
+      }
+    })().catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [role, userId, pathname]);
+  return counts;
+}
 
 export function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { profile } = useSession();
@@ -62,6 +107,12 @@ export function Layout() {
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   if (!profile) return null;
+  return <Shell profile={profile} signOut={signOut} open={open} setOpen={setOpen} pathname={loc.pathname} />;
+}
+
+function Shell({ profile, signOut, open, setOpen, pathname }: { profile: NonNullable<ReturnType<typeof useSession>['profile']>; signOut: () => void; open: boolean; setOpen: (v: boolean | ((v: boolean) => boolean)) => void; pathname: string }) {
+  const loc = { pathname };
+  const counts = useNavCounts(profile.role, profile.id, loc.pathname);
   const items = NAV.filter((n) => n.roles.includes(profile.role));
   const groups = [...new Set(items.map((i) => i.group))];
   const nav = (
@@ -73,7 +124,7 @@ export function Layout() {
             {items
               .filter((i) => i.group === g)
               .map((i) => (
-                <li key={i.to}>
+                <li key={`${i.group}${i.to}`}>
                   <NavLink
                     to={i.to}
                     onClick={() => setOpen(false)}
@@ -85,7 +136,8 @@ export function Layout() {
                     }
                   >
                     <Icon name={i.icon} size={17} className="shrink-0 opacity-90" />
-                    {i.label}
+                    <span className="flex-1">{i.label}</span>
+                    {i.badge && counts[i.badge] > 0 && <span className="rounded-full bg-accent px-1.5 text-[12px] font-semibold leading-5 text-white">{counts[i.badge]}</span>}
                   </NavLink>
                 </li>
               ))}

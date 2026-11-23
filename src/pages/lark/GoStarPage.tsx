@@ -1,5 +1,16 @@
 import { useMemo, useState } from 'react';
 import {
+  fmtDueDate,
+  KPI_STATUS_LABEL,
+  KpiStatus,
+  kpiTracked,
+  personMonthStats,
+  PersonMonthStats,
+  StarSlot,
+  starOutlook,
+  suggestQuality,
+  TASK_STAGE_LABEL,
+  TaskStage,
   DEFAULT_GOSTAR_RULES,
   employeeOfMonth,
   fmtVnd,
@@ -15,7 +26,8 @@ import {
   monthLabel,
   rankGoStar,
 } from '@/domain';
-import { Badge, Banner, Button, Card, EmptyState, ErrorBox, Field, Input, Loading, Modal, PageHeader, Select, Stat, Textarea, cx, useAsync, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Card, EmptyState, ErrorBox, Field, Input, Loading, Modal, PageHeader, Select, Textarea, cx, useAsync, useToast } from '@/components/ui';
+import { Link } from 'react-router-dom';
 import { fmtVnDateTime } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
@@ -23,6 +35,7 @@ import { check, supabase } from '@/lib/supabase';
 import { BotCard } from './BotCard';
 
 const SCORERS = ['pm', 'ecom_exec', 'ceo'];
+const SUGGEST_ROLES = ['pm', 'ceo', 'admin'];
 
 interface ScoreRow {
   month: string;
@@ -70,6 +83,70 @@ function Stars({ n, px = 15 }: { n: number; px?: number }) {
   );
 }
 
+/** A star the data suggests but nobody has scored yet: outlined, dashed when unlikely. */
+function StarHint({ likely, px = 16 }: { likely: boolean; px?: number }) {
+  return (
+    <svg width={px} height={px} viewBox="0 0 24 24" aria-hidden="true" className={likely ? 'text-[#E39A12]' : 'text-ink/30'}>
+      <path d={STAR_PATH} fill={likely ? 'rgba(227,154,18,0.18)' : 'none'} stroke="currentColor" strokeWidth={1.6} strokeDasharray={likely ? undefined : '2.5 2'} />
+    </svg>
+  );
+}
+
+const SLOT_STYLE: Record<StarSlot['state'], { box: string; label: string }> = {
+  on: { box: 'border-[#E9C37A] bg-[#FFF6E3]', label: 'Đạt' },
+  off: { box: 'border-line bg-canvas/60', label: 'Chưa đạt' },
+  likely: { box: 'border-dashed border-[#E39A12] bg-white', label: 'Có thể đạt' },
+  unlikely: { box: 'border-dashed border-line bg-white', label: 'Khó đạt' },
+  open: { box: 'border-dashed border-line bg-white', label: 'Chờ chấm' },
+};
+
+function StarOutlook({ outlook, onUseSuggestion, details }: { outlook: ReturnType<typeof starOutlook>; onUseSuggestion?: () => void; details: Partial<Record<GoStarCriterion, string>> }) {
+  return (
+    <section aria-label="Gợi ý số sao" className="mb-5 rounded-xl border border-line-soft bg-canvas/40 p-3">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-[14px] font-semibold text-ink">Gợi ý số sao</h3>
+        <div className="flex items-center gap-2 text-[13px] text-ink-2">
+          <Stars n={outlook.likely} px={16} />
+          <span>
+            Dự kiến <b className="text-ink">{outlook.likely}/5</b> · chắc chắn {outlook.sure} · tối đa {outlook.max}
+          </span>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {outlook.slots.map((x) => {
+          const c = GOSTAR_CRITERIA.find((k) => k.key === x.key)!;
+          return (
+            <div key={x.key} className={cx('flex flex-col gap-1 rounded-lg border px-2.5 py-2', SLOT_STYLE[x.state].box)} title={c.label}>
+              <div className="flex items-center gap-1.5">
+                {x.state === 'on' || x.state === 'off' ? <StarMark on={x.state === 'on'} px={16} /> : <StarHint likely={x.state === 'likely'} px={16} />}
+                <span className="truncate text-[12.5px] font-semibold text-ink">{c.name}</span>
+              </div>
+              <span className="text-[12px] text-ink-3">
+                {[SLOT_STYLE[x.state].label, x.note || details[x.key]].filter(Boolean).join(' · ')}
+              </span>
+              {x.suggest !== undefined && onUseSuggestion && (
+                <button type="button" onClick={onUseSuggestion} className="self-start text-[12px] font-semibold text-brand hover:underline">
+                  Dùng gợi ý {x.suggest}/5
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+interface FactRow {
+  id: string;
+  assignee_open_id: string | null;
+  kpi_due_date: string | null;
+  due_date: string;
+  state: TaskStage;
+  accepted_at: string | null;
+  pending_at: string | null;
+}
+
 export function GoStarPage() {
   const me = useProfile();
   const { tz } = useSettings();
@@ -83,14 +160,28 @@ export function GoStarPage() {
   const { data, error, loading, reload } = useAsync(async () => {
     const [people, tasks, scores, months, profiles] = await Promise.all([
       supabase.from('lark_people').select('open_id, name, profile_id'),
-      supabase.from('lark_tasks').select('assignee_open_id, due_date, closed_at, completed_at').eq('kind', 'child').is('deleted_at', null),
+      // 1.6: one row per task with the KPI deadline and the approved submission (view task_kpi_facts).
+      supabase.from('task_kpi_facts').select('id, assignee_open_id, kpi_due_date, due_date, state, accepted_at, pending_at'),
       supabase.from('gostar_scores').select('month, open_id, kpi_name, kpi_pct, quality, teamwork, note, updated_by, updated_at'),
       supabase.from('gostar_months').select('month, result, finalized_by, finalized_at'),
       supabase.from('profiles').select('id, full_name, email, role'),
     ]);
+    const facts = check(tasks) as FactRow[];
+    // Suggested Work Quality needs review rounds; only roles that can read every project get them.
+    const subs =
+      SUGGEST_ROLES.includes(me.role) && facts.length
+        ? (check(await supabase.from('task_submissions').select('task_id, decision').in('task_id', facts.map((f) => f.id))) as { task_id: string; decision: 'approved' | 'changes' | null }[])
+        : null;
     return {
+      facts,
+      subs,
       people: check(people) as { open_id: string; name: string; profile_id: string | null }[],
-      tasks: check(tasks) as { assignee_open_id: string | null; due_date: string; closed_at: string | null; completed_at: string | null }[],
+      tasks: (check(tasks) as FactRow[])
+        .map((t) => {
+          const k = kpiTracked({ state: t.state, kpiDueDate: t.kpi_due_date ?? t.due_date, acceptedAt: t.accepted_at ? Date.parse(t.accepted_at) : null, pendingAt: t.pending_at ? Date.parse(t.pending_at) : null }, now, tz);
+          return k ? { assignee_open_id: t.assignee_open_id, due_date: k.dueDate, completedAt: k.completedAt } : null;
+        })
+        .filter((t): t is { assignee_open_id: string | null; due_date: string; completedAt: number | null } => t !== null),
       scores: (check(scores) as ScoreRow[]).map((s) => ({ ...s, kpi_pct: s.kpi_pct === null ? null : Number(s.kpi_pct) })),
       months: check(months) as MonthRow[],
       profiles: check(profiles) as { id: string; full_name: string; email: string; role: string }[],
@@ -122,7 +213,7 @@ export function GoStarPage() {
     const scores = new Map<string, GoStarScore>(scored.map((s) => [s.open_id, { kpiPct: s.kpi_pct, quality: s.quality, teamwork: s.teamwork }]));
     return rankGoStar(
       roster,
-      data.tasks.map((t) => ({ assigneeOpenId: t.assignee_open_id, dueDate: t.due_date, completedAt: t.closed_at ? Date.parse(t.completed_at ?? t.closed_at) : null })),
+      data.tasks.map((t) => ({ assigneeOpenId: t.assignee_open_id, dueDate: t.due_date, completedAt: t.completedAt })),
       scores,
       month,
       now,
@@ -132,6 +223,27 @@ export function GoStarPage() {
   }, [data, month, tz]);
 
   const rows = closed ? closed.result.rows : live;
+  const statsByPerson = useMemo(() => {
+    const out = new Map<string, PersonMonthStats>();
+    if (!data?.subs) return out;
+    const byPerson = new Map<string, FactRow[]>();
+    for (const f of data.facts) if (f.assignee_open_id) byPerson.set(f.assignee_open_id, [...(byPerson.get(f.assignee_open_id) ?? []), f]);
+    for (const [openId, list] of byPerson)
+      out.set(
+        openId,
+        personMonthStats(
+          month,
+          list.map((f) => ({ id: f.id, code: '', name: '', state: f.state, kpiDueDate: f.kpi_due_date ?? f.due_date, acceptedAt: f.accepted_at ? Date.parse(f.accepted_at) : null, pendingAt: f.pending_at ? Date.parse(f.pending_at) : null })),
+          data.subs,
+          [],
+          [],
+          now,
+          tz,
+        ),
+      );
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, month, tz]);
   const rules = closed?.result.rules ?? DEFAULT_GOSTAR_RULES;
   const scoreOf = (openId: string) => data?.scores.find((s) => s.month === month && s.open_id === openId) ?? null;
   const canScore = SCORERS.includes(me.role) && !closed;
@@ -141,9 +253,13 @@ export function GoStarPage() {
   const missing = rows.filter((r) => r.score.kpiPct === null || r.score.quality === null || r.score.teamwork === null).length;
   const notYetDue = rows.reduce((s, r) => s + r.tally.notYetDue, 0);
   const myOpenId = `sim:${me.id}`;
+  const suggestOf = (r: GoStarRow) => {
+    const st = statsByPerson.get(r.openId);
+    return st ? suggestQuality(st) : null;
+  };
 
   async function closeMonth() {
-    if (!window.confirm(`Chốt Go Star ${monthLabel(month)}? Sau khi chốt, bảng xếp hạng và tiền thưởng được giữ nguyên, điểm của tháng không sửa được nữa.`)) return;
+    if (!window.confirm(`Chốt Go Star ${monthLabel(month)}? Sau khi chốt không sửa điểm được nữa.`)) return;
     setBusy(true);
     try {
       check(await supabase.from('gostar_months').insert({ month, finalized_by: me.id, result: { rows: live, rules: DEFAULT_GOSTAR_RULES, computedAt: new Date().toISOString() } }));
@@ -173,7 +289,13 @@ export function GoStarPage() {
     <div>
       <PageHeader
         title="Go Star · Ghi nhận nhân viên"
-        subtitle="Mỗi tiêu chí đạt yêu cầu được 1 sao/tháng, tối đa 5 sao. Cuối tháng xếp hạng: hạng 1 nhận 1.000.000đ và danh hiệu “Employee of the Month”, hạng 2 nhận 500.000đ, hạng 3 nhận 200.000đ."
+        info="Hạng 1 nhận thêm danh hiệu Employee of the Month. Người 0 sao không xếp hạng."
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>Mỗi tiêu chí đạt = 1 sao</span>
+            <span className="text-ink-2">🥇 1.000.000đ · 🥈 500.000đ · 🥉 200.000đ</span>
+          </span>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Select aria-label="Chọn tháng" value={month} onChange={(e) => setMonth(e.target.value)} className="min-w-[160px]">
@@ -206,7 +328,7 @@ export function GoStarPage() {
         <>
           {closed ? (
             <Banner tone="ok" title={`Đã chốt ${monthLabel(month)}`} className="mb-4">
-              {profileName(closed.finalized_by)} chốt lúc {fmtVnDateTime(closed.finalized_at, tz)}. Bảng dưới đây là kết quả đã khoá; điểm của tháng không sửa được nữa.
+              {profileName(closed.finalized_by)} chốt lúc {fmtVnDateTime(closed.finalized_at, tz)}. Kết quả đã khoá.
             </Banner>
           ) : over ? (
             <Banner tone="warn" title={`${monthLabel(month)} đã kết thúc, chưa chốt`} className="mb-4">
@@ -215,13 +337,13 @@ export function GoStarPage() {
             </Banner>
           ) : (
             <Banner tone="info" title="Đang tạm tính" className="mb-4">
-              Hai sao Task Completion và Deadline tự tính từ task con trên Lark đến hôm nay
-              {notYetDue ? ` (còn ${notYetDue} task con chưa đến hạn trong tháng, chưa tính)` : ''}. Ba sao còn lại theo điểm quản lý chấm. CEO chốt sau ngày cuối tháng.
+              2 sao tự tính, 3 sao quản lý chấm. CEO chốt sau ngày cuối tháng.
+              {notYetDue ? ` ${notYetDue} task chưa tính.` : ''}
             </Banner>
           )}
 
           {!rows.length ? (
-            <EmptyState title="Chưa có nhân viên nào trong tháng này">Bảng xếp hạng gồm nhân viên và những ai có task con đến hạn trong tháng trên Lark.</EmptyState>
+            <EmptyState title="Chưa có ai trong tháng này" />
           ) : (
             <>
               <div className="mb-8 grid border-y border-ink md:grid-cols-3">
@@ -267,7 +389,8 @@ export function GoStarPage() {
 
               <Card
                 title={`Bảng xếp hạng ${monthLabel(month)}`}
-                subtitle={`${rows.length} người · cùng số sao thì xét KPI, rồi Chất lượng, rồi Teamwork (mức độ đóng góp)`}
+                subtitle={`${rows.length} người`}
+                info="Bằng sao thì so % KPI, rồi điểm Chất lượng, rồi Teamwork. Vẫn bằng thì đồng hạng, chia đều thưởng."
                 className="mb-4"
               >
                 <div className="relative overflow-x-auto">
@@ -291,9 +414,9 @@ export function GoStarPage() {
                         const t = r.tally;
                         const sc = scoreOf(r.openId);
                         const detail: Record<GoStarCriterion, string> = {
-                          completion: t.judged ? `${t.done}/${t.judged} task con đã xong` : 'Không có task con đến hạn',
-                          deadline: t.judged ? `Trễ ${t.late + t.openLate}/${t.judged} (${t.latePct}%)` : 'Không có task con đến hạn',
-                          quality: r.score.quality !== null ? `${r.score.quality}/5` : 'Chưa chấm',
+                          completion: t.judged ? `${t.done}/${t.judged} task đã được duyệt` : 'Không có task đến hạn',
+                          deadline: t.judged ? `Trễ ${t.late + t.openLate}/${t.judged} (${t.latePct}%)` : 'Không có task đến hạn',
+                          quality: r.score.quality !== null ? `${r.score.quality}/5` : suggestOf(r) ? `Chưa chấm · gợi ý ${suggestOf(r)!.score}/5` : 'Chưa chấm',
                           kpi: r.score.kpiPct !== null ? `${r.score.kpiPct}%` : 'Chưa nhập',
                           teamwork: r.score.teamwork !== null ? `${r.score.teamwork}/5` : 'Chưa chấm',
                         };
@@ -312,7 +435,7 @@ export function GoStarPage() {
                             {GOSTAR_CRITERIA.map((c) => (
                               <td key={c.key} className="py-2.5 pr-2 text-center" title={`${c.name}: ${detail[c.key]}`}>
                                 <div className="flex justify-center">
-                                  <StarMark on={r.stars[c.key]} px={17} />
+                                  {c.key === 'quality' && r.score.quality === null && !closed && suggestOf(r) ? <StarHint likely={suggestOf(r)!.score >= rules.qualityMinScore} px={17} /> : <StarMark on={r.stars[c.key]} px={17} />}
                                 </div>
                                 <div className={cx('mt-1 text-[12px]', r.stars[c.key] ? 'text-ink-2' : 'text-ink-3')}>{detail[c.key]}</div>
                               </td>
@@ -337,13 +460,13 @@ export function GoStarPage() {
               </Card>
 
               <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-                <Card title="Cách tính sao" subtitle="Ngưỡng hiện tại là giả định của nhóm, chờ CEO chốt">
+                <Card title="Cách tính sao" subtitle="Ngưỡng tạm, chờ CEO chốt">
                   <ul className="flex flex-col gap-2.5 text-[14px] text-ink-2">
                     <li>
-                      <b className="text-ink">1. Task Completion</b> (tự tính từ Lark): mọi task con đến hạn trong tháng đều Completed với mã hợp lệ (≥ {rules.completionMinPct}%).
+                      <b className="text-ink">1. Task Completion</b> (tự tính): mọi task đến hạn trong tháng đều đã được PM duyệt (≥ {rules.completionMinPct}%).
                     </li>
                     <li>
-                      <b className="text-ink">2. Deadline</b> (tự tính từ Lark): tỷ lệ task con trễ trong tháng dưới {rules.deadlineMaxLatePct}%, cùng chuẩn với chỉ số M1 của S1.
+                      <b className="text-ink">2. Deadline</b> (tự tính): tỷ lệ task trễ trong tháng (theo lúc nộp, so với deadline tính KPI) dưới {rules.deadlineMaxLatePct}%, cùng chuẩn với chỉ số M1 của S1.
                     </li>
                     <li>
                       <b className="text-ink">3. Work Quality</b> (quản lý chấm): điểm chất lượng đầu ra từ {rules.qualityMinScore}/5 trở lên.
@@ -357,14 +480,14 @@ export function GoStarPage() {
                     <li className="border-t border-line-soft pt-2.5">
                       Bằng số sao thì so lần lượt: <b>% KPI</b> → <b>điểm Chất lượng</b> → <b>điểm Teamwork</b>. Vẫn bằng nhau thì đồng hạng, tiền thưởng của các hạng bị trùng chia đều. Người 0 sao không nhận thưởng.
                     </li>
-                    <li>Chấm điểm: PM, E-com Exec, CEO. CEO chốt tháng sau ngày cuối tháng; đã chốt thì không sửa được điểm.</li>
+                    <li>Người chấm: PM, E-com Exec, CEO. CEO chốt sau ngày cuối tháng.</li>
                   </ul>
                 </Card>
                 <div>
                   <h2 className="mb-2.5 text-[17px] font-semibold text-ink">Tin vinh danh trên group Lark</h2>
                   <BotCard message={goStarMessage(month, rows, (v) => fmtVnd(v))} />
                   <p className="mt-2 px-1 text-[12.5px] text-ink-3">
-                    {closed ? 'Nội dung tin vinh danh của tháng đã chốt.' : 'Xem trước theo số liệu tạm tính; tin chính thức theo kết quả lúc CEO chốt tháng.'} Bước bot tự gửi lên group Lark chưa làm.
+                    {closed ? 'Tin của tháng đã chốt.' : 'Xem trước, theo số liệu tạm tính.'} Chưa tự gửi lên Lark.
                   </p>
                 </div>
               </div>
@@ -379,6 +502,8 @@ export function GoStarPage() {
           month={month}
           existing={scoreOf(editing.openId)}
           meId={me.id}
+          rules={rules}
+          canSuggest={SUGGEST_ROLES.includes(me.role)}
           updatedByName={(id) => profileName(id)}
           tz={tz}
           onClose={() => setEditing(null)}
@@ -397,6 +522,8 @@ function ScoreModal({
   month,
   existing,
   meId,
+  rules,
+  canSuggest,
   updatedByName,
   tz,
   onClose,
@@ -406,6 +533,8 @@ function ScoreModal({
   month: string;
   existing: ScoreRow | null;
   meId: string;
+  rules: GoStarRules;
+  canSuggest: boolean;
   updatedByName: (id: string) => string;
   tz: string;
   onClose: () => void;
@@ -420,7 +549,20 @@ function ScoreModal({
   const [busy, setBusy] = useState(false);
   const kpiNum = kpi.trim() === '' ? null : Number(kpi.replace(',', '.'));
   const kpiErr = kpiNum !== null && (!Number.isFinite(kpiNum) || kpiNum < 0 || kpiNum > 300) ? 'Nhập % từ 0 đến 300.' : null;
-  const t = row.tally;
+  const facts = useAsync(() => loadPersonMonth(row.openId, month, tz), [row.openId, month]);
+  // The outlook follows what the PM is typing, so the effect of each score is visible before saving.
+  const qNum = quality ? Number(quality) : null;
+  const tNum = teamwork ? Number(teamwork) : null;
+  const kNum = kpiErr ? null : kpiNum;
+  const outlook = starOutlook(
+    {
+      stars: { ...row.stars, quality: qNum !== null && qNum >= rules.qualityMinScore, kpi: kNum !== null && kNum >= rules.kpiMinPct, teamwork: tNum !== null && tNum >= rules.teamworkMinScore },
+      score: { quality: qNum, kpiPct: kNum, teamwork: tNum },
+    },
+    canSuggest ? facts.data : null,
+    rules,
+  );
+  const qSuggest = outlook.slots.find((x) => x.key === 'quality')?.suggest;
 
   async function save() {
     setBusy(true);
@@ -464,9 +606,11 @@ function ScoreModal({
     <Modal
       open
       onClose={onClose}
+      wide="xl"
       title={`Chấm điểm ${monthLabel(month)} · ${row.name}`}
       footer={
         <>
+          {existing && <span className="mr-auto self-center text-[12.5px] text-ink-3">Sửa lần cuối: {updatedByName(existing.updated_by)} · {fmtVnDateTime(existing.updated_at, tz)}</span>}
           <Button variant="ghost" onClick={onClose}>
             Huỷ
           </Button>
@@ -476,42 +620,177 @@ function ScoreModal({
         </>
       }
     >
-      <div className="mb-4 grid grid-cols-3 gap-2">
-        <Stat label="Task con đã xong" value={`${t.done}/${t.judged}`} sub={t.notYetDue ? `+${t.notYetDue} chưa đến hạn` : undefined} />
-        <Stat label="Đúng hạn" value={t.onTime} />
-        <Stat label="Tỷ lệ trễ" value={t.latePct === null ? '—' : `${t.latePct}%`} tone={t.latePct === null ? null : t.latePct < 20 ? 'ok' : 'bad'} />
+      <StarOutlook
+        outlook={outlook}
+        onUseSuggestion={qSuggest ? () => setQuality(String(qSuggest)) : undefined}
+        details={{
+          completion: row.tally.judged ? `${row.tally.done}/${row.tally.judged} task đã duyệt` : 'Không có task đến hạn',
+          deadline: row.tally.judged ? `trễ ${row.tally.latePct}%` : 'Không có task đến hạn',
+        }}
+      />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        {/* left: what the PM decides */}
+        <div className="flex flex-col gap-3 lg:order-1">
+          <h3 className="text-[14px] font-semibold text-ink">Điểm quản lý chấm</h3>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+            <Field label="KPI cá nhân" hint="VD: 4 video đúng lịch">
+              {(id) => <Input id={id} value={kpiName} onChange={(e) => setKpiName(e.target.value)} maxLength={120} />}
+            </Field>
+            <Field label="% đạt" hint="≥ 100% → 1 sao" error={kpiErr}>
+              {(id) => <Input id={id} inputMode="decimal" value={kpi} onChange={(e) => setKpi(e.target.value)} placeholder="105" />}
+            </Field>
+          </div>
+          <Field label="Work Quality" hint={facts.data && facts.data.onTime + facts.data.late > 0 ? `≥ 4 → 1 sao · ${facts.data.firstPass}/${facts.data.onTime + facts.data.late} duyệt ngay lần đầu` : '≥ 4 → 1 sao'}>
+            {(id) => (
+              <Select id={id} value={quality} onChange={(e) => setQuality(e.target.value)}>
+                {scale}
+              </Select>
+            )}
+          </Field>
+          <Field label="Teamwork" hint="≥ 4 → 1 sao">
+            {(id) => (
+              <Select id={id} value={teamwork} onChange={(e) => setTeamwork(e.target.value)}>
+                {scale}
+              </Select>
+            )}
+          </Field>
+          <Field label="Ghi chú, dẫn chứng">
+            {(id) => <Textarea id={id} rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: hỗ trợ Duyên dựng video KN032" />}
+          </Field>
+        </div>
+        {/* right: what the person did this month */}
+        <div className="min-w-0 lg:order-2 lg:border-l lg:border-line-soft lg:pl-6">
+          <PersonFacts state={facts} name={row.name} month={month} row={row} />
+        </div>
       </div>
-      <p className="mb-4 text-[13px] text-ink-3">Hai sao Task Completion và Deadline tự tính từ Lark, không chấm tay.</p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="KPI cá nhân của tháng" hint="Vd: 4 video đăng đúng lịch, doanh số shop…">
-          {(id) => <Input id={id} value={kpiName} onChange={(e) => setKpiName(e.target.value)} maxLength={120} />}
-        </Field>
-        <Field label="% KPI đạt được" hint="Đạt từ 100% được 1 sao" error={kpiErr}>
-          {(id) => <Input id={id} inputMode="decimal" value={kpi} onChange={(e) => setKpi(e.target.value)} placeholder="vd 105" />}
-        </Field>
-        <Field label="Work Quality (chất lượng đầu ra)" hint="Từ 4/5 được 1 sao">
-          {(id) => (
-            <Select id={id} value={quality} onChange={(e) => setQuality(e.target.value)}>
-              {scale}
-            </Select>
-          )}
-        </Field>
-        <Field label="Teamwork (hỗ trợ, phối hợp)" hint="Từ 4/5 được 1 sao">
-          {(id) => (
-            <Select id={id} value={teamwork} onChange={(e) => setTeamwork(e.target.value)}>
-              {scale}
-            </Select>
-          )}
-        </Field>
-      </div>
-      <Field label="Ghi chú / dẫn chứng" className="mt-3">
-        {(id) => <Textarea id={id} rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Vd: hỗ trợ Duyên dựng video KN032 khi bạn ấy nghỉ ốm" />}
-      </Field>
-      {existing && (
-        <p className="mt-3 text-[12.5px] text-ink-3">
-          Lần sửa gần nhất: {updatedByName(existing.updated_by)} · {fmtVnDateTime(existing.updated_at, tz)}
-        </p>
-      )}
     </Modal>
   );
+}
+
+/** The month's tasks of one person, with rounds, extensions and check-ins (for the scoring modal). */
+async function loadPersonMonth(openId: string, month: string, tz: string): Promise<PersonMonthStats> {
+  const rows = check(
+    await supabase
+      .from('lark_tasks')
+      .select('id, code, name, state, due_date, kpi_due_date, accepted_at')
+      .eq('kind', 'child')
+      .eq('assignee_open_id', openId)
+      .is('deleted_at', null)
+      // Window wide enough for any KPI deadline in the month; personMonthStats picks the month exactly.
+      .gte('due_date', `${shiftMonthKey(month, -3)}-01`),
+  ) as { id: string; code: string | null; name: string; state: TaskStage; due_date: string; kpi_due_date: string | null; accepted_at: string | null }[];
+  const ids = rows.filter((r) => (r.kpi_due_date ?? r.due_date).slice(0, 7) === month).map((r) => r.id);
+  const [subs, exts, checkins] = ids.length
+    ? await Promise.all([
+        supabase.from('task_submissions').select('task_id, round, decision, submitted_at').in('task_id', ids),
+        supabase.from('task_extensions').select('task_id, reason').in('task_id', ids),
+        supabase.from('task_checkins').select('task_id, sent_at, answer').in('task_id', ids),
+      ]).then(([a, b, c]) => [check(a), check(b), check(c)] as const)
+    : ([[], [], []] as const);
+  const subRows = subs as { task_id: string; round: number; decision: 'approved' | 'changes' | null; submitted_at: string }[];
+  const pendingAt = (id: string) => {
+    const open = subRows.filter((x) => x.task_id === id && x.decision === null).sort((a, b) => b.round - a.round)[0];
+    return open ? Date.parse(open.submitted_at) : null;
+  };
+  return personMonthStats(
+    month,
+    rows.map((r) => ({ id: r.id, code: r.code ?? '—', name: r.name, state: r.state, kpiDueDate: r.kpi_due_date ?? r.due_date, acceptedAt: r.accepted_at ? Date.parse(r.accepted_at) : null, pendingAt: pendingAt(r.id) })),
+    subRows,
+    exts as { task_id: string; reason: 'scope' | 'quality' }[],
+    checkins as { task_id: string; sent_at: string | null; answer: 'on_plan' | 'behind' | 'blocked' | null }[],
+    Date.now(),
+    tz,
+  );
+}
+
+const STATUS_TONE: Record<KpiStatus, 'ok' | 'bad' | 'warn' | 'neutral' | 'brand'> = { on_time: 'ok', late: 'bad', overdue: 'bad', pending: 'brand', open: 'neutral', excluded: 'neutral' };
+
+function Tile({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: 'ok' | 'bad' | 'warn' }) {
+  return (
+    <div className="rounded-lg border border-line-soft bg-canvas/50 px-3 py-2">
+      <div className="text-[12.5px] font-medium text-ink-3">{label}</div>
+      <div className={cx('text-[20px] font-semibold leading-tight tracking-[-0.01em]', tone === 'ok' ? 'text-ok-ink' : tone === 'bad' ? 'text-bad' : tone === 'warn' ? 'text-warn' : 'text-ink')}>{value}</div>
+      {sub && <div className="text-[12px] leading-snug text-ink-3">{sub}</div>}
+    </div>
+  );
+}
+
+function PersonFacts({ state, name, month, row }: { state: { data: PersonMonthStats | null; error: unknown; loading: boolean }; name: string; month: string; row: GoStarRow }) {
+  if (state.error) return <ErrorBox error={state.error} />;
+  if (!state.data) return <div className="mb-4 h-[120px] animate-pulse rounded-lg bg-canvas" aria-label="Đang tải số liệu" />;
+  const s = state.data;
+  const judged = s.onTime + s.late + s.overdue;
+  const latePct = judged ? Math.round(((s.late + s.overdue) / judged) * 100) : null;
+  const approved = s.onTime + s.late;
+  return (
+    <section aria-label={`Số liệu ${monthLabel(month)} của ${name}`}>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[14px] font-semibold text-ink">Số liệu {monthLabel(month).toLowerCase()}</h3>
+        <div className="flex gap-1.5">
+          {GOSTAR_CRITERIA.filter((c) => c.source === 'lark').map((c) => (
+            <Badge key={c.key} tone={row.stars[c.key] ? 'ok' : 'neutral'}>
+              {row.stars[c.key] ? '★' : '☆'} {c.name}
+            </Badge>
+          ))}
+        </div>
+      </div>
+      {!s.total ? (
+        <p className="rounded-lg bg-canvas px-3 py-3 text-[14px] text-ink-3">{name} không có task nào có deadline trong tháng này.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Tile label="Task trong tháng" value={s.total} sub={`${approved} đã duyệt${s.pending ? ` · ${s.pending} chờ duyệt` : ''}${s.open ? ` · ${s.open} chưa đến hạn` : ''}`} />
+            <Tile label="Đúng hạn" value={`${s.onTime}/${judged || 0}`} sub="Theo lúc nộp" tone={judged && s.onTime === judged ? 'ok' : undefined} />
+            <Tile label="Trễ / quá hạn" value={latePct === null ? '—' : `${latePct}%`} sub={`${s.late} nộp trễ · ${s.overdue} chưa nộp`} tone={latePct === null ? undefined : latePct < 20 ? 'ok' : 'bad'} />
+            <Tile label="Duyệt ngay lần đầu" value={approved ? `${s.firstPass}/${approved}` : '—'} sub={`${s.sentBack} lần bị trả về sửa`} tone={approved && s.firstPass / approved >= 0.8 ? 'ok' : s.sentBack ? 'warn' : undefined} />
+            <Tile label="Gia hạn" value={s.extScope + s.extQuality} sub={`${s.extScope} đổi yêu cầu · ${s.extQuality} do người làm`} tone={s.extQuality ? 'warn' : undefined} />
+            <Tile label="Trả lời tiến độ" value={s.asked ? `${s.answered}/${s.asked}` : '—'} sub={s.blocked || s.behind ? `${s.blocked} bị chặn · ${s.behind} chậm` : 'Không báo chậm'} tone={s.asked && s.answered < s.asked ? 'warn' : undefined} />
+          </div>
+          <div className="mt-3 rounded-lg border border-line-soft">
+            <div className="px-3 py-2 text-[13px] font-semibold text-ink-2">{s.total} task tính trong tháng</div>
+            <div className="max-h-72 overflow-y-auto border-t border-line-soft">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="text-left text-[12px] text-ink-3">
+                    <th className="px-3 py-1.5 font-medium">Task</th>
+                    <th className="px-2 py-1.5 font-medium">Deadline KPI</th>
+                    <th className="px-2 py-1.5 font-medium">Kết quả</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Lần nộp</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Gia hạn</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {s.tasks.map((t) => (
+                    <tr key={t.id} className="border-t border-line-soft">
+                      <td className="max-w-[260px] px-3 py-1.5">
+                        <Link to={`/du-an/${encodeURIComponent(t.code.split('-')[0])}?task=${t.id}`} target="_blank" rel="noopener" className="block truncate hover:underline" title={`${t.code} · ${t.name} · ${TASK_STAGE_LABEL[t.state]} (mở ở tab mới)`}>
+                          <span className="font-mono text-[12px] text-brand">{t.code}</span> {t.name}
+                        </Link>
+                      </td>
+                      <td className="px-2 py-1.5 text-ink-2">{fmtDueDate(t.kpiDueDate).slice(0, 5)}</td>
+                      <td className="px-2 py-1.5">
+                        <Badge tone={STATUS_TONE[t.status]}>{KPI_STATUS_LABEL[t.status]}</Badge>
+                      </td>
+                      <td className="px-2 py-1.5 text-right text-ink-2">
+                        {t.rounds}
+                        {t.sentBack > 0 && <span className="text-warn"> ({t.sentBack} sửa)</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-right text-ink-2">{t.extensions || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      <p className="mt-2 text-[12.5px] text-ink-3">Hai sao trên tự tính, không chấm tay.</p>
+    </section>
+  );
+}
+
+function shiftMonthKey(month: string, n: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return d.toISOString().slice(0, 7);
 }

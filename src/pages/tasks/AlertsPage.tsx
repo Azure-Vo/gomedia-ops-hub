@@ -62,7 +62,7 @@ export function AlertsPage() {
 
   return (
     <div>
-      <PageHeader title="Cảnh báo" subtitle="Chỉ task chậm, bị chặn, im lặng hoặc trễ hạn mới đến đây. Xác nhận và ghi việc bạn sẽ làm để cả nhóm biết đã có người xử lý." />
+      <PageHeader title="Cảnh báo" subtitle="Task chậm, bị chặn, im lặng hoặc trễ. Xác nhận và ghi việc sẽ làm." />
       <Card
         title={`${items.length} cảnh báo`}
         actions={
