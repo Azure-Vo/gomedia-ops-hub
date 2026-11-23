@@ -59,7 +59,7 @@ export function MyCheckinsPage() {
           tone="info"
           title="Muốn nhận check-in qua Telegram?"
           actions={
-            <Link to="/profile" className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 font-semibold text-white">
+            <Link to="/profile" className="inline-flex min-h-[38px] items-center rounded-full bg-brand px-4 text-[14px] font-semibold text-white hover:bg-brand-dark">
               Liên kết Telegram
             </Link>
           }

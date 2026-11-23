@@ -104,7 +104,7 @@ export function ApprovalsPage() {
                 subtitle={`${q.client} · ${personName(data!.people, q.created_by)} · gửi duyệt ${q.approval_requested_at ? fmtVnDateTime(q.approval_requested_at, tz) : ''} · đã chờ ${fmtNum(waiting, 1)} giờ làm việc`}
                 actions={
                   <>
-                    <Link to={`/quotes/${q.id}`} className="inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-lg border border-dashed border-accent-line bg-accent-soft px-4 text-[15px] font-semibold text-accent hover:bg-accent-soft">
+                    <Link to={`/quotes/${q.id}`} className="inline-flex min-h-[38px] items-center gap-2 whitespace-nowrap rounded-full border border-line-edge bg-paper px-4 text-[14px] font-semibold text-ink hover:border-line-control">
                       Mở báo giá để góp ý
                     </Link>
                     <Button variant="secondary" icon="edit" onClick={() => setDecision({ quote: q, kind: 'changes', comment: '' })}>

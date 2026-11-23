@@ -51,7 +51,7 @@ export function WeeklyChart({ points, baseline, target, lateHours }: { points: W
   const hp = hover !== null ? points[hover] : null;
   const last = points.length ? points[points.length - 1] : null;
   const refs = [
-    { v: baseline, label: `Baseline ${fmtNum(baseline, 2)} h`, color: '#5D5B80', dash: '6 4' },
+    { v: baseline, label: `Baseline ${fmtNum(baseline, 2)} h`, color: '#62625D', dash: '6 4' },
     { v: target, label: `Mục tiêu < ${fmtNum(target, 2)} h`, color: '#C2410C', dash: '2 4' },
   ];
 
@@ -60,8 +60,8 @@ export function WeeklyChart({ points, baseline, target, lateHours }: { points: W
       <svg width={W} height={H} className="block" role="img" aria-label="Thời gian báo giá trung bình theo tuần, so với baseline và mục tiêu">
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} stroke="#ECEAF3" strokeWidth={1} />
-            <text x={PAD.l - 8} y={y(t) + 4} textAnchor="end" fontSize={12} fill="#5D5B80" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} stroke="#E4E4E1" strokeWidth={1} />
+            <text x={PAD.l - 8} y={y(t) + 4} textAnchor="end" fontSize={12} fill="#62625D" style={{ fontVariantNumeric: 'tabular-nums' }}>
               {fmtNum(t, 0)}
             </text>
           </g>
@@ -70,30 +70,30 @@ export function WeeklyChart({ points, baseline, target, lateHours }: { points: W
           <g key={r.label}>
             <line x1={PAD.l} x2={W - PAD.r} y1={y(r.v)} y2={y(r.v)} stroke={r.color} strokeWidth={1.5} strokeDasharray={r.dash} />
             {narrow ? (
-              <text x={W - PAD.r} y={y(r.v) - 6} textAnchor="end" fontSize={12} fill="#4A4870" fontWeight={600}>
+              <text x={W - PAD.r} y={y(r.v) - 6} textAnchor="end" fontSize={12} fill="#545450" fontWeight={600}>
                 {r.label}
               </text>
             ) : (
-              <text x={W - PAD.r + 8} y={y(r.v) + 4} fontSize={12} fill="#4A4870" fontWeight={600}>
+              <text x={W - PAD.r + 8} y={y(r.v) + 4} fontSize={12} fill="#545450" fontWeight={600}>
                 {r.label}
               </text>
             )}
           </g>
         ))}
-        {points.length > 1 && <path d={path} fill="none" stroke="#082774" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
-        {hp && hover !== null && <line x1={x(hover)} x2={x(hover)} y1={PAD.t} y2={PAD.t + innerH} stroke="#A99BF0" strokeWidth={1} />}
+        {points.length > 1 && <path d={path} fill="none" stroke="#2F5BD3" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />}
+        {hp && hover !== null && <line x1={x(hover)} x2={x(hover)} y1={PAD.t} y2={PAD.t + innerH} stroke="#B9C8F0" strokeWidth={1} />}
         {points.map((p, i) => (
           <g key={p.weekStart}>
-            <circle cx={x(i)} cy={y(p.avgHours)} r={hover === i ? 6 : 4.5} fill="#082774" stroke="#FFFFFF" strokeWidth={2} />
+            <circle cx={x(i)} cy={y(p.avgHours)} r={hover === i ? 6 : 4.5} fill="#2F5BD3" stroke="#FFFFFF" strokeWidth={2} />
             {(i % labelEvery === 0 || i === points.length - 1) && (
-              <text x={x(i)} y={H - PAD.b + 18} textAnchor="middle" fontSize={12} fill="#5D5B80">
+              <text x={x(i)} y={H - PAD.b + 18} textAnchor="middle" fontSize={12} fill="#62625D">
                 {weekLabel(p.weekStart)}
               </text>
             )}
           </g>
         ))}
         {last && (
-          <text x={x(points.length - 1) + (points.length > 1 ? -8 : 0)} y={y(last.avgHours) - 12} textAnchor={points.length > 1 ? 'end' : 'middle'} fontSize={12} fontWeight={700} fill="#24224F">
+          <text x={x(points.length - 1) + (points.length > 1 ? -8 : 0)} y={y(last.avgHours) - 12} textAnchor={points.length > 1 ? 'end' : 'middle'} fontSize={12} fontWeight={700} fill="#1B1B1A">
             {fmtNum(last.avgHours, 2)} h
           </text>
         )}

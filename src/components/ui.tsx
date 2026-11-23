@@ -1,3 +1,4 @@
+import * as L from 'lucide-react';
 import { ButtonHTMLAttributes, createContext, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
@@ -5,63 +6,72 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
 }
 
 // ------------------------------------------------------------------ icons -----
-const PATHS: Record<string, string> = {
-  plus: 'M12 5v14M5 12h14',
-  x: 'M6 6l12 12M18 6L6 18',
-  check: 'M5 12.5l4.2 4.2L19 7',
-  alert: 'M12 8v5M12 16.5v.5M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
-  clock: 'M12 7v5l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
-  file: 'M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9l-6-6zM14 3v6h6',
-  search: 'M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.3-4.3',
-  upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',
-  download: 'M12 4v12M7 11l5 5 5-5M4 20h16',
-  chevronRight: 'M9 6l6 6-6 6',
-  chevronDown: 'M6 9l6 6 6-6',
-  menu: 'M4 7h16M4 12h16M4 17h16',
-  user: 'M20 21a8 8 0 10-16 0M12 13a5 5 0 100-10 5 5 0 000 10z',
-  logout: 'M15 4h4a1 1 0 011 1v14a1 1 0 01-1 1h-4M10 17l-5-5 5-5M5 12h11',
-  settings: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z',
-  chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
-  list: 'M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01',
-  star: 'M12 2.8l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17.3l-5.7 3 1.1-6.3-4.6-4.5 6.4-.9z',
-  bell: 'M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0',
-  tag: 'M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0L3 13V3h10l7.6 7.6a2 2 0 010 2.8zM7.5 7.5h.01',
-  archive: 'M21 8v13H3V8M1 3h22v5H1zM10 12h4',
-  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-  link: 'M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.7 1.7M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7l1.7-1.7',
-  refresh: 'M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5',
-  trash: 'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6',
-  edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z',
-  copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
-  play: 'M6 4l14 8-14 8V4z',
-  tasks: 'M9 11l3 3 8-8M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2h9',
-  message: 'M21 11.5a8.4 8.4 0 01-12.2 7.5L3 21l2-5.6A8.4 8.4 0 1121 11.5z',
-  calendar: 'M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z',
-  inbox: 'M22 12h-6l-2 3h-4l-2-3H2M5.5 5.1L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.5-6.9A2 2 0 0016.7 4H7.3a2 2 0 00-1.8 1.1z',
-  users: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
-  sun: 'M12 17a5 5 0 100-10 5 5 0 000 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
-  folder: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z',
-  info: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 11v6M12 7.5v.5',
-  telegram: 'M21.5 4.5L2.8 11.7c-1 .4-1 1.6 0 1.9l4.6 1.5 1.8 5.6c.2.7 1.1.9 1.6.4l2.6-2.4 4.8 3.5c.6.4 1.4.1 1.6-.6l3.4-15.6c.2-.9-.7-1.7-1.7-1.5zM9.4 14.7l8.4-7.4',
-};
+// One icon set across the app: Lucide (ISC licence), 1.75px stroke, as in the Paper & ink kit.
+const ICONS = {
+  plus: L.Plus,
+  x: L.X,
+  check: L.Check,
+  alert: L.TriangleAlert,
+  clock: L.Clock,
+  send: L.Send,
+  file: L.FileText,
+  fileCheck: L.FileCheck2,
+  search: L.Search,
+  upload: L.Upload,
+  download: L.Download,
+  chevronRight: L.ChevronRight,
+  chevronLeft: L.ChevronLeft,
+  chevronDown: L.ChevronDown,
+  menu: L.Menu,
+  user: L.User,
+  profile: L.CircleUserRound,
+  logout: L.LogOut,
+  settings: L.Settings,
+  chart: L.ChartColumn,
+  list: L.List,
+  listChecks: L.ListChecks,
+  star: L.Star,
+  bell: L.Bell,
+  tag: L.Tags,
+  archive: L.Archive,
+  shield: L.ShieldCheck,
+  scale: L.Scale,
+  activity: L.Activity,
+  link: L.Link2,
+  refresh: L.RefreshCw,
+  trash: L.Trash2,
+  edit: L.PenLine,
+  copy: L.Copy,
+  play: L.Play,
+  tasks: L.SquareCheckBig,
+  message: L.MessageSquare,
+  calendar: L.CalendarDays,
+  inbox: L.Inbox,
+  users: L.Users,
+  sun: L.Sun,
+  folder: L.Folder,
+  info: L.Info,
+  telegram: L.Send,
+  signature: L.Signature,
+  eye: L.Eye,
+  ask: L.MessageCircleQuestion,
+  medal: L.Medal,
+} satisfies Record<string, L.LucideIcon>;
+export type IconName = keyof typeof ICONS;
 
-export function Icon({ name, size = 18, className }: { name: keyof typeof PATHS | string; size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d={PATHS[name] ?? PATHS.alert} />
-    </svg>
-  );
+export function Icon({ name, size = 18, className, strokeWidth = 1.75 }: { name: IconName | string; size?: number; className?: string; strokeWidth?: number }) {
+  const Svg = ICONS[name as IconName] ?? L.CircleAlert;
+  return <Svg size={size} strokeWidth={strokeWidth} absoluteStrokeWidth={false} aria-hidden="true" className={className} />;
 }
 
 // ---------------------------------------------------------------- buttons -----
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'accent';
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand text-white shadow-sheet hover:bg-brand-dark active:translate-y-px disabled:bg-brand/45 disabled:shadow-none',
-  secondary: 'bg-white text-ink border border-line shadow-sheet hover:border-ink-3 hover:bg-canvas active:translate-y-px disabled:opacity-50',
-  ghost: 'bg-transparent text-ink-2 hover:bg-ink/5 hover:text-ink disabled:opacity-50',
-  danger: 'bg-white text-bad border border-bad-line hover:bg-bad-soft disabled:opacity-50',
-  success: 'bg-ok text-white shadow-sheet hover:bg-ok-ink active:translate-y-px disabled:opacity-50',
+  primary: 'bg-brand text-white hover:bg-brand-dark active:translate-y-px disabled:bg-brand/45',
+  secondary: 'bg-paper text-ink border border-line-edge hover:border-line-control hover:bg-[#F7F7F5] active:translate-y-px disabled:opacity-50',
+  ghost: 'bg-transparent text-ink-2 hover:bg-ink/[0.06] hover:text-ink disabled:opacity-50',
+  danger: 'bg-paper text-bad border border-bad-line hover:bg-bad-soft disabled:opacity-50',
+  success: 'bg-ink text-white hover:bg-[#33332F] active:translate-y-px disabled:opacity-50',
   accent: 'bg-transparent text-brand border border-dashed border-brand-line hover:bg-brand-soft hover:border-brand disabled:opacity-50',
 };
 
@@ -80,13 +90,13 @@ export function Button({
       {...rest}
       disabled={rest.disabled || busy}
       className={cx(
-        'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-[background-color,border-color,color,transform] duration-150 ease-out disabled:cursor-not-allowed whitespace-nowrap',
-        size === 'sm' ? 'min-h-[34px] px-3 text-[13.5px]' : size === 'lg' ? 'min-h-[48px] px-5 text-[15px]' : 'min-h-[40px] px-4 text-[14.5px]',
+        'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-[background-color,border-color,color,transform] duration-150 ease-out disabled:cursor-not-allowed whitespace-nowrap',
+        size === 'sm' ? 'min-h-[32px] px-3.5 text-[13px]' : size === 'lg' ? 'min-h-[46px] px-6 text-[15px]' : 'min-h-[38px] px-4 text-[14px]',
         VARIANTS[variant],
         className,
       )}
     >
-      {busy ? <Spinner size={16} /> : icon ? <Icon name={icon} size={size === 'sm' ? 15 : 17} /> : null}
+      {busy ? <Spinner size={16} /> : icon ? <Icon name={icon} size={size === 'sm' ? 15 : 16} /> : null}
       {children}
     </button>
   );
@@ -94,14 +104,14 @@ export function Button({
 
 export function IconButton({ icon, label, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon: string; label: string }) {
   return (
-    <button type="button" aria-label={label} title={label} {...rest} className={cx('inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-3 transition-colors duration-150 hover:bg-ink/5 hover:text-ink disabled:opacity-40', className)}>
+    <button type="button" aria-label={label} title={label} {...rest} className={cx('inline-flex h-9 w-9 items-center justify-center rounded-full text-ink-2 transition-colors duration-150 hover:bg-ink/[0.06] hover:text-ink disabled:opacity-40', className)}>
       <Icon name={icon} size={17} />
     </button>
   );
 }
 
 // ----------------------------------------------------------------- inputs -----
-const fieldCore = 'rounded-lg border border-line bg-white px-3 text-[15px] text-ink shadow-[inset_0_1px_0_rgba(27,26,51,0.03)] transition-[border-color,box-shadow] duration-150 placeholder:text-ink-3 hover:border-[#CFCDC4] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:bg-canvas disabled:text-ink-2 disabled:shadow-none';
+const fieldCore = 'rounded-xl border border-line-control bg-paper px-3 text-[14.5px] text-ink transition-[border-color,box-shadow] duration-150 placeholder:text-ink-3 hover:border-ink-2 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:border-line disabled:bg-canvas disabled:text-ink-2';
 /** Full width unless the caller sets its own width (Tailwind would otherwise let w-full win). */
 const fieldBase = (className?: string) => cx(/(^|\s)w-/.test(className ?? '') ? '' : 'w-full', fieldCore);
 
@@ -178,7 +188,7 @@ export function Field({ label, hint, error, children, className }: { label: Reac
   const id = useId();
   return (
     <div className={cx('flex flex-col gap-1.5', className)}>
-      <label htmlFor={id} className="text-[13px] font-medium text-ink-2">
+      <label htmlFor={id} className="text-[13px] font-medium text-ink">
         {label}
       </label>
       {children(id)}
@@ -213,7 +223,7 @@ export function InfoTip({ children, label = 'Giải thích', align = 'left' }: {
         <Icon name="info" size={16} />
       </button>
       {open && (
-        <span id={id} role="note" className={cx('absolute top-7 z-40 w-[min(340px,80vw)] rounded-lg border border-line bg-white p-3 text-left text-[13.5px] font-normal leading-relaxed tracking-normal text-ink-2 shadow-lift', align === 'right' ? 'right-0' : 'left-0')}>
+        <span id={id} role="note" className={cx('absolute top-7 z-40 w-[min(340px,80vw)] rounded-xl border border-line-edge bg-paper p-3 text-left text-[13.5px] font-normal leading-relaxed tracking-normal text-ink-2 shadow-lift', align === 'right' ? 'right-0' : 'left-0')}>
           {children}
         </span>
       )}
@@ -223,7 +233,7 @@ export function InfoTip({ children, label = 'Giải thích', align = 'left' }: {
 
 export function Card({ children, className, title, actions, subtitle, info }: { children: ReactNode; className?: string; title?: ReactNode; subtitle?: ReactNode; actions?: ReactNode; info?: ReactNode }) {
   return (
-    <section className={cx('border-t border-ink pt-3.5', className)}>
+    <section className={cx('rounded-2xl border border-line bg-paper p-5', className)}>
       {(title || actions) && (
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -245,13 +255,13 @@ export function Card({ children, className, title, actions, subtitle, info }: { 
 
 export function PageHeader({ title, subtitle, actions, info }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; info?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="flex items-center gap-1.5 text-[26px] font-bold leading-tight tracking-[-0.02em] text-ink">
+        <h1 className="flex items-center gap-1.5 text-[32px] font-semibold leading-[38px] tracking-[-0.01em] text-ink">
           {title}
           {info && <InfoTip label={`Giải thích: ${typeof title === 'string' ? title : 'trang này'}`}>{info}</InfoTip>}
         </h1>
-        {subtitle && <p className="mt-1 max-w-[75ch] text-[14.5px] text-ink-3">{subtitle}</p>}
+        {subtitle && <p className="mt-1 max-w-[75ch] text-[15px] text-ink-2">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
@@ -260,31 +270,31 @@ export function PageHeader({ title, subtitle, actions, info }: { title: ReactNod
 
 type Tone = 'neutral' | 'brand' | 'ok' | 'warn' | 'bad' | 'accent' | 'solidOk' | 'solidBad';
 const TONES: Record<Tone, string> = {
-  neutral: 'bg-ink/[0.06] text-ink-2',
+  neutral: 'bg-line-soft text-ink-2',
   brand: 'bg-brand-soft text-brand',
   ok: 'bg-ok-soft text-ok-ink',
   warn: 'bg-warn-soft text-warn',
   bad: 'bg-bad-soft text-bad',
   accent: 'bg-accent-soft text-accent',
-  solidOk: 'bg-ok text-white',
+  solidOk: 'bg-ink text-white',
   solidBad: 'bg-bad text-white',
 };
 
 export function Badge({ tone = 'neutral', children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
-  return <span className={cx('inline-flex items-center gap-1 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[12px] font-semibold leading-5', TONES[tone], className)}>{children}</span>;
+  return <span className={cx('inline-flex items-center gap-1 whitespace-nowrap rounded-[6px] font-sans px-2 py-[1px] text-[12px] font-medium leading-5', TONES[tone], className)}>{children}</span>;
 }
 
 const BANNER: Record<'ok' | 'warn' | 'bad' | 'info', [string, string]> = {
   ok: ['bg-ok-soft text-ok-ink', 'check'],
   warn: ['bg-warn-soft text-warn', 'alert'],
   bad: ['bg-bad-soft text-bad', 'alert'],
-  info: ['bg-brand-soft text-brand-dark', 'alert'],
+  info: ['bg-brand-soft text-ink', 'info'],
 };
 
 export function Banner({ tone = 'info', title, children, actions, className }: { tone?: 'ok' | 'warn' | 'bad' | 'info'; title?: ReactNode; children?: ReactNode; actions?: ReactNode; className?: string }) {
   const [cls, icon] = BANNER[tone];
   return (
-    <div role={tone === 'bad' ? 'alert' : 'status'} className={cx('flex flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-3', cls, className)}>
+    <div role={tone === 'bad' ? 'alert' : 'status'} className={cx('flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3', cls, className)}>
       <div className="flex min-w-0 flex-1 basis-72 items-start gap-2.5">
         <Icon name={icon} size={18} className="mt-[3px] shrink-0" />
         <div className="min-w-0">
@@ -316,7 +326,7 @@ export function Loading({ label = 'Đang tải…' }: { label?: string }) {
 
 export function EmptyState({ title, children, action }: { title: ReactNode; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[#D3D1C8] bg-white/50 px-6 py-10 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line-control/60 bg-paper/60 px-6 py-10 text-center">
       <div className="font-semibold text-ink">{title}</div>
       {children && <div className="max-w-md text-sm text-ink-3">{children}</div>}
       {action}
@@ -356,14 +366,14 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   }, [open]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-rail/40 p-4 pt-[8vh] backdrop-blur-[1px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" tabIndex={-1} className={cx('w-full outline-none rounded-2xl border border-line bg-white shadow-lift', wide === 'xl' ? 'max-w-6xl' : wide ? 'max-w-3xl' : 'max-w-lg')}>
-        <div className="flex items-center justify-between gap-3 border-b border-line-soft px-5 py-4">
-          <h2 className="text-[17px] font-semibold text-ink">{title}</h2>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/30 p-4 pt-[8vh]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={ref} role="dialog" aria-modal="true" tabIndex={-1} className={cx('w-full outline-none rounded-2xl bg-paper shadow-lift', wide === 'xl' ? 'max-w-6xl' : wide ? 'max-w-3xl' : 'max-w-lg')}>
+        <div className="flex items-center justify-between gap-3 px-6 pb-2 pt-5">
+          <h2 className="text-[18px] font-semibold text-ink">{title}</h2>
           <IconButton icon="x" label="Đóng" onClick={onClose} />
         </div>
-        <div ref={bodyRef} className={cx('overflow-y-auto px-5 py-4', wide === 'xl' ? 'max-h-[76vh]' : 'max-h-[70vh]')}>{children}</div>
-        {footer && <div data-modal-footer className="flex flex-wrap justify-end gap-2 border-t border-line-soft px-5 py-3">{footer}</div>}
+        <div ref={bodyRef} className={cx('overflow-y-auto px-6 py-3', wide === 'xl' ? 'max-h-[76vh]' : 'max-h-[70vh]')}>{children}</div>
+        {footer && <div data-modal-footer className="flex flex-wrap justify-end gap-2 px-6 pb-5 pt-3">{footer}</div>}
       </div>
     </div>
   );
@@ -389,7 +399,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex max-w-sm flex-col gap-2" aria-live="polite">
         {items.map((t) => (
-          <div key={t.id} role="status" className={cx('pointer-events-auto rounded-xl px-4 py-3 text-sm font-medium shadow-lift', t.tone === 'bad' ? 'bg-bad text-white' : t.tone === 'info' ? 'bg-brand text-white' : 'bg-rail text-white')}>
+          <div key={t.id} role="status" className={cx('pointer-events-auto rounded-xl px-4 py-3 text-sm font-medium shadow-lift', t.tone === 'bad' ? 'bg-bad text-white' : t.tone === 'info' ? 'bg-brand text-white' : 'bg-ink text-white')}>
             {t.text}
           </div>
         ))}
@@ -424,7 +434,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
 
 export function Stat({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: 'ok' | 'bad' | null }) {
   return (
-    <div className="border-t-2 border-ink pt-2.5">
+    <div className="rounded-2xl border border-line bg-paper px-4 py-3.5">
       <div className="text-[13px] font-medium text-ink-2">{label}</div>
       <div className={cx('mt-0.5 text-[30px] font-semibold leading-tight tracking-[-0.02em]', tone === 'ok' ? 'text-ok-ink' : tone === 'bad' ? 'text-bad' : 'text-ink')}>{value}</div>
       {sub && <div className="mt-1 text-[13px] text-ink-3">{sub}</div>}

@@ -671,7 +671,7 @@ export function QuoteBuilderPage() {
           <Link to="/quotes" className="-ml-2 flex h-10 w-10 items-center justify-center rounded-lg text-ink-3 transition-colors hover:bg-ink/5 hover:text-ink" aria-label="Về danh sách báo giá">
             <Icon name="chevronRight" className="rotate-180" />
           </Link>
-          <h1 className="flex flex-wrap items-center gap-2.5 text-[26px] font-bold leading-tight tracking-[-0.02em] text-ink">
+          <h1 className="flex flex-wrap items-center gap-2.5 text-[30px] font-semibold leading-tight tracking-[-0.01em] text-ink">
             {quote.code} <StatusBadge status={quote.status} />
             {quote.source === 'import' && <Badge tone="neutral">Lịch sử (import)</Badge>}
           </h1>
@@ -898,7 +898,7 @@ export function QuoteBuilderPage() {
                               value={l.qty}
                               disabled={!editable}
                               onValue={(v) => setLine(l.key, { qty: v })}
-                              className="h-10 w-full rounded-lg border border-line bg-white text-center font-semibold focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas"
+                              className="h-10 w-full rounded-xl border border-line-control bg-paper text-center font-semibold focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:border-transparent disabled:bg-canvas"
                             />
                           </td>
                           <td data-cell="price" className="border-b border-line-soft px-3 py-2.5">
@@ -910,7 +910,7 @@ export function QuoteBuilderPage() {
                                 value={fmtVnd(l.unit_price, false)}
                                 disabled={!editable}
                                 onChange={(e) => setLine(l.key, { unit_price: parseMoney(e.target.value) })}
-                                className={`h-10 w-full rounded-lg border px-2.5 sm:w-36 text-right tabular-nums focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas ${flagged ? 'border-accent-line bg-accent-soft/40 focus:border-accent' : 'border-line bg-white focus:border-brand'}`}
+                                className={`h-10 w-full rounded-xl border px-2.5 sm:w-36 text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-brand disabled:border-transparent disabled:bg-canvas ${flagged ? 'border-accent-line bg-accent-soft/40 focus:border-accent' : 'border-line-control bg-paper focus:border-brand'}`}
                               />
                               <BandRuler unitPrice={l.unit_price} libraryPrice={lp} kind={l.kind} flagged={flagged} />
                             </div>
@@ -1002,7 +1002,7 @@ export function QuoteBuilderPage() {
                     value={header.discount_pct}
                     disabled={!editable}
                     onValue={(v) => setH({ discount_pct: v })}
-                    className="h-10 w-20 rounded-lg border border-line bg-white text-center font-semibold focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas"
+                    className="h-10 w-20 rounded-xl border border-line-control bg-paper text-center font-semibold focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:border-transparent disabled:bg-canvas"
                   />
                   <span className="min-w-[120px] text-right tabular-nums">− {fmtVnd(totals.discountAmount)}</span>
                 </div>
@@ -1020,7 +1020,7 @@ export function QuoteBuilderPage() {
                     value={header.vat_pct}
                     disabled={!editable}
                     onValue={(v) => setH({ vat_pct: v })}
-                    className="h-10 w-20 rounded-lg border border-line bg-white text-center font-semibold focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas"
+                    className="h-10 w-20 rounded-xl border border-line-control bg-paper text-center font-semibold focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:border-transparent disabled:bg-canvas"
                   />
                   <span className="min-w-[120px] text-right tabular-nums">{fmtVnd(totals.vatAmount)}</span>
                 </div>

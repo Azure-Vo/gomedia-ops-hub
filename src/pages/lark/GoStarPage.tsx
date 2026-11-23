@@ -26,6 +26,7 @@ import {
   monthLabel,
   rankGoStar,
 } from '@/domain';
+import { Star } from 'lucide-react';
 import { Badge, Banner, Button, Card, EmptyState, ErrorBox, Field, Input, Loading, Modal, PageHeader, Select, Textarea, cx, useAsync, useToast } from '@/components/ui';
 import { Link } from 'react-router-dom';
 import { fmtVnDateTime } from '@/lib/format';
@@ -63,14 +64,8 @@ const STAR_SHORT: Record<GoStarCriterion, string> = {
   teamwork: 'Teamwork',
 };
 
-const STAR_PATH = 'M12 2.8l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17.3l-5.7 3 1.1-6.3-4.6-4.5 6.4-.9z';
-
 function StarMark({ on, px = 16 }: { on: boolean; px?: number }) {
-  return (
-    <svg width={px} height={px} viewBox="0 0 24 24" aria-hidden="true" className={on ? 'text-[#E39A12]' : 'text-ink/15'}>
-      <path d={STAR_PATH} fill="currentColor" />
-    </svg>
-  );
+  return <Star size={px} strokeWidth={1.5} aria-hidden="true" className={on ? 'fill-current text-[#E39A12]' : 'fill-current text-ink/15'} />;
 }
 
 function Stars({ n, px = 15 }: { n: number; px?: number }) {
@@ -86,9 +81,7 @@ function Stars({ n, px = 15 }: { n: number; px?: number }) {
 /** A star the data suggests but nobody has scored yet: outlined, dashed when unlikely. */
 function StarHint({ likely, px = 16 }: { likely: boolean; px?: number }) {
   return (
-    <svg width={px} height={px} viewBox="0 0 24 24" aria-hidden="true" className={likely ? 'text-[#E39A12]' : 'text-ink/30'}>
-      <path d={STAR_PATH} fill={likely ? 'rgba(227,154,18,0.18)' : 'none'} stroke="currentColor" strokeWidth={1.6} strokeDasharray={likely ? undefined : '2.5 2'} />
-    </svg>
+    <Star size={px} strokeWidth={1.6} aria-hidden="true" fill={likely ? 'rgba(227,154,18,0.18)' : 'none'} strokeDasharray={likely ? undefined : '2.5 2'} className={likely ? 'text-[#E39A12]' : 'text-ink/30'} />
   );
 }
 
@@ -293,7 +286,7 @@ export function GoStarPage() {
         subtitle={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>Mỗi tiêu chí đạt = 1 sao</span>
-            <span className="text-ink-2">🥇 1.000.000đ · 🥈 500.000đ · 🥉 200.000đ</span>
+            <span className="text-ink-2">Thưởng: hạng 1 · 1.000.000đ, hạng 2 · 500.000đ, hạng 3 · 200.000đ</span>
           </span>
         }
         actions={
@@ -729,7 +722,7 @@ function PersonFacts({ state, name, month, row }: { state: { data: PersonMonthSt
         <div className="flex gap-1.5">
           {GOSTAR_CRITERIA.filter((c) => c.source === 'lark').map((c) => (
             <Badge key={c.key} tone={row.stars[c.key] ? 'ok' : 'neutral'}>
-              {row.stars[c.key] ? '★' : '☆'} {c.name}
+              <StarMark on={!!row.stars[c.key]} px={12} /> {c.name}
             </Badge>
           ))}
         </div>

@@ -150,15 +150,15 @@ function Invitations({ list, onAnswered }: { list: InvitationRow[]; onAnswered: 
 
 function Group({ title, tasks, today, onOpen, empty, tone }: { title: string; tasks: Task[]; today: string; onOpen: (t: Task, d?: 'submit' | 'progress') => void; empty?: ReactNode; tone?: 'bad' | 'warn' }) {
   return (
-    <section className="border-t border-ink pt-3">
-      <h2 className="mb-2 flex items-center gap-2 text-[17px] font-semibold text-ink">
+    <section>
+      <h2 className="mb-3 flex items-center gap-2 text-[17px] font-semibold text-ink">
         {title}
         <Badge tone={tasks.length ? (tone ?? 'neutral') : 'neutral'}>{tasks.length}</Badge>
       </h2>
       {!tasks.length ? (
         <p className="text-[14px] text-ink-3">{empty}</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-line-soft">
+        <ul className="flex flex-col divide-y divide-line rounded-2xl border border-line bg-paper px-4">
           {tasks.map((t) => (
             <li key={t.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
               <HealthDot health={t.health} reason={t.reason} />

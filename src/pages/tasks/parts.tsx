@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ALERT_LABEL, AlertKind, checkpointTimes, TASK_STATUS_LABEL, TaskStatus, validateTaskDraft } from '@/domain';
-import { Badge, Banner, Button, Field, Input, Modal, Select, Textarea, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Field, Icon, Input, Modal, Select, Textarea, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { fmtVnLong, fmtVnShort, fromLocalInput, toLocalInput } from '@/lib/format';
 import { useSettings } from '@/lib/settings';
@@ -42,7 +42,7 @@ export function MilestonePills({ milestones, checkpoints, now = Date.now() }: { 
             title={m?.label}
             className={`min-w-0 flex-1 truncate rounded-md px-1.5 py-1 text-[11.5px] font-semibold leading-tight ${done ? 'bg-ok text-white' : due ? 'bg-warn-soft text-warn' : 'bg-canvas text-ink-3'}`}
           >
-            {done ? '✓ ' : ''}
+            {done ? <Icon name="check" size={12} className="mr-0.5 inline align-[-1px]" /> : null}
             {m?.label ?? `Mốc ${i}`}
           </div>
         );

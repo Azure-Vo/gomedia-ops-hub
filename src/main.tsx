@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { ToastProvider } from './components/ui';
 import { SessionProvider } from './lib/session';
+import '@fontsource/newsreader/500.css';
+import '@fontsource/newsreader/600.css';
 import '@fontsource/archivo/400.css';
 import '@fontsource/archivo/500.css';
 import '@fontsource/archivo/600.css';

@@ -79,7 +79,7 @@ export function LoginPage() {
           <span className="text-[15px] text-rail-text">Go Media</span>
         </div>
         <div className="max-w-sm">
-          <p className="text-[44px] font-semibold leading-[1.05] tracking-[-0.03em]">Ops Hub</p>
+          <p className="font-display text-[52px] font-semibold leading-[1.05] tracking-[-0.01em]">Ops Hub</p>
           <dl className="mt-10 flex flex-col border-t border-white/15 text-[14.5px]">
             <div className="flex gap-4 border-b border-white/15 py-3.5">
               <dt className="w-8 shrink-0 font-semibold text-white">S2</dt>

@@ -155,7 +155,7 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
               aria-expanded="true"
               aria-controls={listId}
               aria-activedescendant={rows[active] ? `lp-${rows[active].id}` : undefined}
-              className="min-h-[44px] w-full rounded-lg border border-line bg-white pl-10 pr-10 text-[15px] text-ink placeholder:text-ink-3 focus:border-brand focus:outline-none"
+              className="min-h-[44px] w-full rounded-xl border border-line-control bg-paper pl-10 pr-10 text-[15px] text-ink placeholder:text-ink-3 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
             />
             {query && (
               <button type="button" aria-label="Xoá ô tìm" onClick={() => { setQuery(''); inputRef.current?.focus(); }} className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-ink-3 hover:bg-canvas hover:text-ink">
@@ -163,7 +163,7 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
               </button>
             )}
           </div>
-          <button type="button" onClick={onClose} className="min-h-[44px] rounded-lg bg-brand px-4 text-[15px] font-semibold text-white hover:bg-brand-dark">
+          <button type="button" onClick={onClose} className="min-h-[44px] rounded-full bg-brand px-5 text-[15px] font-semibold text-white hover:bg-brand-dark">
             Xong
           </button>
         </div>

@@ -207,7 +207,7 @@ export function CalendarPage() {
   );
   const chipCheckin = (c: { task: Task; pct: number }) => (
     <button key={`${c.task.id}-${c.pct}`} type="button" onClick={() => open(c.task, 'progress')} className="flex w-full items-center gap-1 truncate rounded-[5px] border border-dashed border-brand-line px-1.5 py-[2px] text-left text-[11.5px] text-brand hover:bg-brand-soft">
-      📍 Hỏi tiến độ {c.task.code.split('-').pop()}
+      <Icon name="ask" size={12} className="shrink-0" /> Hỏi tiến độ {c.task.code.split('-').pop()}
     </button>
   );
 
@@ -262,11 +262,11 @@ export function CalendarPage() {
       {/* header: ‹ period › on the left; Hôm nay sits with the view switch, away from the arrows */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1">
-          <IconButton icon="chevronRight" label={view === 'month' ? 'Tháng trước' : 'Tuần trước'} className="rotate-180 rounded-full bg-white shadow-sheet" onClick={() => step(-1)} />
-          <h1 aria-live="polite" className="min-w-[200px] px-2 text-center text-[26px] font-bold leading-none tracking-[-0.02em] text-ink sm:min-w-[240px] sm:text-[30px]">
+          <IconButton icon="chevronRight" label={view === 'month' ? 'Tháng trước' : 'Tuần trước'} className="rotate-180 rounded-full border border-line-edge bg-paper" onClick={() => step(-1)} />
+          <h1 aria-live="polite" className="min-w-[200px] px-2 text-center text-[26px] font-semibold leading-none tracking-[-0.01em] text-ink sm:min-w-[240px] sm:text-[30px]">
             {title}
           </h1>
-          <IconButton icon="chevronRight" label={view === 'month' ? 'Tháng sau' : 'Tuần sau'} className="rounded-full bg-white shadow-sheet" onClick={() => step(1)} />
+          <IconButton icon="chevronRight" label={view === 'month' ? 'Tháng sau' : 'Tuần sau'} className="rounded-full border border-line-edge bg-paper" onClick={() => step(1)} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm" icon="calendar" disabled={showsToday} onClick={() => setAnchor(null)} title={`Về ${view === 'month' ? 'tháng' : 'tuần'} có hôm nay (${fmtDueDate(today)})`}>

@@ -68,7 +68,7 @@ export function ProjectsPage() {
     return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'vi'));
   };
   const list = (rows: Project[], readOnly: boolean) => (
-    <ul className="flex flex-col">
+    <ul className="flex flex-col rounded-2xl border border-line bg-paper px-2">
       {rows.map((p) => (
         <ProjectRowItem key={p.id} p={p} meId={me.id} showMine={staffView} isPm={ownedByMe(p)} readOnly={readOnly} pmLabel={pmName(p)} />
       ))}

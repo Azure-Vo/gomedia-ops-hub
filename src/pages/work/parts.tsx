@@ -382,16 +382,18 @@ export function TaskDrawer({ task, people, onClose, onChanged, initialPanel = nu
                 </li>
               ))}
               {hist.data.extensions.map((x) => (
-                <li key={x.id} className="text-[13.5px] text-ink-2">
-                  📅 {fmtAt(x.created_at)} · Gia hạn {fmtDueDate(x.from_date)} → {fmtDueDate(x.to_date)} · {EXTEND_REASON_LABEL[x.reason]}
-                  {x.created_by && ` · ${nameOf(x.created_by)}`}
+                <li key={x.id} className="flex gap-1.5 text-[13.5px] text-ink-2">
+                  <Icon name="calendar" size={15} className="mt-[3px] shrink-0 text-ink-3" />
+                  <span>{fmtAt(x.created_at)} · Gia hạn {fmtDueDate(x.from_date)} → {fmtDueDate(x.to_date)} · {EXTEND_REASON_LABEL[x.reason]}
+                  {x.created_by && ` · ${nameOf(x.created_by)}`}</span>
                 </li>
               ))}
               {hist.data.checkins
                 .filter((c) => c.sent_at)
                 .map((c) => (
-                  <li key={c.pct} className="text-[13.5px] text-ink-2">
-                    📍 Hỏi tiến độ mốc {c.pct}% ({fmtDueDate(c.due_date)}): {c.answer ? `${PROGRESS_LABEL[c.answer]}${c.answer_reason ? ` · ${c.answer_reason}` : ''}` : 'chưa trả lời'}
+                  <li key={c.pct} className="flex gap-1.5 text-[13.5px] text-ink-2">
+                    <Icon name="ask" size={15} className="mt-[3px] shrink-0 text-ink-3" />
+                    <span>Hỏi tiến độ mốc {c.pct}% ({fmtDueDate(c.due_date)}): {c.answer ? `${PROGRESS_LABEL[c.answer]}${c.answer_reason ? ` · ${c.answer_reason}` : ''}` : 'chưa trả lời'}</span>
                   </li>
                 ))}
               {!hist.data.submissions.length && !hist.data.extensions.length && !hist.data.checkins.some((c) => c.sent_at) && <li className="text-ink-3">Chưa có lần nộp hay thay đổi nào.</li>}

@@ -99,7 +99,7 @@ export function ProfilePage() {
                   <div className="text-[13px] text-ink-3">Mã của bạn (hết hạn {status.expires_at ? fmtVnDateTime(status.expires_at, tz) : ''})</div>
                   <div className="mt-1 text-2xl font-semibold tracking-[0.2em] text-ink">{status.code}</div>
                   {link ? (
-                    <a href={link} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand px-4 font-semibold text-white">
+                    <a href={link} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-[38px] items-center gap-2 rounded-full bg-brand px-4 text-[14px] font-semibold text-white hover:bg-brand-dark">
                       Mở Telegram
                     </a>
                   ) : (

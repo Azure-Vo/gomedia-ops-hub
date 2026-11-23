@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fmtNum, validateCalendar, WorkCalendar, workingHoursBetween, at } from '@/domain';
-import { Banner, Button, Card, Field, Input, Loading, PageHeader, useToast } from '@/components/ui';
+import { Banner, Button, Card, Field, Icon, Input, Loading, PageHeader, useToast } from '@/components/ui';
 import { SettingsRow, useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
 
@@ -140,8 +140,8 @@ export function SettingsPage() {
               <div className="mb-1.5 text-[13px] font-semibold text-ink-2">Ngày nghỉ lễ (không tính giờ làm)</div>
               <div className="flex flex-wrap gap-2">
                 {s.holidays.map((h) => (
-                  <button key={h} type="button" onClick={() => setS({ ...s, holidays: s.holidays.filter((x) => x !== h) })} className="min-h-[40px] rounded-full bg-canvas px-3 text-sm font-semibold text-ink-2 hover:bg-bad-soft" title="Bấm để xoá">
-                    {String(h).split('-').reverse().join('/')} ✕
+                  <button key={h} type="button" onClick={() => setS({ ...s, holidays: s.holidays.filter((x) => x !== h) })} className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-line-edge bg-paper px-3 text-sm font-medium text-ink-2 hover:bg-bad-soft" title="Bấm để xoá">
+                    {String(h).split('-').reverse().join('/')} <Icon name="x" size={14} />
                   </button>
                 ))}
               </div>

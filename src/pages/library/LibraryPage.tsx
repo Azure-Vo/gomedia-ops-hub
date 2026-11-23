@@ -574,7 +574,7 @@ function TermsCard({ canEdit }: { canEdit: boolean }) {
                   aria-label="Nội dung điều khoản"
                   defaultValue={t.text}
                   onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== t.text && patch(t, { text: e.target.value.trim() })}
-                  className="min-h-[40px] min-w-[240px] flex-1 rounded-lg border border-transparent bg-transparent px-2 text-[14.5px] transition-colors duration-150 hover:border-line hover:bg-white focus:border-brand focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-brand/15"
+                  className="min-h-[40px] min-w-[240px] flex-1 rounded-lg border border-transparent bg-transparent px-2 text-[14.5px] transition-colors duration-150 hover:border-line hover:bg-white focus:border-brand focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand"
                 />
               ) : (
                 <span className="flex-1 text-[14.5px]">{t.text}</span>
@@ -586,7 +586,7 @@ function TermsCard({ canEdit }: { canEdit: boolean }) {
                   defaultValue={t.choice_group ?? ''}
                   placeholder="Nhóm chọn 1"
                   onBlur={(e) => (e.target.value.trim() || null) !== (t.choice_group ?? null) && patch(t, { choice_group: e.target.value.trim() || null })}
-                  className="min-h-[36px] w-44 rounded-lg border border-line bg-white px-2 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15"
+                  className="min-h-[36px] w-44 rounded-xl border border-line-control bg-paper px-2 text-[13px] focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
                 />
               ) : (
                 t.choice_group && <span className="rounded bg-ink/[0.06] px-1.5 text-[12px] text-ink-2">{t.choice_group}</span>
