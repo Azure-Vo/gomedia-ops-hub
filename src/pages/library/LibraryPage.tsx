@@ -555,7 +555,12 @@ function TermsCard({ canEdit }: { canEdit: boolean }) {
   };
 
   return (
-    <Card className="mt-4" title="Điều khoản mẫu trên báo giá" subtitle="Mục “Mặc định” được chọn sẵn ở báo giá mới.">
+    <Card className="mt-4" title="Điều khoản mẫu trên báo giá" subtitle="Mục “Mặc định” được chọn sẵn ở báo giá mới." info="Điều khoản cùng “Nhóm chọn 1” loại trừ nhau, VD Hình thức thanh toán: báo giá chỉ in được 1 cách thanh toán.">
+      <datalist id="term-groups">
+        {[...new Set(terms.map((t) => t.choice_group).filter(Boolean))].map((g) => (
+          <option key={g!} value={g!} />
+        ))}
+      </datalist>
       {loading ? (
         <Loading />
       ) : error ? (
@@ -574,8 +579,33 @@ function TermsCard({ canEdit }: { canEdit: boolean }) {
               ) : (
                 <span className="flex-1 text-[14.5px]">{t.text}</span>
               )}
+              {canEdit ? (
+                <input
+                  aria-label="Nhóm chỉ chọn 1"
+                  list="term-groups"
+                  defaultValue={t.choice_group ?? ''}
+                  placeholder="Nhóm chọn 1"
+                  onBlur={(e) => (e.target.value.trim() || null) !== (t.choice_group ?? null) && patch(t, { choice_group: e.target.value.trim() || null })}
+                  className="min-h-[36px] w-44 rounded-lg border border-line bg-white px-2 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15"
+                />
+              ) : (
+                t.choice_group && <span className="rounded bg-ink/[0.06] px-1.5 text-[12px] text-ink-2">{t.choice_group}</span>
+              )}
               <label className="flex items-center gap-1.5 text-[13px] text-ink-2">
-                <input type="checkbox" className="h-4 w-4" checked={t.default_on} disabled={!canEdit || busy || !t.active} onChange={(e) => patch(t, { default_on: e.target.checked })} /> Mặc định
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={t.default_on}
+                  disabled={!canEdit || busy || !t.active}
+                  onChange={(e) =>
+                    run(async () => {
+                      // One default per choice group.
+                      if (e.target.checked && t.choice_group) for (const o of terms.filter((x) => x.id !== t.id && x.default_on && x.choice_group === t.choice_group)) check(await supabase.from('quote_terms').update({ default_on: false }).eq('id', o.id));
+                      check(await supabase.from('quote_terms').update({ default_on: e.target.checked }).eq('id', t.id));
+                    })
+                  }
+                />{' '}
+                Mặc định
               </label>
               {canEdit && (
                 <div className="flex items-center gap-1">

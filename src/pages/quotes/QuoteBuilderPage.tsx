@@ -1,6 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  termConflicts,
+  termConflictText,
+  toggleTermIn,
   QUOTE_KIND_LABEL,
   QuoteKind,
   ANCHOR_LABEL,
@@ -372,6 +375,7 @@ export function QuoteBuilderPage() {
   const problems = [
     ...validateQuote({ client: header.client, requestedAt: header.requested_at, now: Date.now(), lines: lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price })), discountPct: header.discount_pct, vatPct: header.vat_pct }),
     ...(missing.length ? [`Ghi lý do cho đơn giá khác thư viện ở dòng ${missing.map((i) => i + 1).join(', ')}.`] : []),
+    ...termConflictText(termConflicts(header.terms, termLib)),
   ];
   const lastDecision = approvals[0];
   const accountName = personName(people, quote.created_by);
@@ -458,9 +462,8 @@ export function QuoteBuilderPage() {
   // --------------------------------------------------------------- terms ----
   function toggleTerm(text: string, on: boolean) {
     if (!header) return;
-    const chosen = new Set(header.terms);
-    if (on) chosen.add(text);
-    else chosen.delete(text);
+    // A term in a choice group (e.g. the payment schedule) replaces the other one of its group.
+    const chosen = new Set(toggleTermIn(header.terms, text, on, termLib));
     // Library terms keep the PM's order; custom terms follow in the order they were added.
     const lib = termLib.filter((t) => chosen.has(t.text)).map((t) => t.text);
     const custom = header.terms.filter((t) => chosen.has(t) && !lib.includes(t));
@@ -643,6 +646,7 @@ export function QuoteBuilderPage() {
   const company = companyFromSettings(settings);
   const libraryTerms = termLib.filter((t) => t.active || header.terms.includes(t.text));
   const customTerms = header.terms.filter((t) => !termLib.some((x) => x.text === t));
+  const termGroups = [...libraryTerms.filter((t) => t.choice_group?.trim()).reduce((m, t) => m.set(t.choice_group!.trim(), [...(m.get(t.choice_group!.trim()) ?? []), t]), new Map<string, QuoteTerm[]>())];
 
   return (
     <ReviewProvider
@@ -1042,15 +1046,40 @@ export function QuoteBuilderPage() {
               <CommentToggle target={{ anchor: 'terms' }} label={ANCHOR_LABEL.terms} />
             </div>
             <p className="mt-0.5 text-[13px] text-ink-3">Chọn điều khoản in trên báo giá.</p>
+            {termGroups.map(([g, ts]) => (
+              <fieldset key={g} className="mt-3 rounded-lg border border-line-soft px-3 pb-2 pt-1">
+                <legend className="px-1 text-[13px] font-semibold text-ink-2">{g} · chọn 1</legend>
+                <ul className="flex flex-col gap-1.5">
+                  {ts.map((t) => (
+                    <li key={t.id}>
+                      <label className="flex items-start gap-2.5 text-[14.5px]">
+                        <input
+                          type="radio"
+                          name={`term-${g}`}
+                          className="mt-1 h-4 w-4"
+                          checked={header.terms.includes(t.text)}
+                          disabled={!editable}
+                          onChange={() => toggleTerm(t.text, true)}
+                          onClick={() => header.terms.includes(t.text) && toggleTerm(t.text, false)}
+                        />
+                        <span>{t.text}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </fieldset>
+            ))}
             <ul className="mt-3 flex flex-col gap-1.5">
-              {libraryTerms.map((t) => (
-                <li key={t.id}>
-                  <label className="flex items-start gap-2.5 text-[14.5px]">
-                    <input type="checkbox" className="mt-1 h-4 w-4" checked={header.terms.includes(t.text)} disabled={!editable} onChange={(e) => toggleTerm(t.text, e.target.checked)} />
-                    <span>{t.text}</span>
-                  </label>
-                </li>
-              ))}
+              {libraryTerms
+                .filter((t) => !t.choice_group?.trim())
+                .map((t) => (
+                  <li key={t.id}>
+                    <label className="flex items-start gap-2.5 text-[14.5px]">
+                      <input type="checkbox" className="mt-1 h-4 w-4" checked={header.terms.includes(t.text)} disabled={!editable} onChange={(e) => toggleTerm(t.text, e.target.checked)} />
+                      <span>{t.text}</span>
+                    </label>
+                  </li>
+                ))}
               {customTerms.map((t) => (
                 <li key={t} className="flex items-start gap-2.5 text-[14.5px]">
                   <input type="checkbox" className="mt-1 h-4 w-4" checked disabled={!editable} onChange={() => toggleTerm(t, false)} aria-label={`Bỏ điều khoản: ${t}`} />

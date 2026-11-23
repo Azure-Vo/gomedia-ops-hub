@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approverFor, needsSignature, nextQuoteStatus, outcomeErrors, quoteLinkErrors, winRate } from './quote';
+import { termConflicts, toggleTermIn, approverFor, needsSignature, nextQuoteStatus, outcomeErrors, quoteLinkErrors, winRate } from './quote';
 
 describe('1.7 · loại báo giá, CEO ký, kết quả khách', () => {
   it('quick in band goes out with the printed signature; everything else waits for the CEO', () => {
@@ -39,5 +39,18 @@ describe('1.7 · loại báo giá, CEO ký, kết quả khách', () => {
     expect(quoteLinkErrors({ ...q, linked: true }, { id: 'pm1', role: 'pm' })).toEqual(['Báo giá này đã thuộc một dự án.']);
     expect(quoteLinkErrors({ ...q, outcome: null }, { id: 'pm1', role: 'pm' })[0]).toMatch(/đã chốt/);
     expect(quoteLinkErrors(q, { id: 'acc', role: 'account' })[0]).toMatch(/Chỉ PM/);
+  });
+  it('keeps one term per choice group', () => {
+    const lib = [
+      { text: 'TT 60/40', choice_group: 'Hình thức thanh toán' },
+      { text: 'TT 50/30/20', choice_group: 'Hình thức thanh toán' },
+      { text: 'TT theo tháng', choice_group: ' Hình thức thanh toán ' },
+      { text: 'Hiệu lực 15 ngày', choice_group: null },
+    ];
+    expect(termConflicts(['TT 60/40', 'Hiệu lực 15 ngày'], lib)).toEqual([]);
+    expect(termConflicts(['TT 60/40', 'TT theo tháng', 'Riêng'], lib)).toEqual([{ group: 'Hình thức thanh toán', terms: ['TT 60/40', 'TT theo tháng'] }]);
+    expect(toggleTermIn(['TT 60/40', 'Hiệu lực 15 ngày'], 'TT 50/30/20', true, lib)).toEqual(['Hiệu lực 15 ngày', 'TT 50/30/20']);
+    expect(toggleTermIn(['TT 60/40', 'Hiệu lực 15 ngày'], 'TT 60/40', false, lib)).toEqual(['Hiệu lực 15 ngày']);
+    expect(toggleTermIn(['TT 60/40'], 'Riêng', true, lib)).toEqual(['TT 60/40', 'Riêng']);
   });
 });

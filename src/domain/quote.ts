@@ -174,6 +174,35 @@ export function nextQuoteStatus(status: QuoteStatus, event: QuoteEvent, band?: B
   }
 }
 
+// ------------------------------------------------------------- terms that exclude each other -----
+
+/**
+ * 1.7 · Terms in the same choice group exclude each other (e.g. "Hình thức thanh toán": 60/40, 50/30/20,
+ * monthly). At most one per group may be printed on a quote. Terms with no group are independent.
+ */
+export interface TermDef {
+  text: string;
+  choice_group: string | null;
+}
+export function termConflicts(selected: string[], lib: TermDef[]): { group: string; terms: string[] }[] {
+  const groupOf = new Map(lib.filter((t) => t.choice_group?.trim()).map((t) => [t.text, t.choice_group!.trim()]));
+  const byGroup = new Map<string, string[]>();
+  for (const text of selected) {
+    const g = groupOf.get(text);
+    if (g) byGroup.set(g, [...(byGroup.get(g) ?? []), text]);
+  }
+  return [...byGroup.entries()].filter(([, ts]) => ts.length > 1).map(([group, terms]) => ({ group, terms }));
+}
+export function termConflictText(c: { group: string; terms: string[] }[]): string[] {
+  return c.map((x) => `Điều khoản "${x.group}" chỉ chọn 1 (đang chọn ${x.terms.length}).`);
+}
+/** Ticking a term in a group unticks the others of that group (radio behaviour). */
+export function toggleTermIn(selected: string[], text: string, on: boolean, lib: TermDef[]): string[] {
+  const g = lib.find((t) => t.text === text)?.choice_group?.trim();
+  const rest = selected.filter((t) => t !== text && !(on && g && lib.find((x) => x.text === t)?.choice_group?.trim() === g));
+  return on ? [...rest, text] : rest;
+}
+
 // ------------------------------------------------------------------ client answer (1.7) -----
 
 export type QuoteOutcome = 'won' | 'lost';

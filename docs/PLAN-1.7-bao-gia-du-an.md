@@ -108,6 +108,9 @@ Account gửi báo giá ──► Khách trả lời
 - Danh sách báo giá thêm bộ lọc: Chờ phản hồi · Đã chốt · Không chốt.
 - Báo giá đã chốt hiện link sang dự án (khi có).
 
+- **Điều khoản loại trừ nhau** (Long, 23/11): điều khoản mẫu có "Nhóm chọn 1"; 3 điều khoản "Thanh toán…" thuộc nhóm **Hình thức thanh toán**. Trên báo giá nhóm này hiện dạng chọn 1; mỗi nhóm chỉ 1 điều khoản Mặc định; server chặn gửi duyệt/gửi khách nếu chọn 2.
+- Sửa lỗi 1.7.0: "Lỗi lưu / Bạn không có quyền" khi chọn Báo giá dự án (thiếu quyền ghi cột `kind`). Yêu cầu CEO ký gửi ngoài giờ làm thì xếp hàng gửi lại vào giờ làm.
+
 ### 4.2 Tóm tắt hôm nay + Inbox (PM)
 - Khối mới **"Báo giá đã chốt, chưa có dự án (n)"**, mỗi dòng: mã báo giá, loại, khách, Account, số ngày chờ. Nút **Tạo dự án**.
 

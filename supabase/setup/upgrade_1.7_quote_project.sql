@@ -120,4 +120,17 @@ grant select on public.project_quotes to authenticated;
 drop trigger if exists audit_row on public.project_quotes;
 create trigger audit_row after insert or update or delete on public.project_quotes for each row execute function public.audit_row();
 
+-- 1.7.0 fix (23/11): the Account sets the quote kind directly from the builder (column grant was missing),
+-- and terms in the same choice group exclude each other (one payment schedule per quote).
+grant insert (kind) on public.quotes to authenticated;
+grant update (kind) on public.quotes to authenticated;
+alter table public.quote_terms add column if not exists choice_group text;
+grant insert (choice_group) on public.quote_terms to authenticated;
+grant update (choice_group) on public.quote_terms to authenticated;
+update public.quote_terms set choice_group = 'Hình thức thanh toán' where choice_group is null and text ilike 'Thanh toán%';
+-- One default per group: keep the first one.
+update public.quote_terms t set default_on = false
+  where t.choice_group is not null and t.default_on
+    and exists (select 1 from public.quote_terms o where o.choice_group = t.choice_group and o.default_on and (o.position, o.id::text) < (t.position, t.id::text));
+
 commit;

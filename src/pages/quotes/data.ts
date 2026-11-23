@@ -21,6 +21,8 @@ export interface QuoteTerm {
   id: string;
   text: string;
   default_on: boolean;
+  /** Terms sharing a group exclude each other (1.7: "Hình thức thanh toán"). */
+  choice_group: string | null;
   position: number;
   active: boolean;
 }
@@ -124,7 +126,7 @@ export async function loadLibrary(includeRetired = false): Promise<LibraryItem[]
 }
 
 export async function loadTerms(includeRetired = false): Promise<QuoteTerm[]> {
-  let q = supabase.from('quote_terms').select('id, text, default_on, position, active').order('position').order('text');
+  let q = supabase.from('quote_terms').select('id, text, default_on, position, active, choice_group').order('position').order('text');
   if (!includeRetired) q = q.eq('active', true);
   return check(await q) as QuoteTerm[];
 }

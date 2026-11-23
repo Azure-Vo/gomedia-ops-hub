@@ -11,6 +11,8 @@ import {
   PublicBandReason,
   approveGate,
   approverFor,
+  termConflicts,
+  termConflictText,
   LOST_REASON_LABEL,
   OUTCOME_LABEL,
   outcomeErrors,
@@ -60,6 +62,7 @@ interface QuoteRow {
   kind: QuoteKind;
   source: 'app' | 'import';
   outcome: QuoteOutcome | null;
+  terms: string[] | null;
 }
 
 interface LineIn {
@@ -71,7 +74,7 @@ interface LineIn {
   kind?: LineKind;
 }
 
-const QUOTE_COLS = 'id, code, client, service_group, status, requested_at, discount_pct, vat_pct, created_by, approver, band_result, band_detail, total, kind, source, outcome';
+const QUOTE_COLS = 'id, code, client, service_group, status, requested_at, discount_pct, vat_pct, created_by, approver, band_result, band_detail, total, kind, source, outcome, terms';
 
 async function libraryMap(ctx: Ctx, ids: (string | null)[]): Promise<Map<string, LibRow>> {
   const wanted = [...new Set(ids.filter((x): x is string => !!x))];
@@ -126,6 +129,13 @@ async function loadLines(ctx: Ctx, quoteId: string): Promise<LineIn[]> {
 function own(user: Profile, q: QuoteRow) {
   requireRole(user, 'account');
   if (q.created_by !== user.id) throw new ApiError(403, 'not_owner', 'Đây không phải báo giá của bạn.');
+}
+
+/** 1.7 · One payment schedule (or one term of any choice group) per quote. */
+async function termGate(ctx: Ctx, q: QuoteRow) {
+  const lib = must(await ctx.db.from('quote_terms').select('text, choice_group'), 'load terms') as { text: string; choice_group: string | null }[];
+  const errs = termConflictText(termConflicts(q.terms ?? [], lib));
+  if (errs.length) throw new ApiError(400, 'term_conflict', errs.join(' '));
 }
 
 async function transition(ctx: Ctx, p: Record<string, unknown>) {
@@ -187,13 +197,18 @@ export async function notifyApproval(ctx: Ctx, quoteId: string): Promise<boolean
       .from('quotes')
       .update({ approval_notified_at: new Date(ctx.now()).toISOString() })
       .eq('id', quoteId)
-      .eq('status', 'pending')
+      .in('status', ['pending', 'signing'])
       .is('approval_notified_at', null)
       .select(QUOTE_COLS),
     'claim approval notice',
   ) as QuoteRow[];
   const q = claimed[0];
   if (!q || !q.approver) return false;
+  // 1.7: after approval the same notice slot is reused for the CEO's signing request (sent in working hours, or by the cron later).
+  if (q.status === 'signing') {
+    await ctx.notifier.sendToRoles(['ceo'], signRequestText({ code: q.code, client: q.client }), linkButton('Mở báo giá để ký', appLink(s, `/quotes/${q.id}`)));
+    return true;
+  }
   const account = (await ctx.db.from('profiles').select('full_name, email').eq('id', q.created_by).maybeSingle()).data as { full_name: string; email: string } | null;
   const text = approvalRequestText({
     code: q.code,
@@ -204,12 +219,13 @@ export async function notifyApproval(ctx: Ctx, quoteId: string): Promise<boolean
     reasons: q.band_detail?.reasons ?? [],
   });
   // The button opens the quote itself: the approver reads it, comments on the lines and decides there.
-  await ctx.notifier.sendToRoles([q.approver], text, linkButton('Mở báo giá để duyệt', appLink(s, `/quotes/${q.id}`)));
+  // A project quote goes to every PM (to comment) and the CEO (who decides).
+  await ctx.notifier.sendToRoles(q.kind === 'project' ? ['ceo', 'pm'] : [q.approver], text, linkButton(q.kind === 'project' ? 'Mở báo giá để góp ý' : 'Mở báo giá để duyệt', appLink(s, `/quotes/${q.id}`)));
   return true;
 }
 
 export async function deliverPendingApprovals(ctx: Ctx): Promise<number> {
-  const rows = must(await ctx.db.from('quotes').select('id').eq('status', 'pending').is('approval_notified_at', null).limit(50), 'pending approvals') as { id: string }[];
+  const rows = must(await ctx.db.from('quotes').select('id').in('status', ['pending', 'signing']).is('approval_notified_at', null).limit(50), 'pending approvals') as { id: string }[];
   let n = 0;
   for (const r of rows) if (await notifyApproval(ctx, r.id)) n++;
   return n;
@@ -218,6 +234,7 @@ export async function deliverPendingApprovals(ctx: Ctx): Promise<number> {
 export async function submitQuote(ctx: Ctx, user: Profile, quoteId: string) {
   const q = await loadQuote(ctx, quoteId);
   own(user, q);
+  await termGate(ctx, q);
   const { band, totals } = await readyLines(ctx, q);
   const t = nextQuoteStatus(q.status, 'submit', band.level, q.kind);
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
@@ -275,10 +292,14 @@ export async function decideQuote(ctx: Ctx, user: Profile, body: Record<string, 
     event_action: decision === 'approve' ? 'quote.approved' : 'quote.changes_requested',
     event_payload: { comment, open_comments: open },
   });
+  if (decision === 'approve') {
+    // Ask the CEO to sign now, or at the next working hour (deliverPendingApprovals).
+    must(await ctx.db.from('quotes').update({ approval_notified_at: null }).eq('id', q.id).eq('status', 'signing'), 'reset notice');
+    await notifyApproval(ctx, q.id);
+  }
   const s = await loadSettings(ctx.db);
   if (isWorkingTime(ctx.now(), calendarOf(s))) {
     await ctx.notifier.send(q.created_by, decisionText({ code: q.code, decision, approverRole: user.role, comment: comment || null }), linkButton('Mở báo giá', appLink(s, `/quotes/${q.id}`)));
-    if (decision === 'approve') await ctx.notifier.sendToRoles(['ceo'], signRequestText({ code: q.code, client: q.client }), linkButton('Mở báo giá để ký', appLink(s, `/quotes/${q.id}`)));
   }
   return { quote };
 }
@@ -339,6 +360,7 @@ export async function sendQuote(ctx: Ctx, user: Profile, quoteId: string) {
   own(user, q);
   const gate = sendGate(await openThreadCount(ctx, q.id));
   if (!gate.ok) throw new ApiError(409, 'open_comments', gate.error);
+  await termGate(ctx, q);
   const { band, totals } = await readyLines(ctx, q);
   const t = nextQuoteStatus(q.status, 'send', q.status === 'approved' ? q.band_result ?? undefined : band.level, q.kind);
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
