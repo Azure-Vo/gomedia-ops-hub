@@ -26,13 +26,13 @@ declare v_id uuid; v_chat text;
 begin
   if p_chat then
     v_chat := 'sim-chat:' || gen_random_uuid();
-    insert into public.lark_chats (chat_id, name, mode) values (v_chat, p_code || ' · ' || p_name, 'simulation');
+    insert into public.lark_chats (chat_id, name, mode) values (v_chat, p_code || ' - ' || p_name, 'simulation');
     perform pg_temp.reg('lark_chats', v_chat);
   end if;
   insert into public.lark_tasks (kind, code, name, client, assignee_open_id, assignee_name, pm_id, start_date, due_date, original_due_date, kpi_due_date,
                                  mode, lark_title, state, color, chat_id, chat_name, chat_status, source, created_by, created_at)
   values ('parent', p_code, p_name, p_client, pg_temp.person(p_pm), pg_temp.pname(p_pm), p_pm, p_start, p_due, p_due, p_due,
-          'simulation', '[' || p_code || '] ' || p_name, 'active', p_color, v_chat, case when p_chat then p_code || ' · ' || p_name end,
+          'simulation', '[' || p_code || '] ' || p_name, 'active', p_color, v_chat, case when p_chat then p_code || ' - ' || p_name end,
           case when p_chat then 'linked' else 'missing' end, 'web', p_pm, pg_temp.ts(p_start, '08:30'))
   returning id into v_id;
   perform pg_temp.reg('lark_tasks', v_id::text);

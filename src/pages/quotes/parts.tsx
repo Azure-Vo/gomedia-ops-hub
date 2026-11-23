@@ -2,7 +2,7 @@ import { forwardRef, Fragment } from 'react';
 import { BAND_LABEL, BandLevel, describeReason, groupBySection, LineKind, PublicBand, QUOTE_STATUS_LABEL, QuoteStatus, quoteTotals, toRoman } from '@/domain';
 import type { SettingsRow } from '@/lib/settings';
 import { Badge } from '@/components/ui';
-import { fmtVnd, fmtVnDate } from '@/lib/format';
+import { fmtVnd, fmtVnDate, fmtVnDateTime } from '@/lib/format';
 import type { LineRow, QuoteRow } from './data';
 
 export function StatusBadge({ status }: { status: QuoteStatus }) {
@@ -122,17 +122,49 @@ export function companyFromSettings(s: SettingsRow | null): CompanyInfo {
   };
 }
 
-const PDF = { navy: '#1F2238', orange: '#D9822B', cream: '#FFF4E5', line: '#C9C7D6', soft: '#F3F2F8', ink: '#1F2238', mute: '#6B6985' };
-const cell = (extra: Record<string, string | number> = {}) => ({ padding: '6px 7px', border: `1px solid ${PDF.line}`, verticalAlign: 'top', ...extra });
+/** Go Media brand colours, sampled from the logo (navy, orange, peach, violet). */
+const PDF = {
+  navy: '#082774',
+  orange: '#FF5E00',
+  peach: '#FFBFA3',
+  violet: '#600EE4',
+  tint: '#FFF3EC',
+  line: '#DCE0EC',
+  soft: '#F4F6FB',
+  ink: '#151B33',
+  mute: '#5E6684',
+};
+const LOGO = `${import.meta.env.BASE_URL}brand/gomedia-logo-full.png`;
+const num: Record<string, string> = { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
+const td = (extra: Record<string, string | number> = {}) => ({ padding: '6px 8px', borderBottom: `1px solid ${PDF.line}`, verticalAlign: 'top', color: PDF.ink, ...extra });
+
+/** The four quadrants of the logo as a thin bar. */
+function BrandBar({ height = 4 }: { height?: number }) {
+  return (
+    <div style={{ display: 'flex', height: `${height}px` }}>
+      {[PDF.peach, PDF.orange, PDF.violet, PDF.navy].map((c) => (
+        <div key={c} style={{ flex: 1, background: c }} />
+      ))}
+    </div>
+  );
+}
+
+export interface PdfSignature {
+  image: string;
+  signedAt: string | null;
+  /** The CEO previewing before signing: the image is shown with a "Xem trước" mark. */
+  preview?: boolean;
+}
 
 /**
- * A4 quote in Go Media's own layout (the CEO's "Go Quote AI" sample): company band, client block,
- * numbered sections with a subtotal each, discount, VAT shown separately, terms and two signature boxes.
+ * A4 quote in Go Media's brand: logo header, client block, numbered sections with subtotals, discount,
+ * VAT shown separately, totals box, terms, and the two signature boxes with the CEO's signature once signed.
+ * Rendered by html2canvas, so every colour is set inline (global table styles must not leak in).
  */
 export const QuotePdf = forwardRef<
   HTMLDivElement,
-  { quote: QuoteRow; lines: LineRow[]; company: CompanyInfo; preparedBy: string; tz: string; vatOnPassThrough: boolean }
->(function QuotePdf({ quote, lines, company, preparedBy, tz, vatOnPassThrough }, ref) {
+  { quote: QuoteRow; lines: LineRow[]; company: CompanyInfo; preparedBy: string; tz: string; vatOnPassThrough: boolean; signature?: PdfSignature | null }
+>(function QuotePdf({ quote, lines, company, preparedBy, tz, vatOnPassThrough, signature }, ref) {
   const date = quote.sent_at ?? new Date().toISOString();
   const t = quoteTotals(
     lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price, kind: l.kind })),
@@ -148,43 +180,70 @@ export const QuotePdf = forwardRef<
     ['Dự án', quote.project],
     ['Địa điểm', quote.venue],
   ];
+  const head: [string, string, 'left' | 'center' | 'right'][] = [
+    ['STT', '10mm', 'center'],
+    ['Hạng mục / phạm vi', '', 'left'],
+    ['ĐVT', '17mm', 'center'],
+    ['SL', '12mm', 'center'],
+    ['Đơn giá (đ)', '27mm', 'right'],
+    ['Thành tiền (đ)', '29mm', 'right'],
+  ];
+  const label = { fontSize: '9.5px', fontWeight: 600, letterSpacing: '0.6px', textTransform: 'uppercase' as const, color: PDF.mute };
   return (
-    <div ref={ref} style={{ width: '190mm', paddingBottom: '8mm', fontFamily: '"Times New Roman", Times, serif', color: PDF.ink, background: '#FFFFFF', fontSize: '12.5px', lineHeight: 1.35 }}>
-      <div style={{ background: PDF.navy, color: '#FFFFFF', padding: '14px 18px' }}>
-        <div style={{ color: PDF.orange, fontWeight: 700, fontSize: '16px', letterSpacing: '0.2px' }}>{company.name.toUpperCase()}</div>
-        {(company.taxCode || company.address) && (
-          <div style={{ fontSize: '11px', marginTop: '3px', opacity: 0.9 }}>{[company.taxCode && `MST ${company.taxCode}`, company.address].filter(Boolean).join(' · ')}</div>
-        )}
-        {(company.website || company.phone) && <div style={{ fontSize: '11px', opacity: 0.9 }}>{[company.website, company.phone].filter(Boolean).join(' · ')}</div>}
-        <div style={{ textAlign: 'center', fontSize: '22px', fontWeight: 700, marginTop: '10px', letterSpacing: '1px' }}>BÁO GIÁ</div>
-        <div style={{ fontSize: '11px', opacity: 0.9 }}>
-          Số: {quote.code} · Ngày {fmtVnDate(date, tz)}
+    <div
+      ref={ref}
+      className="quote-pdf"
+      style={{ width: '190mm', paddingBottom: '6mm', fontFamily: 'Archivo, Arial, Helvetica, sans-serif', color: PDF.ink, background: '#FFFFFF', fontSize: '12px', lineHeight: 1.45 }}
+    >
+      {/* letterhead */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '2px 0 10px' }}>
+        <img src={LOGO} alt="Go Media" crossOrigin="anonymous" style={{ height: '16mm', width: 'auto', display: 'block' }} />
+        <div style={{ textAlign: 'right', fontSize: '10.5px', color: PDF.mute, lineHeight: 1.5 }}>
+          <div style={{ color: PDF.navy, fontWeight: 700, fontSize: '12px' }}>{company.name.toUpperCase()}</div>
+          {company.taxCode && <div>MST {company.taxCode}</div>}
+          {company.address && <div>{company.address}</div>}
+          {(company.phone || company.website) && <div>{[company.phone, company.website].filter(Boolean).join(' · ')}</div>}
         </div>
       </div>
+      <BrandBar />
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', margin: '12px 0' }}>
-        <tbody>
-          {info.map(([k, v]) => (
-            <tr key={k}>
-              <td style={cell({ width: '32mm', fontWeight: 700, background: PDF.soft })}>{k}</td>
-              <td style={cell()}>{v?.trim() || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* title + reference */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', margin: '12px 0 10px' }}>
+        <div>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: PDF.navy, letterSpacing: '0.5px', lineHeight: 1.1 }}>BÁO GIÁ</div>
+          <div style={{ marginTop: '4px', color: PDF.orange, fontWeight: 600, fontSize: '12px' }}>{quote.kind === 'project' ? 'Báo giá dự án' : 'Báo giá dịch vụ'}</div>
+        </div>
+        <table style={{ borderCollapse: 'collapse', fontSize: '11.5px' }}>
+          <tbody>
+            {[
+              ['Số báo giá', quote.code],
+              ['Ngày', fmtVnDate(date, tz)],
+            ].map(([k, v]) => (
+              <tr key={k}>
+                <td style={{ padding: '2px 10px 2px 0', color: PDF.mute, textAlign: 'right' }}>{k}</td>
+                <td style={{ padding: '2px 0', fontWeight: 700, color: PDF.navy, textAlign: 'right', ...num }}>{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
+      {/* client */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 18px', background: PDF.tint, borderLeft: `3px solid ${PDF.orange}`, padding: '10px 14px', marginBottom: '14px' }}>
+        {info.map(([k, v]) => (
+          <div key={k}>
+            <div style={label}>{k}</div>
+            <div style={{ fontSize: '12.5px', fontWeight: k === 'Kính gửi' ? 700 : 500, color: PDF.ink }}>{v?.trim() || '—'}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* lines */}
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
-          <tr style={{ background: PDF.navy, color: '#FFFFFF' }}>
-            {[
-              ['STT', '9mm', 'center'],
-              ['Hạng mục / phạm vi', '', 'left'],
-              ['ĐVT', '18mm', 'center'],
-              ['SL', '11mm', 'center'],
-              ['Đơn giá (đ)', '27mm', 'right'],
-              ['Thành tiền (đ)', '29mm', 'right'],
-            ].map(([h, w, align]) => (
-              <th key={h} style={cell({ width: w, textAlign: align, fontWeight: 700, borderColor: PDF.navy })}>
+          <tr>
+            {head.map(([h, w, align]) => (
+              <th key={h} style={{ width: w || undefined, textAlign: align, padding: '8px', background: PDF.navy, color: '#FFFFFF', fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.3px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                 {h}
               </th>
             ))}
@@ -193,8 +252,8 @@ export const QuotePdf = forwardRef<
         <tbody>
           {sections.map((sec, si) => (
             <Fragment key={sec.title}>
-              <tr style={{ background: PDF.cream }}>
-                <td colSpan={6} style={cell({ fontWeight: 700 })}>
+              <tr>
+                <td colSpan={6} style={td({ background: PDF.tint, fontWeight: 700, color: PDF.navy, borderLeft: `3px solid ${PDF.orange}`, paddingTop: '6px', paddingBottom: '6px' })}>
                   {toRoman(si + 1)}. {sec.title}
                 </td>
               </tr>
@@ -202,81 +261,100 @@ export const QuotePdf = forwardRef<
                 stt += 1;
                 return (
                   <tr key={l.id ?? `${si}-${stt}`}>
-                    <td style={cell({ textAlign: 'center' })}>{stt}</td>
-                    <td style={cell()}>
-                      <div>
+                    <td style={td({ textAlign: 'center', color: PDF.mute, ...num })}>{stt}</td>
+                    <td style={td()}>
+                      <div style={{ fontWeight: 600 }}>
                         {l.item_name}
-                        {l.kind === 'pass_through' && !/chi hộ/i.test(l.item_name) && <span style={{ color: PDF.mute }}> (chi hộ)</span>}
+                        {l.kind === 'pass_through' && !/chi hộ/i.test(l.item_name) && <span style={{ color: PDF.mute, fontWeight: 400 }}> (chi hộ)</span>}
                       </div>
-                      {l.description?.trim() && <div style={{ fontStyle: 'italic', color: PDF.mute, fontSize: '11.5px' }}>{l.description}</div>}
+                      {l.description?.trim() && <div style={{ color: PDF.mute, fontSize: '11px', marginTop: '1px' }}>{l.description}</div>}
                     </td>
-                    <td style={cell({ textAlign: 'center' })}>{l.unit}</td>
-                    <td style={cell({ textAlign: 'center' })}>{pct(l.qty)}</td>
-                    <td style={cell({ textAlign: 'right' })}>{fmtVnd(l.unit_price, false)}</td>
-                    <td style={cell({ textAlign: 'right' })}>{fmtVnd(Math.round(l.qty * l.unit_price), false)}</td>
+                    <td style={td({ textAlign: 'center' })}>{l.unit}</td>
+                    <td style={td({ textAlign: 'center', ...num })}>{pct(l.qty)}</td>
+                    <td style={td({ textAlign: 'right', ...num })}>{fmtVnd(l.unit_price, false)}</td>
+                    <td style={td({ textAlign: 'right', fontWeight: 600, ...num })}>{fmtVnd(Math.round(l.qty * l.unit_price), false)}</td>
                   </tr>
                 );
               })}
-              <tr style={{ background: PDF.soft }}>
-                <td colSpan={5} style={cell({ textAlign: 'right', fontWeight: 700 })}>
-                  Tổng phần {toRoman(si + 1)}
-                </td>
-                <td style={cell({ textAlign: 'right', fontWeight: 700 })}>{fmtVnd(sec.amount, false)}</td>
-              </tr>
+              {sections.length > 1 && (
+                <tr>
+                  <td colSpan={5} style={td({ textAlign: 'right', color: PDF.mute, fontWeight: 600 })}>
+                    Tổng phần {toRoman(si + 1)}
+                  </td>
+                  <td style={td({ textAlign: 'right', fontWeight: 700, color: PDF.navy, ...num })}>{fmtVnd(sec.amount, false)}</td>
+                </tr>
+              )}
             </Fragment>
           ))}
-          <tr>
-            <td colSpan={5} style={cell({ textAlign: 'right', fontWeight: 700 })}>
-              Cộng tiền hàng
-            </td>
-            <td style={cell({ textAlign: 'right' })}>{fmtVnd(t.subtotal, false)}</td>
-          </tr>
-          <tr>
-            <td colSpan={5} style={cell({ textAlign: 'right' })}>
-              Chiết khấu {pct(quote.discount_pct)}%{t.passThrough > 0 ? ' (không áp cho khoản chi hộ)' : ''}
-            </td>
-            <td style={cell({ textAlign: 'right' })}>{t.discountAmount ? `− ${fmtVnd(t.discountAmount, false)}` : '0'}</td>
-          </tr>
-          <tr>
-            <td colSpan={5} style={cell({ textAlign: 'right' })}>
-              Thuế GTGT {pct(t.vatPct)}%{t.passThrough > 0 && !vatOnPassThrough ? ' (không tính trên khoản chi hộ)' : ''}
-            </td>
-            <td style={cell({ textAlign: 'right' })}>{fmtVnd(t.vatAmount, false)}</td>
-          </tr>
-          <tr style={{ background: PDF.orange, color: '#FFFFFF' }}>
-            <td colSpan={5} style={cell({ textAlign: 'right', fontWeight: 700, fontSize: '14px', borderColor: PDF.orange })}>
-              TỔNG THANH TOÁN
-            </td>
-            <td style={cell({ textAlign: 'right', fontWeight: 700, fontSize: '14px', borderColor: PDF.orange })}>{fmtVnd(t.grandTotal, false)}</td>
-          </tr>
         </tbody>
       </table>
 
+      {/* totals */}
+      <div className="no-break" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+        <table style={{ width: '96mm', borderCollapse: 'collapse', fontSize: '12px' }}>
+          <tbody>
+            {[
+              ['Cộng tiền hàng', fmtVnd(t.subtotal, false)],
+              [`Chiết khấu ${pct(quote.discount_pct)}%${t.passThrough > 0 ? ' (trừ chi hộ)' : ''}`, t.discountAmount ? `− ${fmtVnd(t.discountAmount, false)}` : '0'],
+              [`Thuế GTGT ${pct(t.vatPct)}%${t.passThrough > 0 && !vatOnPassThrough ? ' (trừ chi hộ)' : ''}`, fmtVnd(t.vatAmount, false)],
+            ].map(([k, v]) => (
+              <tr key={k}>
+                <td style={{ padding: '5px 8px', color: PDF.mute, borderBottom: `1px solid ${PDF.line}` }}>{k}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', borderBottom: `1px solid ${PDF.line}`, ...num }}>{v}</td>
+              </tr>
+            ))}
+            <tr>
+              <td style={{ padding: '9px 8px', background: PDF.navy, color: '#FFFFFF', fontWeight: 700, fontSize: '12.5px', borderTop: `3px solid ${PDF.orange}` }}>TỔNG THANH TOÁN</td>
+              <td style={{ padding: '9px 8px', background: PDF.navy, color: '#FFFFFF', fontWeight: 800, fontSize: '15px', textAlign: 'right', borderTop: `3px solid ${PDF.orange}`, ...num }}>{fmtVnd(t.grandTotal, false)} đ</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       {quote.terms.length > 0 && (
-        <div className="no-break" style={{ marginTop: '14px' }}>
-          <div style={{ fontWeight: 700 }}>Điều khoản và ghi chú</div>
-          <ol style={{ margin: '4px 0 0', paddingLeft: '20px', listStyle: 'decimal' }}>
+        <div className="no-break" style={{ marginTop: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: PDF.navy, fontSize: '12.5px' }}>
+            <span style={{ width: '8px', height: '8px', background: PDF.orange, display: 'inline-block' }} />
+            Điều khoản và ghi chú
+          </div>
+          <ol style={{ margin: '5px 0 0', paddingLeft: '20px', listStyle: 'decimal' }}>
             {quote.terms.map((x, i) => (
-              <li key={i}>{x}</li>
+              <li key={i} style={{ marginBottom: '2px' }}>
+                {x}
+              </li>
             ))}
           </ol>
         </div>
       )}
 
-      <div className="no-break" style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', marginTop: '22px' }}>
-        <div style={{ width: '45%' }}>
-          <div style={{ fontWeight: 700 }}>ĐẠI DIỆN KHÁCH HÀNG</div>
-          <div style={{ fontStyle: 'italic', color: PDF.mute, fontSize: '11px' }}>(Ký, ghi rõ họ tên)</div>
+      {/* signatures */}
+      <div className="no-break" style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'center', marginTop: '22px' }}>
+        <div style={{ width: '46%' }}>
+          <div style={{ fontWeight: 700, color: PDF.navy }}>ĐẠI DIỆN KHÁCH HÀNG</div>
+          <div style={{ fontStyle: 'italic', color: PDF.mute, fontSize: '10.5px' }}>(Ký, ghi rõ họ tên)</div>
         </div>
-        <div style={{ width: '45%' }}>
-          <div style={{ fontWeight: 700 }}>ĐẠI DIỆN {company.shortName.toUpperCase()}</div>
-          <div style={{ fontStyle: 'italic', color: PDF.mute, fontSize: '11px' }}>(Ký, đóng dấu)</div>
-          <div style={{ height: '62px' }} />
+        <div style={{ width: '46%' }}>
+          <div style={{ fontWeight: 700, color: PDF.navy }}>ĐẠI DIỆN {company.shortName.toUpperCase()}</div>
+          <div style={{ fontStyle: 'italic', color: PDF.mute, fontSize: '10.5px' }}>(Ký, đóng dấu)</div>
+          <div style={{ height: '24mm', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            {signature && <img src={signature.image} alt="Chữ ký" style={{ maxHeight: '22mm', maxWidth: '60mm', display: 'block' }} />}
+            {signature?.preview && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: PDF.orange, fontWeight: 800, fontSize: '15px', letterSpacing: '2px', opacity: 0.75, transform: 'rotate(-12deg)' }}>XEM TRƯỚC</div>
+            )}
+          </div>
           {company.signerName && <div style={{ fontWeight: 700 }}>{company.signerName}</div>}
-          {company.signerTitle && <div>{company.signerTitle}</div>}
+          {company.signerTitle && <div style={{ color: PDF.mute }}>{company.signerTitle}</div>}
+          {signature?.signedAt && <div style={{ color: PDF.mute, fontSize: '9.5px', marginTop: '3px' }}>Đã ký trên Go Media Ops Hub · {fmtVnDateTime(signature.signedAt, tz)}</div>}
         </div>
       </div>
-      <div style={{ marginTop: '14px', fontSize: '10.5px', color: PDF.mute }}>Người lập: {preparedBy}</div>
+
+      <div style={{ marginTop: '18px' }}>
+        <BrandBar height={2} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '9.5px', color: PDF.mute }}>
+          <span>Người lập: {preparedBy}</span>
+          <span>{company.website || company.shortName}</span>
+        </div>
+      </div>
     </div>
   );
 });

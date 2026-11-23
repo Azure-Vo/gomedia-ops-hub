@@ -181,6 +181,7 @@ export function ProjectDetailPage() {
       {cancelling && <CancelProject projectId={project.id} onClose={() => setCancelling(false)} onDone={() => (setCancelling(false), reload())} />}
       {linking && (
         <LinkChat
+          name={project.name}
           code={project.code}
           projectId={project.id}
           onClose={() => setLinking(false)}
@@ -307,7 +308,7 @@ function CancelProject({ projectId, onClose, onDone }: { projectId: string; onCl
   );
 }
 
-function LinkChat({ code, projectId, onClose, onDone }: { code: string; projectId: string; onClose: () => void; onDone: () => void }) {
+function LinkChat({ code, name, projectId, onClose, onDone }: { code: string; name: string; projectId: string; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const [chat, setChat] = useState('');
   const [busy, setBusy] = useState(false);
@@ -337,7 +338,7 @@ function LinkChat({ code, projectId, onClose, onDone }: { code: string; projectI
         </>
       }
     >
-      <ChatPicker code={code} value={chat} onChange={setChat} />
+      <ChatPicker code={code} name={name} projectId={projectId} value={chat} onChange={setChat} />
     </Modal>
   );
 }

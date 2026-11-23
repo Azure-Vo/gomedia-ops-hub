@@ -50,11 +50,12 @@ Công ty có **2 loại báo giá** (P):
 4. Báo giá dự án vẫn là **một báo giá gồm toàn bộ đầu mục**; khác ở chỗ **khách trả tiền theo giai đoạn** theo hợp đồng.
    → **Bỏ** ý "mỗi giai đoạn một báo giá, nhãn GĐ1/GĐ2". Giai đoạn là mốc thanh toán trong hợp đồng; để sau, cùng phần hợp đồng/thanh toán (ngoài phạm vi 1.7). Một dự án nhiều báo giá vẫn giữ cho phụ lục, bán thêm.
 
-**Luồng 1.7.0 đã code:**
-- Nhanh, trong khung: Nháp → **Gửi** (chữ ký in sẵn).
-- Nhanh ngoài khung: Nháp → Chờ PM/CEO duyệt → **Chờ CEO ký** → Đã ký → Gửi.
-- Dự án: Nháp → Chờ PM, CEO góp ý (CEO duyệt) → **Chờ CEO ký** → Đã ký → Gửi.
-- CEO ở bước ký: tải PDF, ký số ngoài app, bấm **Đã ký** (ghi `signed_at`); hoặc **Yêu cầu sửa**. App **không** tự áp chữ ký số (cần thiết bị/nhà cung cấp CA: U).
+**Luồng 1.7.0 (sửa theo Long 23/11 tối):** CEO lưu **chữ ký mẫu** một lần (trang Hồ sơ: vẽ hoặc tải ảnh). Ký = in chữ ký mẫu lên báo giá, không tải PDF về ký rồi tải lên lại.
+- Nhanh, trong khung: Nháp → **Gửi** (chữ ký mẫu in sẵn).
+- CEO quyết định (báo giá dự án; báo giá nhanh vượt mức PM): Nháp → Chờ duyệt → CEO xem trước PDF → **Duyệt & ký** (1 bước) → Account gửi.
+- PM quyết định (báo giá nhanh ngoài khung, trong mức PM): Nháp → PM duyệt → **Chờ CEO ký** → CEO xem trước → **Ký** → Account gửi.
+- Tải PDF ở bước ký là tuỳ chọn. Chưa có chữ ký mẫu thì nút ký bị khoá.
+- Đây là **ảnh chữ ký**, không phải chữ ký số theo Luật Giao dịch điện tử (cần thiết bị/CA: U). PDF ghi "Đã ký trên Go Media Ops Hub · giờ ký".
 
 ## 1. Vấn đề
 
@@ -110,6 +111,7 @@ Account gửi báo giá ──► Khách trả lời
 
 - **Điều khoản loại trừ nhau** (Long, 23/11): điều khoản mẫu có "Nhóm chọn 1"; 3 điều khoản "Thanh toán…" thuộc nhóm **Hình thức thanh toán**. Trên báo giá nhóm này hiện dạng chọn 1; mỗi nhóm chỉ 1 điều khoản Mặc định; server chặn gửi duyệt/gửi khách nếu chọn 2.
 - Sửa lỗi 1.7.0: "Lỗi lưu / Bạn không có quyền" khi chọn Báo giá dự án (thiếu quyền ghi cột `kind`). Yêu cầu CEO ký gửi ngoài giờ làm thì xếp hàng gửi lại vào giờ làm.
+- 23/11 tối: PDF báo giá làm lại theo nhận diện Go Media (logo, 4 màu logo, chữ Archivo); ô số lượng/chiết khấu/VAT không còn "010"; group Lark mô phỏng đặt tên chuẩn "MÃ - Tên dự án" (không gõ tay), chặn mã trùng, chặn gắn group mang mã dự án khác hoặc đang gắn dự án khác, xoá được group mô phỏng tạo nhầm.
 
 ### 4.2 Tóm tắt hôm nay + Inbox (PM)
 - Khối mới **"Báo giá đã chốt, chưa có dự án (n)"**, mỗi dòng: mã báo giá, loại, khách, Account, số ngày chờ. Nút **Tạo dự án**.

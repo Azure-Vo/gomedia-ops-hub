@@ -146,3 +146,14 @@ export function personName(people: Map<string, { full_name: string; email: strin
   const p = people.get(id);
   return p ? p.full_name || p.email : '–';
 }
+
+/** 1.7 · The CEO's signature image printed on signed quotes (null = not uploaded yet, or no access). */
+export interface Signature {
+  image: string;
+  signer_name: string | null;
+  updated_at: string;
+}
+export async function loadSignature(): Promise<Signature | null> {
+  const r = await supabase.from('quote_signature').select('image, signer_name, updated_at').eq('id', 1).maybeSingle();
+  return r.error ? null : ((r.data as Signature | null) ?? null);
+}

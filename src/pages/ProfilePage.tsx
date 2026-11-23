@@ -6,6 +6,7 @@ import { fmtVnDateTime } from '@/lib/format';
 import { useProfile, useSession } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
+import { SignatureCard } from './SignaturePad';
 
 interface TgStatus {
   linked: boolean;
@@ -120,6 +121,7 @@ export function ProfilePage() {
             </div>
           )}
         </Card>
+        {(me.role === 'ceo' || me.role === 'admin') && <SignatureCard />}
       </div>
     </div>
   );

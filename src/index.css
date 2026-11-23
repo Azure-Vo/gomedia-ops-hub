@@ -162,3 +162,10 @@ dd {
     animation: none;
   }
 }
+
+/* Quote PDF: html2canvas mis-measures "pretty" wrapping and inherited table header colours. */
+.quote-pdf p,
+.quote-pdf li,
+.quote-pdf div {
+  text-wrap: wrap;
+}

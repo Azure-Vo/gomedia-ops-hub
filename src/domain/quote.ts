@@ -104,7 +104,7 @@ export function toRoman(n: number): string {
 }
 
 export type QuoteStatus = 'draft' | 'pending' | 'signing' | 'approved' | 'changes_requested' | 'sent';
-export type QuoteEvent = 'edit' | 'submit' | 'approve' | 'request_changes' | 'sign' | 'send';
+export type QuoteEvent = 'edit' | 'submit' | 'approve' | 'approve_sign' | 'request_changes' | 'sign' | 'send';
 
 export const QUOTE_STATUS_LABEL: Record<QuoteStatus, string> = {
   draft: 'Nháp',
@@ -139,9 +139,10 @@ export function approverFor(kind: QuoteKind, band: BandLevel): 'pm' | 'ceo' | nu
 export type Transition = { ok: true; status: QuoteStatus } | { ok: false; error: string };
 
 /**
- * Lifecycle:
- *   quick, in band:       Draft → Sent (printed signature)
- *   otherwise:            Draft → Pending → Signing → Approved (signed) → Sent
+ * Lifecycle (1.7, Long 23/11):
+ *   quick, in band:       Draft → Sent (the CEO's signature image is printed, no wait)
+ *   CEO decides:          Draft → Pending → Approved & signed in one click → Sent
+ *   PM decides:           Draft → Pending → Signing (CEO one click) → Approved (signed) → Sent
  *   Pending or Signing → Changes requested → Draft. Any edit before Sent returns to Draft.
  */
 export function nextQuoteStatus(status: QuoteStatus, event: QuoteEvent, band?: BandLevel, kind: QuoteKind = 'quick'): Transition {
@@ -158,6 +159,9 @@ export function nextQuoteStatus(status: QuoteStatus, event: QuoteEvent, band?: B
     case 'approve':
       if (status !== 'pending') return fail('Chỉ duyệt được báo giá đang chờ duyệt.');
       return { ok: true, status: 'signing' };
+    case 'approve_sign':
+      if (status !== 'pending') return fail('Chỉ duyệt được báo giá đang chờ duyệt.');
+      return { ok: true, status: 'approved' };
     case 'request_changes':
       if (status !== 'pending' && status !== 'signing') return fail('Chỉ yêu cầu sửa được báo giá đang chờ duyệt hoặc chờ ký.');
       return { ok: true, status: 'changes_requested' };

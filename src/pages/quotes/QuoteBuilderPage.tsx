@@ -28,13 +28,13 @@ import {
   validateQuote,
   workingHoursBetween,
 } from '@/domain';
-import { Badge, Banner, Button, Card, cx, ErrorBox, Field, Icon, IconButton, InfoTip, Input, Loading, Modal, Select, Textarea, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Card, cx, ErrorBox, Field, Icon, IconButton, InfoTip, Input, Loading, Modal, NumberField, Select, Textarea, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { fmtVnd, fmtVnDate, fmtVnDateTime, fmtVnLong, fromLocalInput, toLocalInput } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
-import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadPeople, loadTerms, normLine, normQuote, personName, QUOTE_COLS, QuoteRow, QuoteTerm } from './data';
+import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadPeople, loadSignature, loadTerms, normLine, normQuote, personName, QUOTE_COLS, QuoteRow, QuoteTerm, Signature } from './data';
 import { LibraryPicker } from './LibraryPicker';
 import { OutcomeBlock } from './outcome';
 import { BandReasons, BandRuler, companyFromSettings, downloadQuotePdf, QuotePdf, StatusBadge } from './parts';
@@ -119,6 +119,7 @@ export function QuoteBuilderPage() {
   const [customTerm, setCustomTerm] = useState('');
   const [termLib, setTermLib] = useState<QuoteTerm[]>([]);
   const [preview, setPreview] = useState(false);
+  const [signature, setSignature] = useState<Signature | null>(null);
   const [decision, setDecision] = useState<{ kind: 'approve' | 'changes'; comment: string } | null>(null);
   const [confirmReopen, setConfirmReopen] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -142,6 +143,7 @@ export function QuoteBuilderPage() {
         supabase.from('quotes').select('id, code, client, service_group, sent_at, total, quote_lines(library_item_id, item_name, unit, qty, unit_price, position, section, description)').eq('status', 'sent').neq('id', id).order('sent_at', { ascending: false }).limit(400),
         loadTerms(true),
       ]);
+      void loadSignature().then(setSignature);
       const qr = check(q) as QuoteRow | null;
       if (!qr) throw new Error('Không tìm thấy báo giá, hoặc bạn không có quyền xem.');
       const quoteRow = normQuote(qr);
@@ -554,7 +556,7 @@ export function QuoteBuilderPage() {
   const sign = () =>
     run('sign', async () => {
       await callApi('quote.sign', { quote_id: quote.id });
-      toast('Đã ghi nhận CEO ký. Account được báo để gửi khách.');
+      toast('Đã ký. Account được báo để gửi khách.');
       await load();
     });
 
@@ -571,7 +573,7 @@ export function QuoteBuilderPage() {
       if (!decision) return;
       await callApi('quote.decide', { quote_id: quote.id, decision: decision.kind, comment: decision.comment });
       setDecision(null);
-      toast(decision.kind === 'approve' ? 'Đã duyệt báo giá' : 'Đã gửi yêu cầu sửa cho Account');
+      toast(decision.kind === 'approve' ? (isCeo ? 'Đã duyệt và ký. Account gửi khách được.' : 'Đã duyệt. Báo giá chờ CEO ký.') : 'Đã gửi yêu cầu sửa cho Account');
       await load();
     });
 
@@ -643,6 +645,10 @@ export function QuoteBuilderPage() {
     kind: l.kind,
   }));
   const pdfQuote: QuoteRow = { ...quote, ...header, requested_at: quote.requested_at };
+  // The CEO's signature is printed once the CEO signed, or on a quick quote inside the band (sent without approval).
+  const printedSignature = header.kind === 'quick' && (quote.status === 'sent' ? !quote.approver && !quote.signed_at : quote.status === 'draft' && band?.level === 'send_now');
+  const pdfSignature = signature && (quote.signed_at || printedSignature) ? { image: signature.image, signedAt: quote.signed_at } : null;
+  const isCeo = me.role === 'ceo';
   const company = companyFromSettings(settings);
   const libraryTerms = termLib.filter((t) => t.active || header.terms.includes(t.text));
   const customTerms = header.terms.filter((t) => !termLib.some((x) => x.text === t));
@@ -886,14 +892,12 @@ export function QuoteBuilderPage() {
                           <td data-cell="unit" className="whitespace-nowrap border-b border-line-soft px-3 py-2.5 pt-[18px] text-ink-2">{l.unit}</td>
                           <td data-cell="qty" className="border-b border-line-soft px-3 py-2.5">
                             <span className="mb-1 block text-[12px] text-ink-3 sm:hidden">Số lượng ({l.unit})</span>
-                            <input
-                              type="number"
-                              min={0.5}
+                            <NumberField
                               step={0.5}
                               aria-label={`Số lượng: ${l.item_name}`}
                               value={l.qty}
                               disabled={!editable}
-                              onChange={(e) => setLine(l.key, { qty: Math.max(0, Number(e.target.value) || 0) })}
+                              onValue={(v) => setLine(l.key, { qty: v })}
                               className="h-10 w-full rounded-lg border border-line bg-white text-center font-semibold focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas"
                             />
                           </td>
@@ -991,15 +995,13 @@ export function QuoteBuilderPage() {
                   Chiết khấu (%){totals.passThrough > 0 && <span className="block text-[12px] text-ink-3">không áp cho khoản chi hộ</span>}
                 </label>
                 <div className="flex items-center gap-3">
-                  <input
+                  <NumberField
                     id="discount"
-                    type="number"
-                    min={0}
                     max={100}
                     step={0.5}
                     value={header.discount_pct}
                     disabled={!editable}
-                    onChange={(e) => setH({ discount_pct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+                    onValue={(v) => setH({ discount_pct: v })}
                     className="h-10 w-20 rounded-lg border border-line bg-white text-center font-semibold focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas"
                   />
                   <span className="min-w-[120px] text-right tabular-nums">− {fmtVnd(totals.discountAmount)}</span>
@@ -1011,15 +1013,13 @@ export function QuoteBuilderPage() {
                   {totals.passThrough > 0 && !vatOnPassThrough && <span className="block text-[12px] text-ink-3">không tính trên khoản chi hộ</span>}
                 </label>
                 <div className="flex items-center gap-3">
-                  <input
+                  <NumberField
                     id="vat"
-                    type="number"
-                    min={0}
                     max={100}
                     step={1}
                     value={header.vat_pct}
                     disabled={!editable}
-                    onChange={(e) => setH({ vat_pct: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+                    onValue={(v) => setH({ vat_pct: v })}
                     className="h-10 w-20 rounded-lg border border-line bg-white text-center font-semibold focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:border-transparent disabled:bg-canvas"
                   />
                   <span className="min-w-[120px] text-right tabular-nums">{fmtVnd(totals.vatAmount)}</span>
@@ -1188,12 +1188,23 @@ export function QuoteBuilderPage() {
               subtitle={
                 openComments > 0
                   ? `Còn ${openComments} góp ý mở: Yêu cầu sửa, hoặc xử lý hết rồi Duyệt.`
-                  : 'Góp ý ngay tại dòng chưa ổn rồi Yêu cầu sửa. Ổn thì Duyệt.'
+                  : isCeo
+                    ? 'Xem trước PDF, góp ý tại dòng chưa ổn. Ổn thì Duyệt & ký: chữ ký mẫu được in lên báo giá.'
+                    : 'Góp ý ngay tại dòng chưa ổn rồi Yêu cầu sửa. Ổn thì Duyệt.'
               }
             >
+              {isCeo && !signature && <NoSignature />}
               <div className="flex flex-wrap gap-2">
-                <Button icon="check" disabled={openComments > 0} title={openComments > 0 ? 'Còn góp ý chưa xử lý' : undefined} onClick={() => setDecision({ kind: 'approve', comment: '' })}>
-                  Duyệt
+                <Button variant="secondary" icon="file" onClick={() => setPreview(true)} disabled={!lines.length}>
+                  Xem trước PDF
+                </Button>
+                <Button
+                  icon="check"
+                  disabled={openComments > 0 || (isCeo && !signature)}
+                  title={openComments > 0 ? 'Còn góp ý chưa xử lý' : isCeo && !signature ? 'Chưa có chữ ký mẫu' : undefined}
+                  onClick={() => setDecision({ kind: 'approve', comment: '' })}
+                >
+                  {isCeo ? 'Duyệt & ký' : 'Duyệt'}
                 </Button>
                 <Button variant="secondary" icon="edit" onClick={() => setDecision({ kind: 'changes', comment: '' })}>
                   Yêu cầu sửa
@@ -1206,16 +1217,16 @@ export function QuoteBuilderPage() {
               tone="info"
               title="Chờ CEO ký"
               actions={
-                me.role === 'ceo' ? (
+                isCeo ? (
                   <>
-                    <Button variant="secondary" icon="download" busy={busy === 'pdf'} onClick={() => run('pdf', async () => { if (pdfRef.current) await downloadQuotePdf(pdfRef.current, quote.code); })}>
-                      Tải PDF để ký
+                    <Button variant="secondary" icon="file" onClick={() => setPreview(true)}>
+                      Xem trước PDF
                     </Button>
                     <Button variant="secondary" icon="edit" onClick={() => setDecision({ kind: 'changes', comment: '' })}>
                       Yêu cầu sửa
                     </Button>
-                    <Button icon="check" busy={busy === 'sign'} disabled={openComments > 0} onClick={sign}>
-                      Đã ký
+                    <Button icon="check" busy={busy === 'sign'} disabled={openComments > 0 || !signature} onClick={sign}>
+                      Ký
                     </Button>
                   </>
                 ) : (
@@ -1228,7 +1239,8 @@ export function QuoteBuilderPage() {
               }
             >
               {lastDecision && `Đã duyệt bởi ${personName(people, lastDecision.approver_id)}, ${fmtVnDateTime(lastDecision.decided_at, tz)}. `}
-              {me.role === 'ceo' ? 'Ký số trên PDF, rồi bấm "Đã ký".' : 'CEO ký số trên PDF rồi xác nhận trong app.'}
+              {isCeo ? 'Xem trước PDF rồi bấm Ký: chữ ký mẫu được in lên báo giá.' : 'CEO xem và ký trên app; xong thì bạn gửi khách được.'}
+              {isCeo && !signature && <NoSignature />}
             </Banner>
           )}
           {quote.status === 'approved' && (
@@ -1303,13 +1315,13 @@ export function QuoteBuilderPage() {
       </div>
 
       <div aria-hidden="true" style={{ position: 'fixed', left: '-10000px', top: 0 }}>
-        <QuotePdf ref={pdfRef} quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} />
+        <QuotePdf ref={pdfRef} quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} signature={pdfSignature} />
       </div>
 
       <Modal open={preview} onClose={() => setPreview(false)} title={`Xem trước ${quote.code}`} wide>
         <div className="relative overflow-x-auto">
           <div className="mx-auto w-[190mm] shadow-sm ring-1 ring-line-soft">
-            <QuotePdf quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} />
+            <QuotePdf quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} signature={pdfSignature ?? (isCeo && signature && (quote.status === 'pending' || quote.status === 'signing') ? { image: signature.image, signedAt: null, preview: true } : null)} />
           </div>
         </div>
       </Modal>
@@ -1328,7 +1340,7 @@ export function QuoteBuilderPage() {
               disabled={decision?.kind === 'changes' ? !requestChangesGate(decision.comment, openComments).ok : !approveGate(openComments).ok}
               onClick={decide}
             >
-              {decision?.kind === 'approve' ? 'Duyệt báo giá' : 'Gửi yêu cầu sửa'}
+              {decision?.kind === 'approve' ? (isCeo ? 'Duyệt & ký' : 'Duyệt báo giá') : 'Gửi yêu cầu sửa'}
             </Button>
           </>
         }
@@ -1431,5 +1443,18 @@ function SimilarCard({
         </div>
       )}
     </div>
+  );
+}
+
+/** The CEO has not stored a signature image yet: signing is blocked until they do. */
+function NoSignature() {
+  return (
+    <p className="mt-2 text-[13.5px] text-bad">
+      Chưa có chữ ký mẫu.{' '}
+      <Link to="/profile" className="font-semibold underline">
+        Tải hoặc vẽ chữ ký ở trang Hồ sơ
+      </Link>{' '}
+      rồi quay lại ký.
+    </p>
   );
 }

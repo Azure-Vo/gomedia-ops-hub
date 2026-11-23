@@ -25,7 +25,10 @@ import {
   TIER_LABEL,
   tierHint,
   whyNot,
+  chatCodeConflict,
   chatMatchesCode,
+  chatNameFor,
+  PROJECT_CODE_RE,
 } from '@/domain';
 import { Badge, Banner, Button, cx, EmptyState, Field, Icon, Input, Loading, Modal, Select, Textarea, useAsync, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
@@ -802,65 +805,94 @@ export function TaskForm({ project, members, task, onDone, onCancel }: { project
 interface Chat {
   chat_id: string;
   name: string;
+  used_by: string | null;
+  used_by_id: string | null;
 }
 
-export function ChatPicker({ code, value, onChange }: { code: string; value: string; onChange: (id: string) => void }) {
+export function ChatPicker({ code, name, projectId, value, onChange }: { code: string; name: string; projectId?: string; value: string; onChange: (id: string) => void }) {
   const toast = useToast();
-  const chats = useAsync(() => callApi<{ mode: string; chats: Chat[] }>('work.chats', { refresh: true }), []);
-  const [newName, setNewName] = useState('');
-  const [busy, setBusy] = useState(false);
+  const chats = useAsync(() => callApi<{ mode: string; chats: Chat[]; codes: string[] }>('work.chats', { refresh: true }), []);
+  const [busy, setBusy] = useState<'' | 'create' | 'delete'>('');
   const list = chats.data?.chats ?? [];
-  const match = code ? list.find((c) => chatMatchesCode(c.name, code)) : undefined;
+  const otherCodes = (chats.data?.codes ?? []).filter((c) => c !== normalizeProjectCode(code));
+  const takenBy = (c: Chat) => (c.used_by_id && c.used_by_id !== projectId ? c.used_by : null);
+  const clash = (c: Chat) => (code ? chatCodeConflict(c.name, code, otherCodes) : null);
+  const usable = (c: Chat) => !takenBy(c) && !clash(c);
+  const match = code ? list.find((c) => usable(c) && chatMatchesCode(c.name, code)) : undefined;
   useEffect(() => {
     if (!value && match) onChange(match.chat_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match?.chat_id]);
   const sim = chats.data?.mode === 'simulation';
+  const codeOk = !checkProjectCode(code).length || (projectId !== undefined && PROJECT_CODE_RE.test(normalizeProjectCode(code)));
+  const proposed = codeOk && name.trim() ? chatNameFor(code, name) : '';
+  const unused = list.filter((c) => c.chat_id.startsWith('sim-chat:') && !c.used_by_id);
+  const hasOwn = !!code && list.some((c) => chatMatchesCode(c.name, code) && usable(c));
   return (
     <div className="flex flex-col gap-2">
       <Field
         label="Group Lark của dự án"
-        hint={
-          chats.loading
-            ? 'Đang tải danh sách group…'
-            : list.length
-              ? `Bot đang ở ${list.length} group. ${match ? `Đã chọn sẵn group có mã ${code}.` : `Chưa có group nào tên chứa "${code || 'mã dự án'}".`}`
-              : 'Bot chưa ở group nào. Có thể gắn group sau.'
-        }
+        hint={chats.loading ? 'Đang tải danh sách group…' : match ? `Đã chọn sẵn group có mã ${normalizeProjectCode(code)}.` : list.length ? `Chưa có group nào mang mã ${normalizeProjectCode(code) || 'dự án'}.` : 'Bot chưa ở group nào. Có thể gắn group sau.'}
       >
         {(id) => (
           <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
             <option value="">Chưa gắn group (tin gửi riêng cho PM)</option>
             {list.map((c) => (
-              <option key={c.chat_id} value={c.chat_id}>
+              <option key={c.chat_id} value={c.chat_id} disabled={!usable(c)}>
                 {c.name}
+                {takenBy(c) ? ` (đang gắn ${takenBy(c)})` : clash(c) ? ` (mã ${clash(c)} của dự án khác)` : ''}
               </option>
             ))}
           </Select>
         )}
       </Field>
       {sim && (
-        <div className="flex flex-wrap items-end gap-2">
-          <Field label="Mô phỏng: tạo group có bot" className="min-w-[220px] flex-1">
-            {(id) => <Input id={id} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={`${code || 'MT35'} · Tên dự án`} />}
-          </Field>
-          <Button
-            variant="secondary"
-            busy={busy}
-            disabled={!newName.trim()}
-            onClick={() => {
-              setBusy(true);
-              callApi<{ chat: Chat }>('work.chat_create_sim', { name: newName })
-                .then((r) => {
-                  setNewName('');
-                  chats.reload();
-                  onChange(r.chat.chat_id);
-                }, (e) => toast(e.message, 'bad'))
-                .finally(() => setBusy(false));
-            }}
-          >
-            Tạo group
-          </Button>
+        <div className="flex flex-wrap items-center gap-2 text-[13.5px]">
+          {!hasOwn && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="plus"
+              busy={busy === 'create'}
+              disabled={!proposed}
+              title={proposed ? '' : 'Nhập mã và tên dự án trước'}
+              onClick={() => {
+                setBusy('create');
+                callApi<{ chat: Chat }>('work.chat_create_sim', { code, name, project_id: projectId })
+                  .then((r) => (chats.reload(), onChange(r.chat.chat_id)), (e) => toast(e.message, 'bad'))
+                  .finally(() => setBusy(''));
+              }}
+            >
+              {proposed ? `Tạo group “${proposed}”` : 'Tạo group (nhập mã, tên dự án trước)'}
+            </Button>
+          )}
+          <span className="text-[12.5px] text-ink-3">Mô phỏng Lark</span>
+        </div>
+      )}
+      {sim && unused.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
+          <span className="text-ink-3">Group chưa dùng:</span>
+          {unused.map((c) => (
+            <span key={c.chat_id} className="inline-flex items-center gap-1 rounded-full border border-line bg-white py-0.5 pl-2.5 pr-1 text-ink-2">
+              {c.name}
+              <button
+                type="button"
+                aria-label={`Xoá group ${c.name}`}
+                title="Xoá group tạo nhầm"
+                disabled={!!busy}
+                className="grid h-5 w-5 place-items-center rounded-full text-ink-3 hover:bg-bad-soft hover:text-bad"
+                onClick={() => {
+                  if (!window.confirm(`Xoá group mô phỏng "${c.name}"?`)) return;
+                  setBusy('delete');
+                  callApi('work.chat_delete_sim', { chat_id: c.chat_id })
+                    .then(() => (value === c.chat_id && onChange(''), chats.reload(), toast('Đã xoá group')), (e) => toast(e.message, 'bad'))
+                    .finally(() => setBusy(''));
+                }}
+              >
+                <Icon name="x" size={12} />
+              </button>
+            </span>
+          ))}
         </div>
       )}
     </div>
@@ -972,7 +1004,7 @@ export function ProjectForm({ project, people, existingCodes, onDone, onCancel, 
           </Field>
         )}
         {errs.length > 0 && <p className="text-[13px] text-bad">{errs.join(' ')}</p>}
-        <ChatPicker code={code} value={f.chat_id} onChange={(chat_id) => setF((x) => ({ ...x, chat_id }))} />
+        <ChatPicker code={code} name={f.name} projectId={project?.id} value={f.chat_id} onChange={(chat_id) => setF((x) => ({ ...x, chat_id }))} />
         {!project && (
           <Field label="Mời thành viên" hint="Họ nhận lời mời trong Inbox.">
             {() => (

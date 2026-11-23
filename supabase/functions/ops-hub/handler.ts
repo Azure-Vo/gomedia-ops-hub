@@ -33,8 +33,8 @@ import {
   setMembers,
   submitTask,
   updateProject,
-  updateTask as updateWorkTask, linkQuote } from './work';
-import { decideQuote, importQuotes, previewBand, reopenQuote, sendQuote, submitQuote, setQuoteOutcome, signQuote } from './quotes';
+  updateTask as updateWorkTask, linkQuote, deleteSimChat } from './work';
+import { decideQuote, importQuotes, previewBand, reopenQuote, sendQuote, submitQuote, setQuoteOutcome, setSignature, signQuote } from './quotes';
 import { addComment, resolveComment } from './review';
 import { connectTelegram, inviteUser, systemHealth, testMessage } from './system';
 import { deriveWebhookSecret, TelegramApi } from './telegram';
@@ -83,6 +83,8 @@ async function handleApi(ctx: Ctx, req: Request) {
       return signQuote(ctx, user, id);
     case 'quote.outcome':
       return setQuoteOutcome(ctx, user, body);
+    case 'quote.signature':
+      return setSignature(ctx, user, body);
     case 'quote.comment':
       return addComment(ctx, user, body);
     case 'quote.comment_resolve':
@@ -147,6 +149,8 @@ async function handleApi(ctx: Ctx, req: Request) {
       return listChats(ctx, user, body);
     case 'work.chat_create_sim':
       return createSimChat(ctx, user, body);
+    case 'work.chat_delete_sim':
+      return deleteSimChat(ctx, user, body);
     case 'work.task_create':
       return createWorkTask(ctx, user, body);
     case 'work.task_update':

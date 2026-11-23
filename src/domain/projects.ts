@@ -47,6 +47,22 @@ export function chatMatchesCode(chatName: string, code: string): boolean {
   return new RegExp(`(^|[^A-Z0-9])${c}([^A-Z0-9]|$)`).test(normalizeCode(chatName));
 }
 
+/** Standard group name, typed with any keyboard: "MT35 - Ra mắt BST Tết 2027" (1.7, Long 23/11). */
+export function chatNameFor(code: string, name: string): string {
+  return `${normalizeProjectCode(code)} - ${name.trim().replace(/\s+/g, ' ')}`;
+}
+
+/**
+ * A group whose name carries another project's code must not be bound to this project
+ * (e.g. "MT35 LOLO" offered for project LL01 while MT35 belongs to another project).
+ * Returns the conflicting code, or null.
+ */
+export function chatCodeConflict(chatName: string, ownCode: string, otherCodes: string[]): string | null {
+  const own = normalizeProjectCode(ownCode);
+  if (own && chatMatchesCode(chatName, own)) return null;
+  return otherCodes.map(normalizeProjectCode).find((c) => c && c !== own && chatMatchesCode(chatName, c)) ?? null;
+}
+
 // ------------------------------------------------------------------------------------ dates --------
 
 export function shiftKey(key: string, days: number): string {

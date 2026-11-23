@@ -131,6 +131,28 @@ function own(user: Profile, q: QuoteRow) {
   if (q.created_by !== user.id) throw new ApiError(403, 'not_owner', 'Đây không phải báo giá của bạn.');
 }
 
+/** 1.7 · Signing prints the CEO's stored signature image; without one there is nothing to print. */
+async function requireSignature(ctx: Ctx) {
+  const row = must(await ctx.db.from('quote_signature').select('id').eq('id', 1).maybeSingle(), 'load signature');
+  if (!row) throw new ApiError(409, 'no_signature', 'Chưa có chữ ký mẫu của CEO. CEO tải hoặc vẽ chữ ký ở trang Hồ sơ rồi ký lại.');
+}
+
+/** 1.7 · The CEO (or Admin) stores or removes the signature image printed on signed quotes. */
+export async function setSignature(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
+  requireRole(user, 'ceo', 'admin');
+  const image = body.image === null ? null : String(body.image ?? '');
+  if (image === null) {
+    must(await ctx.db.from('quote_signature').delete().eq('id', 1), 'remove signature');
+  } else {
+    if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(image)) throw new ApiError(400, 'invalid', 'Chữ ký phải là ảnh PNG.');
+    if (image.length > 400000) throw new ApiError(400, 'too_big', 'Ảnh chữ ký quá lớn (tối đa khoảng 300 KB).');
+    const s = await loadSettings(ctx.db);
+    must(await ctx.db.from('quote_signature').upsert({ id: 1, image, signer_name: (s as { signer_name?: string }).signer_name || user.full_name || null, updated_by: user.id, updated_at: new Date(ctx.now()).toISOString() }), 'save signature');
+  }
+  must(await ctx.db.from('events').insert({ actor: user.id, entity: 'quote_signature', entity_id: '1', action: image ? 'signature.set' : 'signature.removed', payload: {} }), 'log signature');
+  return { ok: true };
+}
+
 /** 1.7 · One payment schedule (or one term of any choice group) per quote. */
 async function termGate(ctx: Ctx, q: QuoteRow) {
   const lib = must(await ctx.db.from('quote_terms').select('text, choice_group'), 'load terms') as { text: string; choice_group: string | null }[];
@@ -281,18 +303,22 @@ export async function decideQuote(ctx: Ctx, user: Profile, body: Record<string, 
     if (!gate.ok) throw new ApiError(400, 'comment_required', gate.error);
   }
   const comment = decision === 'changes' ? changesSummary(note, open) : note;
-  const t = nextQuoteStatus(q.status, decision === 'approve' ? 'approve' : 'request_changes');
+  // 1.7 (Long 23/11 tối): the CEO approves and signs in one click with the stored signature image.
+  const ceoSigns = decision === 'approve' && user.role === 'ceo';
+  if (ceoSigns) await requireSignature(ctx);
+  const t = nextQuoteStatus(q.status, decision === 'approve' ? (ceoSigns ? 'approve_sign' : 'approve') : 'request_changes');
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
   const quote = await transition(ctx, {
     quote_id: q.id,
     expected_status: q.status,
     new_status: t.status,
     actor: user.id,
+    fields: ceoSigns ? { signed_by: user.id } : {},
     approval: { level: signing ? 'ceo' : q.approver, approver_id: user.id, decision, comment },
-    event_action: decision === 'approve' ? 'quote.approved' : 'quote.changes_requested',
+    event_action: decision === 'approve' ? (ceoSigns ? 'quote.approved_signed' : 'quote.approved') : 'quote.changes_requested',
     event_payload: { comment, open_comments: open },
   });
-  if (decision === 'approve') {
+  if (decision === 'approve' && !ceoSigns) {
     // Ask the CEO to sign now, or at the next working hour (deliverPendingApprovals).
     must(await ctx.db.from('quotes').update({ approval_notified_at: null }).eq('id', q.id).eq('status', 'signing'), 'reset notice');
     await notifyApproval(ctx, q.id);
@@ -311,6 +337,7 @@ export async function signQuote(ctx: Ctx, user: Profile, quoteId: string) {
   const t = nextQuoteStatus(q.status, 'sign');
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
   if ((await openThreadCount(ctx, q.id)) > 0) throw new ApiError(409, 'open_comments', 'Còn góp ý mở: xử lý xong rồi ký.');
+  await requireSignature(ctx);
   const quote = await transition(ctx, {
     quote_id: q.id,
     expected_status: 'signing',

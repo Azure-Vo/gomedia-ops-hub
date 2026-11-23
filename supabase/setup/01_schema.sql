@@ -1578,4 +1578,19 @@ update public.quote_terms t set default_on = false
   where t.choice_group is not null and t.default_on
     and exists (select 1 from public.quote_terms o where o.choice_group = t.choice_group and o.default_on and (o.position, o.id::text) < (t.position, t.id::text));
 
+-- 1.7.0 (23/11 tối): the CEO's signature image, printed on quotes the CEO has signed (and on quick quotes
+-- inside the price band). One row. Written only by the Edge Function (CEO/Admin); read by roles that make or review quotes.
+create table if not exists public.quote_signature (
+  id int primary key default 1 check (id = 1),
+  image text not null check (image like 'data:image/png;base64,%' and length(image) <= 400000),
+  signer_name text,
+  updated_by uuid references public.profiles(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+alter table public.quote_signature enable row level security;
+drop policy if exists quote_signature_read on public.quote_signature;
+create policy quote_signature_read on public.quote_signature for select to authenticated
+  using (public.has_role('account','pm','ceo','admin'));
+grant select on public.quote_signature to authenticated;
+
 commit;

@@ -18,6 +18,8 @@ describe('1.7 · loại báo giá, CEO ký, kết quả khách', () => {
     expect(nextQuoteStatus('signing', 'request_changes')).toEqual({ ok: true, status: 'changes_requested' });
     expect(nextQuoteStatus('signing', 'edit')).toEqual({ ok: true, status: 'draft' });
     expect(nextQuoteStatus('approved', 'sign').ok).toBe(false);
+    expect(nextQuoteStatus('pending', 'approve_sign')).toEqual({ ok: true, status: 'approved' });
+    expect(nextQuoteStatus('signing', 'approve_sign').ok).toBe(false);
   });
   it('checks who records the client answer and what it needs', () => {
     const q = { status: 'sent' as const, source: 'app' as const, createdBy: 'acc', hasProject: false };

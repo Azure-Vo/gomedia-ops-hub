@@ -109,6 +109,59 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
   return <input {...rest} className={cx(fieldBase(className), 'min-h-[40px]', className)} />;
 }
 
+/**
+ * A number box that types like a text box: no "010" when you type over a 0, comma or dot as decimal mark,
+ * everything selected on focus, ↑/↓ step by `step`. The value is clamped to [min, max] as you type.
+ */
+export function NumberField({
+  value,
+  onValue,
+  min = 0,
+  max = Number.MAX_SAFE_INTEGER,
+  step = 1,
+  decimals = 1,
+  className,
+  ...rest
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'min' | 'max' | 'step' | 'type'> & { value: number; onValue: (v: number) => void; min?: number; max?: number; step?: number; decimals?: number }) {
+  const show = (v: number) => String(Math.round(v * 10 ** decimals) / 10 ** decimals).replace('.', ',');
+  const [draft, setDraft] = useState(show(value));
+  const parse = (t: string) => Number(t.replace(',', '.'));
+  useEffect(() => {
+    // Follow outside changes, but leave a half-typed "1," alone.
+    if (parse(draft) !== value) setDraft(show(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  const clamp = (v: number) => Math.min(max, Math.max(min, v));
+  const commit = (t: string) => {
+    let clean = t.replace(/[^\d.,]/g, '').replace(/[.,](?=.*[.,])/g, '');
+    clean = clean.replace(/^0+(?=\d)/, '');
+    if (decimals === 0) clean = clean.replace(/[.,].*$/, '');
+    setDraft(clean);
+    const n = parse(clean);
+    if (clean !== '' && Number.isFinite(n)) onValue(clamp(n));
+    else if (clean === '') onValue(clamp(0));
+  };
+  return (
+    <input
+      {...rest}
+      type="text"
+      inputMode={decimals ? 'decimal' : 'numeric'}
+      value={draft}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => commit(e.target.value)}
+      onBlur={() => setDraft(show(value))}
+      onKeyDown={(e) => {
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+        e.preventDefault();
+        const v = clamp(Math.round(((Number.isFinite(parse(draft)) ? parse(draft) : value) + (e.key === 'ArrowUp' ? step : -step)) * 1000) / 1000);
+        setDraft(show(v));
+        onValue(v);
+      }}
+      className={className}
+    />
+  );
+}
+
 export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...rest} className={cx(fieldBase(className), 'min-h-[88px] py-2', className)} />;
 }

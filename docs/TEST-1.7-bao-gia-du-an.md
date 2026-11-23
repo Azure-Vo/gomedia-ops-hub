@@ -23,6 +23,15 @@ Ghi kết quả: ✅ đúng · ❌ sai (chụp màn hình, ghi bước) · ⚠�
 
 ---
 
+## 0'. Chữ ký mẫu (làm 1 lần)
+
+| # | Vai trò | Thao tác | Kết quả mong đợi | KQ |
+|---|---|---|---|---|
+| S1 | CEO | Mở báo giá đang Chờ duyệt khi **chưa** có chữ ký mẫu | Nút **Duyệt & ký** bị khoá, có link "Tải hoặc vẽ chữ ký ở trang Hồ sơ" | |
+| S2 | CEO | **Hồ sơ** → Chữ ký mẫu → **Vẽ chữ ký** (chuột/cảm ứng) → Dùng chữ ký này → **Lưu** | Ảnh chữ ký hiện trong khung | |
+| S3 | CEO | **Tải ảnh** chữ ký chụp trên giấy trắng → Lưu | Nền giấy trắng thành trong suốt, chữ ký được cắt sát | |
+| S4 | Account | Mở trang Hồ sơ | **Không** có mục Chữ ký mẫu | |
+
 ## A. Báo giá dự án (luồng chính)
 
 | # | Vai trò | Thao tác | Kết quả mong đợi | KQ |
@@ -36,17 +45,15 @@ Ghi kết quả: ✅ đúng · ❌ sai (chụp màn hình, ghi bước) · ⚠�
 | A7 | PM | Góp ý 1 dòng (VD "Giảm SL") | Góp ý hiện trên báo giá | |
 | A8 | CEO | Duyệt báo giá → mở báo giá A1 | Nút **Duyệt** bị khoá khi còn góp ý mở | |
 | A9 | Account | Trả lời góp ý, bấm **Đã xử lý** | Góp ý đóng | |
-| A10 | CEO | Bấm **Duyệt** | Trạng thái **Chờ CEO ký**; banner có **Tải PDF để ký**, **Yêu cầu sửa**, **Đã ký** | |
-| A11 | Account | Mở báo giá | Banner "Chờ CEO ký"; **không** có nút gửi khách | |
-| A12 | CEO | Duyệt báo giá | Mục **Chờ bạn ký** có báo giá A1 | |
-| A13 | CEO | Bấm **Tải PDF để ký** | Tải file PDF | |
-| A14 | CEO | Bấm **Đã ký** | Trạng thái **Đã ký, sẵn sàng gửi**; banner ghi giờ ký | |
-| A15 | Account | Bấm **Xuất PDF & gửi** | Trạng thái **Đã gửi**; xuất PDF; khối **Khách trả lời** xuất hiện | |
+| A10 | CEO | Bấm **Xem trước PDF** | PDF có logo, chữ ký mẫu kèm dấu "XEM TRƯỚC" | |
+| A11 | CEO | Bấm **Duyệt & ký** | Trạng thái **Đã ký, sẵn sàng gửi**; banner "CEO đã ký · giờ ký" (không qua bước Chờ CEO ký) | |
+| A15 | Account | Bấm **Xuất PDF & gửi** | Trạng thái **Đã gửi**; PDF tải về **có chữ ký CEO** và dòng "Đã ký trên Go Media Ops Hub"; khối **Khách trả lời** xuất hiện | |
+| A15b | Account | Mở PDF | Logo Go Media, tiêu đề bảng đọc rõ (chữ trắng trên nền xanh), không dính chữ | |
 
 ### A'. CEO trả về ở bước ký
 | # | Vai trò | Thao tác | Kết quả mong đợi | KQ |
 |---|---|---|---|---|
-| A16 | CEO | Với một báo giá khác đang **Chờ CEO ký**: bấm **Yêu cầu sửa**, ghi lý do | Trạng thái **Yêu cầu sửa**; Account thấy lý do | |
+| A16 | CEO | Với một báo giá đang **Chờ duyệt** hoặc **Chờ CEO ký**: bấm **Yêu cầu sửa**, ghi lý do | Trạng thái **Yêu cầu sửa**; Account thấy lý do | |
 | A17 | Account | Sửa rồi gửi lại | Quay lại **Chờ duyệt**, phải duyệt và ký lại | |
 
 ## B. Khách trả lời
@@ -76,12 +83,13 @@ Ghi kết quả: ✅ đúng · ❌ sai (chụp màn hình, ghi bước) · ⚠�
 | # | Vai trò | Thao tác | Kết quả mong đợi | KQ |
 |---|---|---|---|---|
 | D1 | Account | Tạo báo giá, để **Báo giá nhanh**, hạng mục giá thư viện, chiết khấu 0 | Banner xanh "Trong khung giá · Account gửi được ngay" | |
-| D2 | Account | Bấm **Xuất PDF & gửi** | **Đã gửi** ngay, không qua bước ký (chữ ký in sẵn) | |
+| D2 | Account | Bấm **Xuất PDF & gửi** | **Đã gửi** ngay, không qua bước ký; PDF **có chữ ký mẫu** của CEO | |
 | D3 | Account | Ghi **Khách đã chốt**, chọn PM Thử nghiệm | Lưu được | |
 | D4 | PM | Trang dự án BX01 → **Gắn báo giá** → chọn D1 | Dòng Báo giá có thêm D1 | |
 | D5 | Account | Tạo báo giá nhanh, chiết khấu 40% | Banner cam "Ngoài khung giá"; nút **Gửi PM duyệt** hoặc **Gửi CEO duyệt** | |
-| D6 | PM/CEO | Duyệt D5 | Trạng thái **Chờ CEO ký** (cả khi PM duyệt) | |
-| D7 | CEO | **Đã ký** | Account gửi được | |
+| D6 | PM | Duyệt D5 (nếu cần PM duyệt) | Trạng thái **Chờ CEO ký**; CEO thấy D5 ở mục **Chờ bạn ký** | |
+| D7 | CEO | Mở D5 → Xem trước PDF → **Ký** | Đã ký; Account gửi được, PDF có chữ ký. (Nếu D5 cần CEO duyệt: CEO bấm **Duyệt & ký** một lần) | |
+| D8 | Account | Ô **SL** đang 0: bấm vào rồi gõ 10 | Hiện **10**, không phải 010; gõ "2,5" được 2,5 | |
 
 ## E. Điều khoản loại trừ nhau
 
@@ -91,6 +99,16 @@ Ghi kết quả: ✅ đúng · ❌ sai (chụp màn hình, ghi bước) · ⚠�
 | E2 | PM/CEO | Tick **Mặc định** cho 50/30/20 | 60/40 tự bỏ Mặc định | |
 | E3 | PM/CEO | Thêm điều khoản mới, ghi nhóm "Hình thức thanh toán" | Điều khoản vào đúng nhóm "chọn 1" trên báo giá | |
 | E4 | Account | Báo giá cũ (tạo trước 23/11) có tick cả 2 cách thanh toán → bấm gửi | Bị chặn: "Điều khoản Hình thức thanh toán chỉ chọn 1" | |
+
+## G. Group Lark (mô phỏng)
+
+| # | Vai trò | Thao tác | Kết quả mong đợi | KQ |
+|---|---|---|---|---|
+| G1 | PM | Dự án mới: nhập mã `LL02`, tên "Thử group" | Nút **Tạo group "LL02 - Thử group"** (không phải gõ tên) | |
+| G2 | PM | Nhập mã `MT35` (của dự án khác) | Báo mã đã có dự án; tạo group bị từ chối | |
+| G3 | PM | Mở danh sách group | Group đang gắn dự án khác hiện "(đang gắn …)" và không chọn được; "MT35 LOLO" hiện "(mã MT35 của dự án khác)" | |
+| G4 | PM | Ở dòng **Group chưa dùng**, bấm × cạnh "MT35 LOLO" | Group bị xoá khỏi danh sách | |
+| G5 | PM | Tìm group đang gắn dự án (VD "MT35 - Ra mắt…") trong dòng Group chưa dùng | Không có ở đó (không xoá được group đang dùng) | |
 
 ## F. Quyền (thử phá)
 

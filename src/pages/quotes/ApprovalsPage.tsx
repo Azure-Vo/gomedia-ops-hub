@@ -60,7 +60,7 @@ export function ApprovalsPage() {
         subtitle={level === 'ceo' ? 'Báo giá chờ bạn duyệt hoặc ký.' : `Báo giá ngoài khung giá cần ${ROLE_LABEL[level]} duyệt.`}
       />
       {data && data.extra.length > 0 && (
-        <Card className="mb-6" title={level === 'ceo' ? `Chờ bạn ký · ${data.extra.length}` : `Báo giá dự án cần góp ý · ${data.extra.length}`} subtitle={level === 'ceo' ? 'Ký số trên PDF, rồi bấm "Đã ký" trong báo giá.' : 'CEO duyệt; PM góp ý ngay trên báo giá.'}>
+        <Card className="mb-6" title={level === 'ceo' ? `Chờ bạn ký · ${data.extra.length}` : `Báo giá dự án cần góp ý · ${data.extra.length}`} subtitle={level === 'ceo' ? 'PM đã duyệt. Mở báo giá, xem trước rồi bấm Ký.' : 'CEO duyệt; PM góp ý ngay trên báo giá.'}>
           <ul className="flex flex-col">
             {data.extra.map((q) => (
               <li key={q.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-soft py-2.5 last:border-b-0">

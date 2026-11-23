@@ -14,7 +14,9 @@ import {
   cancelledMessage,
   changesDmMessage,
   changesGroupMessage,
+  chatCodeConflict,
   chatMatchesCode,
+  chatNameFor,
   checkinMessage,
   checkinToSend,
   checkProjectCode,
@@ -396,19 +398,46 @@ export async function listChats(ctx: Ctx, user: Profile, body: Record<string, un
     if (gone.length) await ctx.db.from('lark_chats').update({ active: false, updated_at: stamp }).in('chat_id', gone);
   }
   const rows = must(await ctx.db.from('lark_chats').select('chat_id, name, mode, active').eq('mode', w.cfg.mode).eq('active', true).order('name'), 'load chats') as { chat_id: string; name: string }[];
-  return { mode: w.cfg.mode, chats: rows };
+  // Which project already uses each group, so the picker can show it and refuse it.
+  const used = must(await ctx.db.from('lark_tasks').select('id, code, chat_id').eq('kind', 'parent').is('deleted_at', null).neq('state', 'cancelled').not('chat_id', 'is', null), 'chat usage') as { id: string; code: string; chat_id: string }[];
+  const by = new Map(used.map((u) => [u.chat_id, u]));
+  return { mode: w.cfg.mode, chats: rows.map((r) => ({ ...r, used_by: by.get(r.chat_id)?.code ?? null, used_by_id: by.get(r.chat_id)?.id ?? null })), codes: [...new Set(used.map((u) => u.code))] };
 }
 
-/** Simulation only: the PM "creates" a Lark group with the bot in it. */
+/**
+ * Simulation: the bot "creates" the project's group. The name is always "<MÃ> - <Tên dự án>" (no free typing),
+ * and a code that already has a group, or belongs to another project, is refused.
+ */
 export async function createSimChat(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
   if (user.role !== 'pm' && user.role !== 'admin') throw new ApiError(403, 'forbidden', 'Chỉ PM hoặc Admin.');
   const w = await workEnv(ctx);
   if (w.cfg.mode !== 'simulation') throw new ApiError(400, 'live', 'Đang kết nối Lark thật: hãy thêm bot vào group trên Lark.');
-  const name = String(body.name ?? '').trim();
-  if (!name) throw new ApiError(400, 'invalid', 'Nhập tên group.');
-  const row = { chat_id: `sim-chat:${crypto.randomUUID()}`, name, mode: 'simulation', active: true };
+  const code = normalizeProjectCode(String(body.code ?? ''));
+  const title = String(body.name ?? '').trim();
+  const codeErr = checkProjectCode(code);
+  if (codeErr.length) throw new ApiError(400, 'invalid', `Nhập mã dự án hợp lệ trước khi tạo group. ${codeErr.join(' ')}`);
+  if (!title) throw new ApiError(400, 'invalid', 'Nhập tên dự án trước khi tạo group.');
+  const projectId = body.project_id ? String(body.project_id) : null;
+  const owner = must(await ctx.db.from('lark_tasks').select('id, name').eq('kind', 'parent').eq('code', code).is('deleted_at', null).maybeSingle(), 'check code') as { id: string; name: string } | null;
+  if (owner && owner.id !== projectId) throw new ApiError(409, 'code_taken', `Mã ${code} đang là của dự án "${owner.name}". Đổi mã dự án trước khi tạo group.`);
+  const chats = must(await ctx.db.from('lark_chats').select('chat_id, name').eq('mode', 'simulation').eq('active', true), 'load chats') as { chat_id: string; name: string }[];
+  const same = chats.find((c) => chatMatchesCode(c.name, code));
+  if (same) throw new ApiError(409, 'chat_exists', `Đã có group cho mã ${code}: "${same.name}". Chọn group đó trong danh sách.`);
+  const row = { chat_id: `sim-chat:${crypto.randomUUID()}`, name: chatNameFor(code, title), mode: 'simulation', active: true };
   must(await ctx.db.from('lark_chats').insert(row), 'save chat');
   return { chat: row };
+}
+
+/** Simulation: remove a group made by mistake. Only one no project is using. */
+export async function deleteSimChat(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
+  if (user.role !== 'pm' && user.role !== 'admin') throw new ApiError(403, 'forbidden', 'Chỉ PM hoặc Admin.');
+  const w = await workEnv(ctx);
+  const chatId = String(body.chat_id ?? '');
+  if (w.cfg.mode !== 'simulation' || !chatId.startsWith('sim-chat:')) throw new ApiError(400, 'live', 'Group Lark thật: giải tán hoặc xoá bot khỏi group trên Lark.');
+  const holder = must(await ctx.db.from('lark_tasks').select('code, name').eq('kind', 'parent').eq('chat_id', chatId).is('deleted_at', null).limit(1).maybeSingle(), 'check chat') as { code: string; name: string } | null;
+  if (holder) throw new ApiError(409, 'in_use', `Group đang gắn với dự án ${holder.code} · ${holder.name}. Bỏ gắn trước khi xoá.`);
+  must(await ctx.db.from('lark_chats').delete().eq('chat_id', chatId), 'delete chat');
+  return { ok: true };
 }
 
 async function syncMembersFromChat(ctx: Ctx, w: WorkEnv, project: WorkRow) {
@@ -424,9 +453,22 @@ async function syncMembersFromChat(ctx: Ctx, w: WorkEnv, project: WorkRow) {
   if (left.length) await ctx.db.from('project_members').delete().in('id', left);
 }
 
-async function bindChat(ctx: Ctx, w: WorkEnv, project: WorkRow, chatId: string): Promise<WorkRow> {
+/** Why this group cannot belong to the project with this code (null = it can). */
+async function chatProblem(ctx: Ctx, w: WorkEnv, chatId: string, code: string, projectId: string | null): Promise<string | null> {
   const chat = must(await ctx.db.from('lark_chats').select('chat_id, name, mode, active').eq('chat_id', chatId).maybeSingle(), 'load chat') as { chat_id: string; name: string; mode: string; active: boolean } | null;
-  if (!chat || !chat.active || chat.mode !== w.cfg.mode) throw new ApiError(400, 'invalid', 'Bot chưa ở trong group này. Thêm bot vào group trên Lark rồi tải lại danh sách.');
+  if (!chat || !chat.active || chat.mode !== w.cfg.mode) return 'Bot chưa ở trong group này. Thêm bot vào group trên Lark rồi tải lại danh sách.';
+  const others = must(await ctx.db.from('lark_tasks').select('id, code, name, chat_id, state').eq('kind', 'parent').is('deleted_at', null), 'load projects') as { id: string; code: string; name: string; chat_id: string | null; state: string }[];
+  const holder = others.find((p) => p.id !== projectId && p.chat_id === chat.chat_id && p.state !== 'cancelled');
+  if (holder) return `Group "${chat.name}" đang gắn với dự án ${holder.code} · ${holder.name}.`;
+  const clash = chatCodeConflict(chat.name, code, others.filter((p) => p.id !== projectId).map((p) => p.code));
+  if (clash) return `Tên group "${chat.name}" mang mã ${clash} của dự án khác. Chọn group có mã ${normalizeProjectCode(code)}.`;
+  return null;
+}
+
+async function bindChat(ctx: Ctx, w: WorkEnv, project: WorkRow, chatId: string): Promise<WorkRow> {
+  const problem = await chatProblem(ctx, w, chatId, project.code ?? '', project.id);
+  if (problem) throw new ApiError(400, 'invalid', problem);
+  const chat = must(await ctx.db.from('lark_chats').select('chat_id, name').eq('chat_id', chatId).single(), 'load chat') as { chat_id: string; name: string };
   const row = must(
     await ctx.db.from('lark_tasks').update({ chat_id: chat.chat_id, chat_name: chat.name, chat_status: 'linked', chat_warned_at: null }).eq('id', project.id).select(WORK_COLS).single(),
     'link chat',
@@ -477,6 +519,10 @@ export async function createProject(ctx: Ctx, user: Profile, body: Record<string
   else {
     if (dueDate <= startDate) errors.push('Deadline dự án phải sau ngày bắt đầu.');
     if (dueDate < w.today) errors.push('Deadline dự án đã qua.');
+  }
+  if (body.chat_id) {
+    const problem = await chatProblem(ctx, w, String(body.chat_id), String(body.code ?? ''), null);
+    if (problem) errors.push(problem);
   }
   const fromQuote = body.quote_id ? await quoteForLink(ctx, String(body.quote_id), user) : null;
   if (fromQuote?.errors.length) errors.push(...fromQuote.errors);

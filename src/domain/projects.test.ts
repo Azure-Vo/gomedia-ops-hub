@@ -32,6 +32,8 @@ import {
   taskDateErrors,
   personMonthStats,
   loadState,
+  chatCodeConflict,
+  chatNameFor,
   starOutlook,
   suggestQuality,
   type SummaryTask,
@@ -354,5 +356,18 @@ describe('Go Star gợi ý sao (1.6.4)', () => {
     const scored = starOutlook({ ...row, stars: { ...row.stars, teamwork: true }, score: { quality: null, kpiPct: 80, teamwork: 4 } }, null, { qualityMinScore: 4 });
     expect(scored.slots.map((x) => x.state)).toEqual(['on', 'off', 'open', 'off', 'on']);
     expect([scored.sure, scored.likely, scored.max]).toEqual([2, 2, 3]);
+  });
+});
+
+describe('Group Lark: tên chuẩn và mã trùng (1.7)', () => {
+  it('names a group with a plain hyphen', () => {
+    expect(chatNameFor('mt35', '  Ra mắt   BST ')).toBe('MT35 - Ra mắt BST');
+  });
+  it('refuses a group that carries another project code', () => {
+    expect(chatCodeConflict('MT35 LOLO', 'LL01', ['MT35', 'LS12'])).toBe('MT35');
+    expect(chatCodeConflict('LL01 - LOLO', 'LL01', ['MT35'])).toBeNull();
+    expect(chatCodeConflict('MT35 · Ra mắt', 'MT35', ['MT35', 'LS12'])).toBeNull();
+    expect(chatCodeConflict('Nhóm khách LOLO', 'LL01', ['MT35'])).toBeNull();
+    expect(chatCodeConflict('MT350 promo', 'LL01', ['MT35'])).toBeNull();
   });
 });

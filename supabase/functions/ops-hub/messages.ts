@@ -72,7 +72,7 @@ export function decisionText(o: { code: string; decision: 'approve' | 'changes';
 }
 
 export function signRequestText(o: { code: string; client: string }): string {
-  return [`<b>Báo giá chờ CEO ký · ${e(o.code)}</b>`, `Khách: ${e(o.client)}`, 'Ký số trên PDF rồi bấm "Đã ký" trong app.'].join('\n');
+  return [`<b>Báo giá chờ CEO ký · ${e(o.code)}</b>`, `Khách: ${e(o.client)}`, 'Mở báo giá, xem trước rồi bấm Ký.'].join('\n');
 }
 
 export function commentText(o: { code: string; client: string; authorName: string; place: string; body: string; reply: boolean }): string {
