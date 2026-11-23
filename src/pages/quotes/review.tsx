@@ -486,8 +486,8 @@ export function ReviewCard({ quoteId, code, locked }: { quoteId: string; code: s
         </h2>
         <p className="mt-1 text-sm text-ink-3">
           {locked
-            ? 'Báo giá đã gửi khách: góp ý được giữ lại để xem, không thêm mới.'
-            : 'Gửi link này cho PM hoặc CEO. Họ mở báo giá, bấm biểu tượng góp ý ở đúng dòng cần sửa. Không cần xuất PDF hay gửi email.'}
+            ? 'Đã gửi khách: chỉ xem góp ý, không thêm mới.'
+            : 'Gửi link này cho người duyệt. Họ góp ý ngay trên từng dòng.'}
         </p>
       </div>
       <Button

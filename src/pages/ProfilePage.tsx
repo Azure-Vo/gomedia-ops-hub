@@ -68,7 +68,7 @@ export function ProfilePage() {
             </div>
           </div>
         </Card>
-        <Card title="Telegram" subtitle="Bot nhắn check-in, cảnh báo và yêu cầu duyệt, chỉ trong giờ làm việc.">
+        <Card title="Telegram" subtitle="Nhận nhắc việc và yêu cầu duyệt, trong giờ làm.">
           {tg.loading ? (
             <Loading />
           ) : tg.error ? (
@@ -87,10 +87,10 @@ export function ProfilePage() {
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {!bot && <Banner tone="warn">Admin chưa kết nối bot (trang Diagnostics). Bạn vẫn lấy mã được, nhưng cần tên bot để mở liên kết.</Banner>}
+              {!bot && <Banner tone="warn">Admin chưa kết nối bot. Lấy mã trước, liên kết sau.</Banner>}
               <ol className="list-decimal pl-5 text-[15px] text-ink-2">
                 <li>Bấm "Lấy mã liên kết".</li>
-                <li>Bấm "Mở Telegram" (trên điện thoại hoặc máy tính có Telegram) rồi bấm Start.</li>
+                <li>Bấm "Mở Telegram", rồi bấm Start.</li>
                 <li>Bot trả lời "Đã liên kết" là xong.</li>
               </ol>
               {status?.code ? (

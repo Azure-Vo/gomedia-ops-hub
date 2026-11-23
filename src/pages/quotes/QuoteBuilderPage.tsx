@@ -678,7 +678,7 @@ export function QuoteBuilderPage() {
             <Field label="Người liên hệ">{(fid) => <Input id={fid} value={header.contact} disabled={!editable} onChange={(e) => setH({ contact: e.target.value })} placeholder="Họ tên, SĐT" />}</Field>
             <Field label="Dự án">{(fid) => <Input id={fid} value={header.project} disabled={!editable} onChange={(e) => setH({ project: e.target.value })} placeholder="VD: Lễ khai giảng 2026" />}</Field>
             <Field label="Địa điểm">{(fid) => <Input id={fid} value={header.venue} disabled={!editable} onChange={(e) => setH({ venue: e.target.value })} placeholder="VD: Khách sạn 5 sao, Đà Nẵng" />}</Field>
-            <Field label="Khách gửi yêu cầu lúc" hint={`Mốc bắt đầu tính thời gian báo giá · đang chọn ${fmtVnLong(header.requested_at, tz)}`}>
+            <Field label="Khách gửi yêu cầu lúc" hint={`Bắt đầu tính giờ · ${fmtVnLong(header.requested_at, tz)}`}>
               {(fid) => (
                 <Input
                   id={fid}
@@ -733,7 +733,7 @@ export function QuoteBuilderPage() {
                 <tbody>
                   <tr>
                     <td colSpan={7} className="border-b border-line-soft px-3 py-6 text-ink-3">
-                      Chưa có hạng mục. Thêm từ Thư viện giá (mỗi nhóm dịch vụ thành một phần), hoặc chép từ một báo giá tương tự bên phải.
+                      Chưa có hạng mục. Thêm từ Thư viện giá, hoặc chép từ báo giá tương tự bên phải.
                       {editable && (
                         <div className="mt-3">
                           <Button variant="accent" icon="plus" onClick={() => setPickerFor(pickerFor === AUTO_SECTION ? null : AUTO_SECTION)} aria-expanded={pickerFor === AUTO_SECTION}>
@@ -1010,7 +1010,7 @@ export function QuoteBuilderPage() {
               <h2 className="text-[17px] font-semibold text-ink">Điều khoản và ghi chú</h2>
               <CommentToggle target={{ anchor: 'terms' }} label={ANCHOR_LABEL.terms} />
             </div>
-            <p className="mt-0.5 text-[13px] text-ink-3">Tick để đưa vào báo giá. Điều khoản mẫu do PM quản lý ở trang Thư viện giá.</p>
+            <p className="mt-0.5 text-[13px] text-ink-3">Chọn điều khoản in trên báo giá.</p>
             <ul className="mt-3 flex flex-col gap-1.5">
               {libraryTerms.map((t) => (
                 <li key={t.id}>
@@ -1056,7 +1056,7 @@ export function QuoteBuilderPage() {
           {quote.status === 'changes_requested' && lastDecision?.decision === 'changes' && (
             <Banner tone="bad" title={`${ROLE_LABEL[lastDecision.level]} yêu cầu sửa`}>
               “{lastDecision.comment}” — {personName(people, lastDecision.approver_id)}, {fmtVnDateTime(lastDecision.decided_at, tz)}.
-              {openComments > 0 ? ` Còn ${openComments} góp ý đang mở, ghi ngay tại dòng cần sửa. Sửa xong, trả lời hoặc đánh dấu "Đã xử lý" rồi gửi lại.` : ' Sửa báo giá rồi gửi lại.'}
+              {openComments > 0 ? ` Còn ${openComments} góp ý mở. Sửa, đánh dấu "Đã xử lý", rồi gửi lại.` : ' Sửa báo giá rồi gửi lại.'}
             </Banner>
           )}
           {editable && lines.length > 0 && (
@@ -1106,7 +1106,7 @@ export function QuoteBuilderPage() {
               actions={isOwner && <Button variant="secondary" icon="edit" onClick={() => setConfirmReopen(true)}>Sửa báo giá</Button>}
             >
               Gửi duyệt lúc {quote.approval_requested_at ? fmtVnDateTime(quote.approval_requested_at, tz) : '–'}. Chỉ báo giá ngoài khung mới đến bước này.
-              {isOwner && ' Gửi link báo giá cho người duyệt để họ xem và góp ý ngay trên báo giá.'}
+              {isOwner && ' Có thể gửi link cho người duyệt.'}
               <BandReasons band={quote.band_detail} />
             </Banner>
           )}
@@ -1115,8 +1115,8 @@ export function QuoteBuilderPage() {
               title="Quyết định của bạn"
               subtitle={
                 openComments > 0
-                  ? `Đang có ${openComments} góp ý mở. Chọn Yêu cầu sửa để trả về Account, hoặc đánh dấu đã xử lý hết rồi Duyệt.`
-                  : 'Chỗ nào chưa ổn, bấm biểu tượng góp ý ở đúng dòng đó rồi chọn Yêu cầu sửa. Ổn hết thì Duyệt.'
+                  ? `Còn ${openComments} góp ý mở: Yêu cầu sửa, hoặc xử lý hết rồi Duyệt.`
+                  : 'Góp ý ngay tại dòng chưa ổn rồi Yêu cầu sửa. Ổn thì Duyệt.'
               }
             >
               <div className="flex flex-wrap gap-2">
@@ -1158,7 +1158,7 @@ export function QuoteBuilderPage() {
                 <span>Xử lý trong {fmtNum(elapsed, 2)} giờ làm việc</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <span className="font-semibold text-ok-ink">Đã lưu vào Kho tham chiếu để báo giá tương tự sau này dùng lại.</span>
+                <span className="font-semibold text-ok-ink">Đã lưu vào Kho tham chiếu.</span>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" icon="download" busy={busy === 'pdf'} onClick={() => run('pdf', async () => { if (pdfRef.current) await downloadQuotePdf(pdfRef.current, quote.code); })}>
                     Tải PDF
@@ -1189,9 +1189,9 @@ export function QuoteBuilderPage() {
         <aside aria-label="Báo giá tương tự" className="flex min-w-0 flex-col gap-0 border-t border-ink pt-3.5">
           <div className="mb-1">
             <h2 className="text-[17px] font-semibold text-ink">Báo giá tương tự đã gửi</h2>
-            <p className="mt-0.5 text-[13.5px] text-ink-3">Từ Kho tham chiếu · cùng nhóm dịch vụ trước, rồi theo số hạng mục trùng</p>
+            <p className="mt-0.5 text-[13.5px] text-ink-3">Cùng nhóm dịch vụ, nhiều hạng mục trùng nhất</p>
           </div>
-          {!similar.length && <p className="text-sm text-ink-3">Chưa có báo giá tương tự. Chọn nhóm dịch vụ hoặc thêm hạng mục để gợi ý.</p>}
+          {!similar.length && <p className="text-sm text-ink-3">Chọn nhóm dịch vụ hoặc thêm hạng mục để thấy gợi ý.</p>}
           {similar.map(({ q, sharedItems, sameGroup }) => (
             <SimilarCard key={q.id} q={q} sharedItems={sharedItems} sameGroup={sameGroup} tz={tz} editable={editable} hasLines={lines.length > 0} onAdd={(mode) => addFrom(q, mode)} />
           ))}
@@ -1252,7 +1252,7 @@ export function QuoteBuilderPage() {
           </>
         }
       >
-        <p className="text-[15px] text-ink-2">Mọi chỉnh sửa sau khi gửi duyệt hoặc đã duyệt đều đưa báo giá về Nháp. Sửa xong phải gửi duyệt lại (nếu vẫn ngoài khung giá).</p>
+        <p className="text-[15px] text-ink-2">Sửa sẽ đưa báo giá về Nháp. Nếu vẫn ngoài khung giá, phải gửi duyệt lại.</p>
       </Modal>
     </div>
     </ReviewProvider>
@@ -1312,7 +1312,7 @@ function SimilarCard({
               <span className="shrink-0 tabular-nums text-ink-3">{fmtVnd(Number(l.unit_price) * Number(l.qty))}</span>
             </li>
           ))}
-          <li className="pt-1.5 text-[12px] text-ink-3">Giá trên là giá lúc gửi; khi thêm vào báo giá này, giá lấy theo thư viện hôm nay.</li>
+          <li className="pt-1.5 text-[12px] text-ink-3">Giá lúc gửi. Khi chép, lấy giá thư viện hôm nay.</li>
         </ul>
       )}
       {editable && (

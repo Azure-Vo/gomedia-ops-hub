@@ -54,7 +54,7 @@ export function SummaryPage() {
     <div>
       <PageHeader
         title="Tóm tắt hôm nay"
-        subtitle={`${fmtDueDate(data.today)} · số liệu mới nhất mỗi lần mở trang. Bản tin Lark gửi riêng cho PM lúc ${settings?.summary_morning_time ?? '08:30'}${settings?.summary_evening_on === false ? '' : ` và ${settings?.summary_evening_time ?? '17:30'}`}.`}
+        subtitle={`${fmtDueDate(data.today)} · bot gửi bản tin lúc ${settings?.summary_morning_time ?? '08:30'}${settings?.summary_evening_on === false ? '' : ` và ${settings?.summary_evening_time ?? '17:30'}`}`}
       />
       <div className="mb-7 grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="Quá hạn" value={sum((s) => s.overdue.length)} tone={sum((s) => s.overdue.length) ? 'bad' : null} />

@@ -75,7 +75,7 @@ export function ProjectsPage() {
   );
   const empty = (
     <EmptyState title={data.projects.length ? 'Không có dự án nào trong mục này' : staffView ? 'Bạn chưa là thành viên dự án nào' : 'Chưa có dự án'} action={pm && !data.projects.length ? <Button icon="plus" onClick={() => setCreating(true)}>Tạo dự án đầu tiên</Button> : undefined}>
-      {staffView ? 'Khi PM mời bạn vào dự án và bạn chọn Tham gia, dự án sẽ hiện ở đây.' : 'Dự án gắn với group Lark của nó; task trong dự án có mã tự sinh như MT35-01.'}
+      {staffView ? 'Dự án hiện ở đây khi bạn Tham gia lời mời.' : 'Tạo dự án để bắt đầu giao task.'}
     </EmptyState>
   );
 
@@ -91,11 +91,11 @@ export function ProjectsPage() {
       ) : (
         <div className="flex flex-col gap-8">
           {showMine && (
-            <Section title="Dự án của tôi" count={mine.length} note="Bạn quản lý: tạo task, duyệt, gia hạn.">
+            <Section title="Dự án của tôi" count={mine.length} >
               {mine.length ? list(mine, false) : <p className="py-3 text-[14px] text-ink-3">Không có dự án nào của bạn trong mục này.</p>}
             </Section>
           )}
-          <Section title={pm ? 'Dự án của PM khác' : 'Tất cả dự án'} count={others.length} note={pm ? 'Chỉ xem. Muốn thay đổi, liên hệ PM phụ trách.' : undefined} tone={pm ? 'muted' : undefined}>
+          <Section title={pm ? 'Dự án của PM khác' : 'Tất cả dự án'} count={others.length} note={pm ? 'Chỉ xem' : undefined} tone={pm ? 'muted' : undefined}>
             {otherGroups.length ? (
               <div className="flex flex-col gap-5">
                 {otherGroups.map(([name, rows]) => (
@@ -119,7 +119,7 @@ export function ProjectsPage() {
     <div>
       <PageHeader
         title={staffView ? 'Dự án của tôi' : 'Dự án'}
-        subtitle={staffView ? 'Các dự án bạn là thành viên. Bạn xem được mọi task trong dự án, chỉ thao tác được task của mình.' : 'Dự án trễ và có nguy cơ xếp trước. Bấm vào dự án để xem task, thành viên và lịch sử nhắc việc.'}
+        subtitle={staffView ? 'Dự án bạn tham gia.' : 'Dự án trễ, có nguy cơ xếp trước.'}
         actions={
           pm && (
             <Button icon="plus" onClick={() => setCreating(true)}>

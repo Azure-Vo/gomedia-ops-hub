@@ -51,7 +51,7 @@ export function CalendarPage() {
   const view: View = (params.get('view') as View) || (manager ? 'month' : 'week');
   const [anchor, setAnchor] = useState<string | null>(null);
   const [projectFilter, setProjectFilter] = useState('');
-  const [personFilter, setPersonFilter] = useState('');
+  const [personFilter, setPersonFilter] = useState(params.get('nguoi') ?? '');
   const [healthFilter, setHealthFilter] = useState<'' | 'red' | 'amber'>('');
   const [hideDone, setHideDone] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -433,7 +433,7 @@ export function CalendarPage() {
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-3 w-5 rounded-[3px] border border-l-[3px] border-line border-l-ok bg-white" /> Task (chip viền, viền trái theo sức khoẻ)
             </span>
-            {canDrag ? <span>Kéo task sang ngày khác để gia hạn (bắt buộc chọn lý do).</span> : <span>Chỉ PM đổi được deadline.</span>}
+            {canDrag ? <span>Kéo task sang ngày khác để gia hạn.</span> : null}
           </div>
         </div>
 
@@ -614,8 +614,8 @@ function ExtendDialog({ task, to, today, onClose, onDone }: { task: Task; to: st
         {task.name}: <b>{fmtDueDate(task.due_date)}</b> → <b>{fmtDueDate(to)}</b>
       </p>
       <div className="flex flex-col gap-3">
-        {task.due_date < today && <Banner tone="warn">Task đã quá hạn từ {fmtDueDate(task.kpi_due_date ?? task.due_date)}. Kéo sang ngày mới chỉ dời ngày làm việc; nếu chọn "Người làm cần thêm thời gian", task vẫn bị tính trễ.</Banner>}
-        <Field label="Vì sao phải gia hạn?" hint="Quyết định task có bị tính trễ khi chấm KPI hay không.">
+        {task.due_date < today && <Banner tone="warn">Task quá hạn từ {fmtDueDate(task.kpi_due_date ?? task.due_date)}. Gia hạn không xoá việc trễ, trừ khi do yêu cầu thay đổi.</Banner>}
+        <Field label="Vì sao phải gia hạn?" hint="Quyết định task có bị tính trễ không.">
           {() => <ExtendReasonPicker value={reason} onChange={setReason} newDue={to} kpiDue={task.kpi_due_date ?? task.due_date} />}
         </Field>
         <Field label="Ghi chú (không bắt buộc)">{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
@@ -658,7 +658,7 @@ function ProjectDueDialog({ project, to, onClose, onDone }: { project: Project; 
       <p className="mb-3 text-[14.5px]">
         <b>{fmtDueDate(project.due_date)}</b> → <b>{fmtDueDate(to)}</b>
       </p>
-      <Field label="Vì sao đổi deadline dự án?" hint="Deadline từng task không tự đổi; gia hạn task riêng nếu cần.">
+      <Field label="Vì sao đổi deadline dự án?" hint="Deadline từng task không tự đổi.">
         {() => <ExtendReasonPicker value={reason} onChange={setReason} newDue={to} kpiDue={project.kpi_due_date ?? project.due_date} subject="project" />}
       </Field>
     </Modal>

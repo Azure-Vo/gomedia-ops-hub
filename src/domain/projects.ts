@@ -274,8 +274,8 @@ export const EXTEND_REASON_LABEL: Record<ExtendReason, string> = {
 };
 /** When to pick each reason, in plain words (shown under the choice). */
 export const EXTEND_REASON_HINT: Record<ExtendReason, string> = {
-  scope: 'Khách hoặc PM đổi brief, thêm việc, chờ khách gửi tài liệu/duyệt. Lỗi không nằm ở người làm.',
-  quality: 'Người làm chưa kịp, hoặc kết quả chưa đạt phải làm lại. Gia hạn để có thời gian làm tiếp, không xoá việc trễ.',
+  scope: 'Khách/PM đổi brief, thêm việc, chờ khách.',
+  quality: 'Chưa kịp, hoặc kết quả chưa đạt phải làm lại.',
 };
 
 /** PRD 6.4: "scope" moves the KPI deadline with the new date, "quality" keeps the original one. */
@@ -872,6 +872,18 @@ export function shiftMonth(month: string, n: number): string {
 /** Workload shade for the people × days view: 0 none, 1 one task, 2 two, 3 three or more. */
 export function loadLevel(n: number): 0 | 1 | 2 | 3 {
   return n <= 0 ? 0 : n === 1 ? 1 : n === 2 ? 2 : 3;
+}
+
+/** Trang Nhân sự: how much one person carries right now, to decide who gets the next task. */
+export type LoadState = 'help' | 'busy' | 'ok' | 'free';
+export const LOAD_LABEL: Record<LoadState, string> = { help: 'Cần hỗ trợ', busy: 'Đang kín việc', ok: 'Vừa sức', free: 'Đang rảnh' };
+/** Open tasks at or above this, or this many due in the next 7 days, count as "kín việc". */
+export const BUSY_OPEN = 5;
+export const BUSY_NEXT7 = 3;
+export function loadState(c: { open: number; overdue: number; blocked: number; next7: number }): LoadState {
+  if (c.overdue > 0 || c.blocked > 0) return 'help';
+  if (c.open >= BUSY_OPEN || c.next7 >= BUSY_NEXT7) return 'busy';
+  return c.open === 0 ? 'free' : 'ok';
 }
 
 /** Project colours for the calendar (navy-family first, then distinct hues readable on white). */

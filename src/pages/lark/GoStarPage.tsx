@@ -167,7 +167,7 @@ export function GoStarPage() {
   const myOpenId = `sim:${me.id}`;
 
   async function closeMonth() {
-    if (!window.confirm(`Chốt Go Star ${monthLabel(month)}? Sau khi chốt, bảng xếp hạng và tiền thưởng được giữ nguyên, điểm của tháng không sửa được nữa.`)) return;
+    if (!window.confirm(`Chốt Go Star ${monthLabel(month)}? Sau khi chốt không sửa điểm được nữa.`)) return;
     setBusy(true);
     try {
       check(await supabase.from('gostar_months').insert({ month, finalized_by: me.id, result: { rows: live, rules: DEFAULT_GOSTAR_RULES, computedAt: new Date().toISOString() } }));
@@ -197,7 +197,13 @@ export function GoStarPage() {
     <div>
       <PageHeader
         title="Go Star · Ghi nhận nhân viên"
-        subtitle="Mỗi tiêu chí đạt yêu cầu được 1 sao/tháng, tối đa 5 sao. Cuối tháng xếp hạng: hạng 1 nhận 1.000.000đ và danh hiệu “Employee of the Month”, hạng 2 nhận 500.000đ, hạng 3 nhận 200.000đ."
+        info="Hạng 1 nhận thêm danh hiệu Employee of the Month. Người 0 sao không xếp hạng."
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>Mỗi tiêu chí đạt = 1 sao</span>
+            <span className="text-ink-2">🥇 1.000.000đ · 🥈 500.000đ · 🥉 200.000đ</span>
+          </span>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Select aria-label="Chọn tháng" value={month} onChange={(e) => setMonth(e.target.value)} className="min-w-[160px]">
@@ -230,7 +236,7 @@ export function GoStarPage() {
         <>
           {closed ? (
             <Banner tone="ok" title={`Đã chốt ${monthLabel(month)}`} className="mb-4">
-              {profileName(closed.finalized_by)} chốt lúc {fmtVnDateTime(closed.finalized_at, tz)}. Bảng dưới đây là kết quả đã khoá; điểm của tháng không sửa được nữa.
+              {profileName(closed.finalized_by)} chốt lúc {fmtVnDateTime(closed.finalized_at, tz)}. Kết quả đã khoá.
             </Banner>
           ) : over ? (
             <Banner tone="warn" title={`${monthLabel(month)} đã kết thúc, chưa chốt`} className="mb-4">
@@ -239,13 +245,13 @@ export function GoStarPage() {
             </Banner>
           ) : (
             <Banner tone="info" title="Đang tạm tính" className="mb-4">
-              Hai sao Task Completion và Deadline tự tính từ các task đã được PM duyệt, đến hôm nay
-              {notYetDue ? ` (còn ${notYetDue} task chưa đến hạn hoặc đang chờ duyệt, chưa tính)` : ''}. Ba sao còn lại theo điểm quản lý chấm. CEO chốt sau ngày cuối tháng.
+              2 sao tự tính, 3 sao quản lý chấm. CEO chốt sau ngày cuối tháng.
+              {notYetDue ? ` ${notYetDue} task chưa tính.` : ''}
             </Banner>
           )}
 
           {!rows.length ? (
-            <EmptyState title="Chưa có nhân viên nào trong tháng này">Bảng xếp hạng gồm nhân viên và những ai có task đến hạn trong tháng.</EmptyState>
+            <EmptyState title="Chưa có ai trong tháng này" />
           ) : (
             <>
               <div className="mb-8 grid border-y border-ink md:grid-cols-3">
@@ -291,7 +297,8 @@ export function GoStarPage() {
 
               <Card
                 title={`Bảng xếp hạng ${monthLabel(month)}`}
-                subtitle={`${rows.length} người · cùng số sao thì xét KPI, rồi Chất lượng, rồi Teamwork (mức độ đóng góp)`}
+                subtitle={`${rows.length} người`}
+                info="Bằng sao thì so % KPI, rồi điểm Chất lượng, rồi Teamwork. Vẫn bằng thì đồng hạng, chia đều thưởng."
                 className="mb-4"
               >
                 <div className="relative overflow-x-auto">
@@ -361,7 +368,7 @@ export function GoStarPage() {
               </Card>
 
               <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-                <Card title="Cách tính sao" subtitle="Ngưỡng hiện tại là giả định của nhóm, chờ CEO chốt">
+                <Card title="Cách tính sao" subtitle="Ngưỡng tạm, chờ CEO chốt">
                   <ul className="flex flex-col gap-2.5 text-[14px] text-ink-2">
                     <li>
                       <b className="text-ink">1. Task Completion</b> (tự tính): mọi task đến hạn trong tháng đều đã được PM duyệt (≥ {rules.completionMinPct}%).
@@ -381,14 +388,14 @@ export function GoStarPage() {
                     <li className="border-t border-line-soft pt-2.5">
                       Bằng số sao thì so lần lượt: <b>% KPI</b> → <b>điểm Chất lượng</b> → <b>điểm Teamwork</b>. Vẫn bằng nhau thì đồng hạng, tiền thưởng của các hạng bị trùng chia đều. Người 0 sao không nhận thưởng.
                     </li>
-                    <li>Chấm điểm: PM, E-com Exec, CEO. CEO chốt tháng sau ngày cuối tháng; đã chốt thì không sửa được điểm.</li>
+                    <li>Người chấm: PM, E-com Exec, CEO. CEO chốt sau ngày cuối tháng.</li>
                   </ul>
                 </Card>
                 <div>
                   <h2 className="mb-2.5 text-[17px] font-semibold text-ink">Tin vinh danh trên group Lark</h2>
                   <BotCard message={goStarMessage(month, rows, (v) => fmtVnd(v))} />
                   <p className="mt-2 px-1 text-[12.5px] text-ink-3">
-                    {closed ? 'Nội dung tin vinh danh của tháng đã chốt.' : 'Xem trước theo số liệu tạm tính; tin chính thức theo kết quả lúc CEO chốt tháng.'} Bước bot tự gửi lên group Lark chưa làm.
+                    {closed ? 'Tin của tháng đã chốt.' : 'Xem trước, theo số liệu tạm tính.'} Chưa tự gửi lên Lark.
                   </p>
                 </div>
               </div>
@@ -488,10 +495,11 @@ function ScoreModal({
     <Modal
       open
       onClose={onClose}
-      wide
+      wide="xl"
       title={`Chấm điểm ${monthLabel(month)} · ${row.name}`}
       footer={
         <>
+          {existing && <span className="mr-auto self-center text-[12.5px] text-ink-3">Sửa lần cuối: {updatedByName(existing.updated_by)} · {fmtVnDateTime(existing.updated_at, tz)}</span>}
           <Button variant="ghost" onClick={onClose}>
             Huỷ
           </Button>
@@ -501,37 +509,41 @@ function ScoreModal({
         </>
       }
     >
-      <PersonFacts state={facts} name={row.name} month={month} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="KPI cá nhân của tháng" hint="Vd: 4 video đăng đúng lịch, doanh số shop…">
-          {(id) => <Input id={id} value={kpiName} onChange={(e) => setKpiName(e.target.value)} maxLength={120} />}
-        </Field>
-        <Field label="% KPI đạt được" hint="Đạt từ 100% được 1 sao" error={kpiErr}>
-          {(id) => <Input id={id} inputMode="decimal" value={kpi} onChange={(e) => setKpi(e.target.value)} placeholder="vd 105" />}
-        </Field>
-        <Field label="Work Quality (chất lượng đầu ra)" hint={facts.data && facts.data.onTime + facts.data.late > 0 ? `Từ 4/5 được 1 sao · ${facts.data.firstPass}/${facts.data.onTime + facts.data.late} task duyệt ngay lần đầu, ${facts.data.sentBack} lần trả về sửa` : 'Từ 4/5 được 1 sao'}>
-          {(id) => (
-            <Select id={id} value={quality} onChange={(e) => setQuality(e.target.value)}>
-              {scale}
-            </Select>
-          )}
-        </Field>
-        <Field label="Teamwork (hỗ trợ, phối hợp)" hint="Từ 4/5 được 1 sao">
-          {(id) => (
-            <Select id={id} value={teamwork} onChange={(e) => setTeamwork(e.target.value)}>
-              {scale}
-            </Select>
-          )}
-        </Field>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        {/* left: what the PM decides */}
+        <div className="flex flex-col gap-3 lg:order-1">
+          <h3 className="text-[14px] font-semibold text-ink">Điểm quản lý chấm</h3>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+            <Field label="KPI cá nhân" hint="VD: 4 video đúng lịch">
+              {(id) => <Input id={id} value={kpiName} onChange={(e) => setKpiName(e.target.value)} maxLength={120} />}
+            </Field>
+            <Field label="% đạt" hint="≥ 100% → 1 sao" error={kpiErr}>
+              {(id) => <Input id={id} inputMode="decimal" value={kpi} onChange={(e) => setKpi(e.target.value)} placeholder="105" />}
+            </Field>
+          </div>
+          <Field label="Work Quality" hint={facts.data && facts.data.onTime + facts.data.late > 0 ? `≥ 4 → 1 sao · ${facts.data.firstPass}/${facts.data.onTime + facts.data.late} duyệt ngay lần đầu` : '≥ 4 → 1 sao'}>
+            {(id) => (
+              <Select id={id} value={quality} onChange={(e) => setQuality(e.target.value)}>
+                {scale}
+              </Select>
+            )}
+          </Field>
+          <Field label="Teamwork" hint="≥ 4 → 1 sao">
+            {(id) => (
+              <Select id={id} value={teamwork} onChange={(e) => setTeamwork(e.target.value)}>
+                {scale}
+              </Select>
+            )}
+          </Field>
+          <Field label="Ghi chú, dẫn chứng">
+            {(id) => <Textarea id={id} rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: hỗ trợ Duyên dựng video KN032" />}
+          </Field>
+        </div>
+        {/* right: what the person did this month */}
+        <div className="min-w-0 lg:order-2 lg:border-l lg:border-line-soft lg:pl-6">
+          <PersonFacts state={facts} name={row.name} month={month} row={row} />
+        </div>
       </div>
-      <Field label="Ghi chú / dẫn chứng" className="mt-3">
-        {(id) => <Textarea id={id} rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Vd: hỗ trợ Duyên dựng video KN032 khi bạn ấy nghỉ ốm" />}
-      </Field>
-      {existing && (
-        <p className="mt-3 text-[12.5px] text-ink-3">
-          Lần sửa gần nhất: {updatedByName(existing.updated_by)} · {fmtVnDateTime(existing.updated_at, tz)}
-        </p>
-      )}
     </Modal>
   );
 }
@@ -584,7 +596,7 @@ function Tile({ label, value, sub, tone }: { label: string; value: string | numb
   );
 }
 
-function PersonFacts({ state, name, month }: { state: { data: PersonMonthStats | null; error: unknown; loading: boolean }; name: string; month: string }) {
+function PersonFacts({ state, name, month, row }: { state: { data: PersonMonthStats | null; error: unknown; loading: boolean }; name: string; month: string; row: GoStarRow }) {
   if (state.error) return <ErrorBox error={state.error} />;
   if (!state.data) return <div className="mb-4 h-[120px] animate-pulse rounded-lg bg-canvas" aria-label="Đang tải số liệu" />;
   const s = state.data;
@@ -592,23 +604,32 @@ function PersonFacts({ state, name, month }: { state: { data: PersonMonthStats |
   const latePct = judged ? Math.round(((s.late + s.overdue) / judged) * 100) : null;
   const approved = s.onTime + s.late;
   return (
-    <section className="mb-5" aria-label={`Số liệu ${monthLabel(month)} của ${name}`}>
-      <h3 className="mb-2 text-[14px] font-semibold text-ink">Số liệu {monthLabel(month).toLowerCase()} (theo deadline tính KPI)</h3>
+    <section aria-label={`Số liệu ${monthLabel(month)} của ${name}`}>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[14px] font-semibold text-ink">Số liệu {monthLabel(month).toLowerCase()}</h3>
+        <div className="flex gap-1.5">
+          {GOSTAR_CRITERIA.filter((c) => c.source === 'lark').map((c) => (
+            <Badge key={c.key} tone={row.stars[c.key] ? 'ok' : 'neutral'}>
+              {row.stars[c.key] ? '★' : '☆'} {c.name}
+            </Badge>
+          ))}
+        </div>
+      </div>
       {!s.total ? (
         <p className="rounded-lg bg-canvas px-3 py-3 text-[14px] text-ink-3">{name} không có task nào có deadline trong tháng này.</p>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Tile label="Task trong tháng" value={s.total} sub={`${approved} đã duyệt${s.pending ? ` · ${s.pending} chờ duyệt` : ''}${s.open ? ` · ${s.open} chưa đến hạn` : ''}`} />
-            <Tile label="Đúng hạn" value={`${s.onTime}/${judged || 0}`} sub="Tính theo lúc nộp bản được duyệt" tone={judged && s.onTime === judged ? 'ok' : undefined} />
+            <Tile label="Đúng hạn" value={`${s.onTime}/${judged || 0}`} sub="Theo lúc nộp" tone={judged && s.onTime === judged ? 'ok' : undefined} />
             <Tile label="Trễ / quá hạn" value={latePct === null ? '—' : `${latePct}%`} sub={`${s.late} nộp trễ · ${s.overdue} chưa nộp`} tone={latePct === null ? undefined : latePct < 20 ? 'ok' : 'bad'} />
             <Tile label="Duyệt ngay lần đầu" value={approved ? `${s.firstPass}/${approved}` : '—'} sub={`${s.sentBack} lần bị trả về sửa`} tone={approved && s.firstPass / approved >= 0.8 ? 'ok' : s.sentBack ? 'warn' : undefined} />
-            <Tile label="Gia hạn" value={s.extScope + s.extQuality} sub={`${s.extScope} do đổi yêu cầu · ${s.extQuality} do người làm`} tone={s.extQuality ? 'warn' : undefined} />
-            <Tile label="Trả lời hỏi tiến độ" value={s.asked ? `${s.answered}/${s.asked}` : '—'} sub={s.blocked || s.behind ? `${s.blocked} lần bị chặn · ${s.behind} lần chậm` : 'Không báo chậm, bị chặn'} tone={s.asked && s.answered < s.asked ? 'warn' : undefined} />
+            <Tile label="Gia hạn" value={s.extScope + s.extQuality} sub={`${s.extScope} đổi yêu cầu · ${s.extQuality} do người làm`} tone={s.extQuality ? 'warn' : undefined} />
+            <Tile label="Trả lời tiến độ" value={s.asked ? `${s.answered}/${s.asked}` : '—'} sub={s.blocked || s.behind ? `${s.blocked} bị chặn · ${s.behind} chậm` : 'Không báo chậm'} tone={s.asked && s.answered < s.asked ? 'warn' : undefined} />
           </div>
-          <details className="mt-3 rounded-lg border border-line-soft">
-            <summary className="cursor-pointer select-none px-3 py-2 text-[13.5px] font-semibold text-ink-2 hover:text-ink">Xem {s.total} task</summary>
-            <div className="max-h-56 overflow-y-auto border-t border-line-soft">
+          <div className="mt-3 rounded-lg border border-line-soft">
+            <div className="px-3 py-2 text-[13px] font-semibold text-ink-2">{s.total} task tính trong tháng</div>
+            <div className="max-h-72 overflow-y-auto border-t border-line-soft">
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="text-left text-[12px] text-ink-3">
@@ -641,10 +662,10 @@ function PersonFacts({ state, name, month }: { state: { data: PersonMonthStats |
                 </tbody>
               </table>
             </div>
-          </details>
+          </div>
         </>
       )}
-      <p className="mt-3 text-[12.5px] text-ink-3">Hai sao Task Completion và Deadline tự tính từ task đã duyệt, không chấm tay. Dùng số lần trả về sửa khi chấm Work Quality.</p>
+      <p className="mt-2 text-[12.5px] text-ink-3">Hai sao trên tự tính, không chấm tay.</p>
     </section>
   );
 }

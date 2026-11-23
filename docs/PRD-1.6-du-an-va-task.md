@@ -666,3 +666,9 @@ Hộp chấm điểm một nhân sự hiện số liệu tháng đó (tính theo
 36. Hộp từ chối lời mời: gõ liên tục một câu, toàn bộ chữ vào ô Lý do.
 37. PM vào Dự án → Tất cả: thấy hai phần tách biệt; dự án của PM khác có nhãn "Chỉ xem" và nhóm theo tên PM.
 38. Go Star → Chấm điểm một nhân sự: thấy 6 ô số liệu và danh sách task của tháng trước khi nhập điểm.
+
+## 17. Bổ sung 1.6.3 (23/11/2026, Long)
+
+- **Chữ gợi ý theo HCI:** mỗi tiêu đề trang/khối chỉ giữ một câu ngắn nói việc chính. Quy tắc, ngưỡng, lý do chuyển vào nút (i) cạnh tiêu đề, bấm mới hiện. Bỏ câu lặp lại điều màn hình đã thể hiện. Thông báo lỗi nêu việc cần làm.
+- **Go Star:** hộp chấm điểm chia hai cột: trái là ô chấm, phải là số liệu và danh sách task của nhân sự trong tháng, kèm 2 sao tự tính.
+- **Nhân sự (PM):** mỗi người một thẻ, gắn nhãn Cần hỗ trợ (có task quá hạn hoặc bị chặn) · Đang kín việc (≥ 5 task đang làm, hoặc ≥ 3 task đến hạn trong 7 ngày) · Vừa sức · Đang rảnh (0 task). Thẻ có thanh khối lượng theo màu sức khoẻ, 7 ô ngày tới, việc cần xem trước, nút Xem lịch (mở Calendar lọc đúng người). Ô đếm trên cùng dùng làm bộ lọc. Nhân sự chưa có task vẫn hiện để PM thấy ai còn rảnh.

@@ -106,7 +106,7 @@ export function DiagnosticsPage() {
   const allGood = browserPass === browser.length && h && serverPass === h.cases.length && versionOk;
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Diagnostics" subtitle="Chạy sau mỗi lần cập nhật code hoặc cấu hình. Đây là cách người không viết code biết luật nghiệp vụ còn đúng." actions={<Button variant="secondary" icon="refresh" onClick={() => { server.reload(); baseline.reload(); }}>Chạy lại</Button>} />
+      <PageHeader title="Diagnostics" subtitle="Chạy sau mỗi lần cập nhật để biết luật nghiệp vụ còn đúng." actions={<Button variant="secondary" icon="refresh" onClick={() => { server.reload(); baseline.reload(); }}>Chạy lại</Button>} />
       {allGood ? (
         <Banner tone="ok" title={`Luật nghiệp vụ: ${browserPass}/${browser.length} PASS ở trình duyệt, ${serverPass}/${h!.cases.length} PASS trên máy chủ`}>Phiên bản domain {DOMAIN_VERSION} khớp giữa web app và Edge Function.</Banner>
       ) : (
@@ -174,7 +174,8 @@ export function DiagnosticsPage() {
 
       <Card
         title="Baseline: 19 báo giá tháng 7–9/2026"
-        subtitle={`So kết quả app tính lại với số nhóm tính tay (8,66 giờ; 52,6% trễ). Chỉ dùng báo giá nhập từ CSV lịch sử. Báo giá trễ = quá ${lateHours} giờ làm việc.`}
+        subtitle="So với số tính tay: 8,66 giờ · 52,6% trễ"
+        info={<>Chỉ dùng báo giá nhập từ CSV lịch sử. Báo giá trễ = quá {lateHours} giờ làm việc.</>}
         actions={
           base.rows.length > 0 && (
             <Button
@@ -204,7 +205,7 @@ export function DiagnosticsPage() {
           <ErrorBox error={baseline.error} />
         ) : !base.check.ran ? (
           <Banner tone="info" title="CHƯA CHẠY">
-            {base.check.skipped ? base.check.message : 'Chưa có báo giá lịch sử. Vào Thư viện giá → Nhập báo giá lịch sử, chọn file 19 báo giá đã ẩn tên (Bước 0).'}
+            {base.check.skipped ? base.check.message : 'Chưa có báo giá lịch sử. Nhập ở Thư viện giá → Nhập báo giá lịch sử.'}
           </Banner>
         ) : (
           <>
@@ -214,7 +215,7 @@ export function DiagnosticsPage() {
             </Banner>
             {demoData && (
               <Banner tone="warn" className="mt-3" title="Đây là dữ liệu mẫu tổng hợp">
-                Bộ 19 báo giá DEMO được dựng để khớp số tổng hợp, nên PASS ở đây không kiểm chứng baseline thật. Kiểm tra thật cần file 19 báo giá thật đã ẩn tên.
+                PASS ở đây chưa chứng minh baseline thật. Cần nhập 19 báo giá thật đã ẩn tên.
               </Banner>
             )}
             <div className="mt-3 max-h-80 overflow-y-auto">
@@ -249,7 +250,7 @@ export function DiagnosticsPage() {
       </Card>
 
       {config.environment === 'demo' && (
-        <Card title="Dữ liệu mẫu (chỉ bản Demo)" subtitle="Tạo 6 người dùng ảo, thư viện giá mẫu, 19 báo giá baseline tổng hợp, báo giá và task của tuần trước và tuần này.">
+        <Card title="Dữ liệu mẫu (chỉ bản Demo)" subtitle="6 người dùng ảo, thư viện giá, báo giá và task mẫu.">
           <div className="flex flex-wrap gap-2">
             <Button icon="refresh" busy={busy === 'seed'} onClick={() => action('seed', async () => { const r = await callApi<{ tasks: number; baselineQuotes: number }>('demo.seed'); return `Đã nạp dữ liệu mẫu: ${r.baselineQuotes} báo giá baseline, ${r.tasks} task.`; })}>
               Nạp lại dữ liệu mẫu

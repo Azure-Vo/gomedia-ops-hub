@@ -247,7 +247,7 @@ export function TaskDetailPage() {
           </>
         }
       >
-        <p className="mb-3 text-sm text-ink-2">Dùng khi khách huỷ việc hoặc task bị tạo nhầm. Task huỷ không tính vào tỷ lệ trễ hạn. Muốn đổi deadline sau khi đã gửi check-in: huỷ rồi tạo task mới.</p>
+        <p className="mb-3 text-sm text-ink-2">Khi khách huỷ việc hoặc tạo nhầm. Task huỷ không tính vào tỷ lệ trễ.</p>
         <Field label="Lý do (bắt buộc)">{(fid) => <Textarea id={fid} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />}</Field>
       </Modal>
       <Modal

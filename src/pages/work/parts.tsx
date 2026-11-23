@@ -295,7 +295,7 @@ export function TaskDrawer({ task, people, onClose, onChanged, initialPanel = nu
         {task.state === 'review' && (
           <Section title={`Lần nộp đang chờ duyệt${task.pending ? ` · ${fmtAt(task.pending.submitted_at)}${task.pending.via === 'lark' ? ' (đánh dấu trên Lark)' : ''}` : ''}`}>
             {task.pending ? <Evidence sub={task.pending} taskId={task.id} /> : <p className="text-ink-3">—</p>}
-            {!task.hasEvidence && <p className="mt-1 text-[13px] text-warn">Chưa có bằng chứng: PM chưa duyệt được cho tới khi người thực hiện thêm link hoặc file.</p>}
+            {!task.hasEvidence && <p className="mt-1 text-[13px] text-warn">Chưa có bằng chứng. Thêm link hoặc file để PM duyệt.</p>}
           </Section>
         )}
 
@@ -561,7 +561,7 @@ function ReviewForm({ task, onDone, onCancel }: { task: Task; onDone: (msg: stri
           </button>
         ))}
       </div>
-      {mode === 'approve' && !task.hasEvidence && <Banner tone="warn">Lần nộp này chưa có bằng chứng. Chờ người thực hiện thêm, hoặc yêu cầu sửa.</Banner>}
+      {mode === 'approve' && !task.hasEvidence && <Banner tone="warn">Chưa có bằng chứng: chờ bổ sung, hoặc yêu cầu sửa.</Banner>}
       <Field label={mode === 'changes' ? 'Góp ý (bắt buộc): cần cải thiện gì, sửa gì' : 'Ghi chú (không bắt buộc)'}>{(id) => <Textarea id={id} rows={3} value={feedback} onChange={(e) => setFeedback(e.target.value)} />}</Field>
       {mode === 'changes' && (
         <>
@@ -579,13 +579,13 @@ function ReviewForm({ task, onDone, onCancel }: { task: Task; onDone: (msg: stri
  * The two extension reasons as explicit choices, each showing what it does to the KPI deadline.
  * scope: KPI deadline moves to the new date. quality: KPI deadline stays where it was.
  */
-export function ExtendReasonPicker({ value, onChange, newDue, kpiDue, subject = 'task' }: { value: ExtendReason | ''; onChange: (v: ExtendReason) => void; newDue: string; kpiDue: string; subject?: 'task' | 'project' }) {
+export function ExtendReasonPicker({ value, onChange, newDue, kpiDue }: { value: ExtendReason | ''; onChange: (v: ExtendReason) => void; newDue: string; kpiDue: string; subject?: 'task' | 'project' }) {
   const opts: { k: ExtendReason; title: string; effect: string; tone: 'ok' | 'warn' }[] = [
-    { k: 'scope', title: 'Yêu cầu thay đổi', effect: `Deadline tính KPI dời theo: ${newDue ? fmtDueDate(newDue) : 'deadline mới'}. Không tính trễ.`, tone: 'ok' },
+    { k: 'scope', title: 'Yêu cầu thay đổi', effect: `Hạn KPI dời sang ${newDue ? fmtDueDate(newDue) : 'ngày mới'} · không tính trễ`, tone: 'ok' },
     {
       k: 'quality',
       title: 'Người làm cần thêm thời gian',
-      effect: `Deadline tính KPI giữ: ${fmtDueDate(kpiDue)}. Nộp sau ngày này vẫn tính trễ${subject === 'task' ? ' trong Go Star' : ''}.`,
+      effect: `Hạn KPI giữ ${fmtDueDate(kpiDue)} · nộp sau vẫn tính trễ`,
       tone: 'warn',
     },
   ];
@@ -618,11 +618,11 @@ export function ExtendReasonPicker({ value, onChange, newDue, kpiDue, subject = 
 function ExtendFields({ to, setTo, reason, setReason, errors, max, kpiDue, overdue }: { to: string; setTo: (v: string) => void; reason: ExtendReason | ''; setReason: (v: ExtendReason) => void; errors: string[]; max: string; kpiDue: string; overdue?: boolean }) {
   return (
     <div className="flex flex-col gap-3">
-      {overdue && <Banner tone="warn">Task đã quá hạn từ {fmtDueDate(kpiDue)}. Gia hạn chỉ dời ngày làm việc; nếu chọn "Người làm cần thêm thời gian", task vẫn bị tính trễ.</Banner>}
+      {overdue && <Banner tone="warn">Task quá hạn từ {fmtDueDate(kpiDue)}. Gia hạn không xoá việc trễ, trừ khi do yêu cầu thay đổi.</Banner>}
       <Field label="Deadline mới" hint={`Không sau deadline dự án ${fmtDueDate(max)}`}>
         {(id) => <Input id={id} type="date" value={to} max={max} onChange={(e) => setTo(e.target.value)} className="sm:max-w-[220px]" />}
       </Field>
-      <Field label="Vì sao phải gia hạn?" hint="Quyết định task có bị tính trễ khi chấm KPI hay không.">
+      <Field label="Vì sao phải gia hạn?" hint="Quyết định task có bị tính trễ không.">
         {() => <ExtendReasonPicker value={reason} onChange={setReason} newDue={to} kpiDue={kpiDue} />}
       </Field>
       {errors.length > 0 && <p className="text-[13px] text-bad">{errors.join(' ')}</p>}
@@ -825,7 +825,7 @@ export function ChatPicker({ code, value, onChange }: { code: string; value: str
             ? 'Đang tải danh sách group…'
             : list.length
               ? `Bot đang ở ${list.length} group. ${match ? `Đã chọn sẵn group có mã ${code}.` : `Chưa có group nào tên chứa "${code || 'mã dự án'}".`}`
-              : 'Bot chưa ở group nào. Có thể tạo dự án trước, gắn group sau.'
+              : 'Bot chưa ở group nào. Có thể gắn group sau.'
         }
       >
         {(id) => (
@@ -939,14 +939,14 @@ export function ProjectForm({ project, people, existingCodes, onDone, onCancel }
           <Field label="Deadline dự án">{(id) => <Input id={id} type="date" value={f.due_date} onChange={(e) => setF({ ...f, due_date: e.target.value })} />}</Field>
         </div>
         {dueChanged && (
-          <Field label="Vì sao đổi deadline dự án?" hint="Deadline từng task không tự đổi; gia hạn task riêng nếu cần.">
+          <Field label="Vì sao đổi deadline dự án?" hint="Deadline từng task không tự đổi.">
             {() => <ExtendReasonPicker value={reason} onChange={setReason} newDue={f.due_date} kpiDue={project!.kpi_due_date ?? project!.due_date} subject="project" />}
           </Field>
         )}
         {errs.length > 0 && <p className="text-[13px] text-bad">{errs.join(' ')}</p>}
         <ChatPicker code={code} value={f.chat_id} onChange={(chat_id) => setF((x) => ({ ...x, chat_id }))} />
         {!project && (
-          <Field label="Mời thành viên" hint="Người được mời nhận lời mời trong Inbox và chọn Tham gia hoặc Từ chối. Khi chạy Lark thật, người trong group Lark của dự án tự là thành viên.">
+          <Field label="Mời thành viên" hint="Họ nhận lời mời trong Inbox.">
             {() => (
               <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
                 {staff.map((p) => {

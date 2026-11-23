@@ -31,6 +31,7 @@ import {
   inviteAnsweredMessage,
   taskDateErrors,
   personMonthStats,
+  loadState,
   type SummaryTask,
 } from './projects';
 
@@ -320,5 +321,16 @@ describe('Go Star scoring facts (1.6.2)', () => {
     expect([s.asked, s.answered, s.blocked]).toEqual([2, 1, 1]);
     expect(s.tasks.map((t) => t.code)).toEqual(['MT35-01', 'MT35-02', 'MT35-03', 'MT35-04']);
     expect(s.tasks[1]).toMatchObject({ rounds: 2, sentBack: 1, extensions: 1, status: 'late' });
+  });
+});
+
+describe('Trang Nhân sự (1.6.3)', () => {
+  it('classifies workload', () => {
+    expect(loadState({ open: 2, overdue: 1, blocked: 0, next7: 0 })).toBe('help');
+    expect(loadState({ open: 2, overdue: 0, blocked: 1, next7: 0 })).toBe('help');
+    expect(loadState({ open: 5, overdue: 0, blocked: 0, next7: 0 })).toBe('busy');
+    expect(loadState({ open: 3, overdue: 0, blocked: 0, next7: 3 })).toBe('busy');
+    expect(loadState({ open: 2, overdue: 0, blocked: 0, next7: 1 })).toBe('ok');
+    expect(loadState({ open: 0, overdue: 0, blocked: 0, next7: 0 })).toBe('free');
   });
 });

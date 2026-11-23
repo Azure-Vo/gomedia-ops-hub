@@ -42,6 +42,7 @@ const PATHS: Record<string, string> = {
   users: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
   sun: 'M12 17a5 5 0 100-10 5 5 0 000 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
   folder: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z',
+  info: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 11v6M12 7.5v.5',
   telegram: 'M21.5 4.5L2.8 11.7c-1 .4-1 1.6 0 1.9l4.6 1.5 1.8 5.6c.2.7 1.1.9 1.6.4l2.6-2.4 4.8 3.5c.6.4 1.4.1 1.6-.6l3.4-15.6c.2-.9-.7-1.7-1.7-1.5zM9.4 14.7l8.4-7.4',
 };
 
@@ -134,13 +135,51 @@ export function Field({ label, hint, error, children, className }: { label: Reac
 }
 
 // ------------------------------------------------------------------ layout -----
-export function Card({ children, className, title, actions, subtitle }: { children: ReactNode; className?: string; title?: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
+/**
+ * Progressive disclosure: a small (i) next to a title. The screen keeps one short line; the rules,
+ * thresholds and "why" live here and open on click (or focus + Enter). Closes on Escape or outside click.
+ */
+export function InfoTip({ children, label = 'Giải thích', align = 'left' }: { children: ReactNode; label?: string; align?: 'left' | 'right' }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const id = useId();
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', off);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', off);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+  return (
+    <span ref={ref} className="relative inline-flex align-middle">
+      <button type="button" aria-label={label} aria-expanded={open} aria-controls={id} onClick={() => setOpen((v) => !v)} className={cx('grid h-6 w-6 place-items-center rounded-full text-ink-3 hover:bg-ink/5 hover:text-ink', open && 'bg-ink/5 text-ink')}>
+        <Icon name="info" size={16} />
+      </button>
+      {open && (
+        <span id={id} role="note" className={cx('absolute top-7 z-40 w-[min(340px,80vw)] rounded-lg border border-line bg-white p-3 text-left text-[13.5px] font-normal leading-relaxed tracking-normal text-ink-2 shadow-lift', align === 'right' ? 'right-0' : 'left-0')}>
+          {children}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function Card({ children, className, title, actions, subtitle, info }: { children: ReactNode; className?: string; title?: ReactNode; subtitle?: ReactNode; actions?: ReactNode; info?: ReactNode }) {
   return (
     <section className={cx('border-t border-ink pt-3.5', className)}>
       {(title || actions) && (
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            {title && <h2 className="text-[17px] font-semibold text-ink">{title}</h2>}
+            {title && (
+              <h2 className="flex items-center gap-1 text-[17px] font-semibold text-ink">
+                {title}
+                {info && <InfoTip label={`Giải thích: ${typeof title === 'string' ? title : ''}`}>{info}</InfoTip>}
+              </h2>
+            )}
             {subtitle && <p className="mt-0.5 max-w-[75ch] text-[13.5px] text-ink-3">{subtitle}</p>}
           </div>
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -151,11 +190,14 @@ export function Card({ children, className, title, actions, subtitle }: { childr
   );
 }
 
-export function PageHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions, info }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; info?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
       <div className="min-w-0">
-        <h1 className="text-[26px] font-bold leading-tight tracking-[-0.02em] text-ink">{title}</h1>
+        <h1 className="flex items-center gap-1.5 text-[26px] font-bold leading-tight tracking-[-0.02em] text-ink">
+          {title}
+          {info && <InfoTip label={`Giải thích: ${typeof title === 'string' ? title : 'trang này'}`}>{info}</InfoTip>}
+        </h1>
         {subtitle && <p className="mt-1 max-w-[75ch] text-[14.5px] text-ink-3">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -235,7 +277,7 @@ export function ErrorBox({ error }: { error: unknown }) {
 }
 
 // ------------------------------------------------------------------- modal -----
-export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean | 'xl' }) {
   const ref = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   // Callers often pass an inline onClose; keep it in a ref so typing (a re-render) never re-runs the focus effect.
@@ -262,12 +304,12 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-rail/40 p-4 pt-[8vh] backdrop-blur-[1px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" tabIndex={-1} className={cx('w-full outline-none rounded-2xl border border-line bg-white shadow-lift', wide ? 'max-w-3xl' : 'max-w-lg')}>
+      <div ref={ref} role="dialog" aria-modal="true" tabIndex={-1} className={cx('w-full outline-none rounded-2xl border border-line bg-white shadow-lift', wide === 'xl' ? 'max-w-6xl' : wide ? 'max-w-3xl' : 'max-w-lg')}>
         <div className="flex items-center justify-between gap-3 border-b border-line-soft px-5 py-4">
           <h2 className="text-[17px] font-semibold text-ink">{title}</h2>
           <IconButton icon="x" label="Đóng" onClick={onClose} />
         </div>
-        <div ref={bodyRef} className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
+        <div ref={bodyRef} className={cx('overflow-y-auto px-5 py-4', wide === 'xl' ? 'max-h-[76vh]' : 'max-h-[70vh]')}>{children}</div>
         {footer && <div data-modal-footer className="flex flex-wrap justify-end gap-2 border-t border-line-soft px-5 py-3">{footer}</div>}
       </div>
     </div>

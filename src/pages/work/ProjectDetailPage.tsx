@@ -40,7 +40,7 @@ export function ProjectDetailPage() {
       if (r.linked) {
         toast('Đã gắn dự án với group Lark');
         reload();
-      } else toast(`Chưa thấy group nào tên chứa "${project!.code}" mà bot đang ở. Thêm bot vào group rồi thử lại, hoặc chọn group bằng tay.`, 'bad');
+      } else toast(`Không thấy group chứa "${project!.code}". Thêm bot vào group, hoặc chọn group bằng tay.`, 'bad');
     } catch (e) {
       toast((e as Error).message, 'bad');
     } finally {
@@ -161,7 +161,7 @@ export function ProjectDetailPage() {
               <Card title="Task của bạn">
                 <TaskTable tasks={mine} today={data.today} onOpen={(t) => open(t)} showAssignee={false} empty={<p className="text-[14px] text-ink-3">Bạn chưa có task trong dự án này.</p>} />
               </Card>
-              <Card title="Task của người khác" subtitle="Chỉ xem: biết mình đang chờ ai và ai đang chờ mình.">
+              <Card title="Task của người khác" subtitle="Chỉ xem">
                 <TaskTable tasks={others} today={data.today} onOpen={(t) => open(t)} />
               </Card>
             </>
@@ -212,7 +212,7 @@ function Members({ projectId, members, people, canEdit, live, onChanged }: { pro
   return (
     <div className="flex flex-col gap-4">
       <p className="text-[14px] text-ink-3">
-        PM mời → người được mời trả lời trong Inbox (Tham gia, hoặc Từ chối kèm lý do). Chỉ giao task được cho người đã tham gia.
+        Chỉ giao task cho người đã Tham gia.
         {live ? ' Người trong group Lark của dự án tự là thành viên.' : ''}
       </p>
       {canEdit && (
@@ -300,7 +300,7 @@ function CancelProject({ projectId, onClose, onDone }: { projectId: string; onCl
         </>
       }
     >
-      <p className="mb-3 text-[14px] text-ink-2">Các task đang mở của dự án cũng được huỷ. Bot báo vào group dự án.</p>
+      <p className="mb-3 text-[14px] text-ink-2">Mọi task đang mở cũng bị huỷ.</p>
       <Field label="Lý do">{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
     </Modal>
   );

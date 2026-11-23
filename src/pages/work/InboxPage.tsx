@@ -30,7 +30,7 @@ export function InboxPage() {
 
   return (
     <div>
-      <PageHeader title="Inbox" subtitle="Việc của bạn: quá hạn, hôm nay, cần sửa và sắp tới. Bấm vào task để nộp kết quả hoặc báo tiến độ." />
+      <PageHeader title="Inbox" subtitle="Việc của bạn, việc gấp xếp trước." />
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Quá hạn" value={overdue.length} tone={overdue.length ? 'bad' : null} />
         <Stat label="Đến hạn hôm nay" value={dueToday.length} />
@@ -58,7 +58,7 @@ export function InboxPage() {
         </Banner>
       )}
       {!mine.length && !(invites.data ?? []).length ? (
-        <EmptyState title="Bạn chưa được giao task nào">Khi PM giao task, task sẽ hiện ở đây và bot nhắc trong group Lark của dự án.</EmptyState>
+        <EmptyState title="Bạn chưa được giao task nào" />
       ) : (
         <div className="flex flex-col gap-7">
           <Group title="Quá hạn" tone="bad" tasks={overdue} today={today} onOpen={open} empty="Không có task quá hạn." />

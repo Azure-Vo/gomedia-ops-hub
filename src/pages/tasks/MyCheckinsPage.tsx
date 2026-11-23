@@ -53,7 +53,7 @@ export function MyCheckinsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Check-in của tôi" subtitle="Trả lời theo tình trạng thật của mốc đã lên kế hoạch. Chỉ mất vài giây." />
+      <PageHeader title="Check-in của tôi" subtitle="Trả lời theo tình trạng thật của từng mốc." />
       {!data!.linked && (
         <Banner
           tone="info"
@@ -64,7 +64,7 @@ export function MyCheckinsPage() {
             </Link>
           }
         >
-          Chưa liên kết thì bạn trả lời ngay tại trang này. Bot chỉ nhắn trong giờ làm việc.
+          Chưa liên kết thì trả lời tại trang này.
         </Banner>
       )}
       <Card title={`Cần trả lời (${waiting.length})`}>
@@ -123,7 +123,7 @@ export function MyCheckinsPage() {
           </div>
         )}
       </Card>
-      <Card title="Task đang mở" subtitle="Bị chặn giữa hai checkpoint? Báo ngay, không cần đợi bot hỏi.">
+      <Card title="Task đang mở" subtitle="Bị chặn? Báo ngay, không cần đợi bot hỏi.">
         {!items.length ? (
           <p className="text-sm text-ink-3">Bạn không có task nào đang mở.</p>
         ) : (

@@ -219,7 +219,8 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Dashboard KPI" subtitle="Mọi con số tính tự động từ mốc thời gian đã lưu, bằng giờ làm việc, theo đúng định nghĩa trong PRD." />
+      <PageHeader title="Dashboard KPI" subtitle="Tự tính từ dữ liệu, theo giờ làm việc."
+        info="Mỗi chỉ số dùng đúng định nghĩa trong PRD. Mẫu nhỏ (khoảng 6 báo giá và 15 task mỗi tháng) nên kết quả 4 tuần chỉ mang tính chỉ báo: gắn nhãn P/A khi đưa vào báo cáo." />
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Từ ngày">{(id) => <Input id={id} type="date" value={from} onChange={(e) => { setTouched(true); setFrom(e.target.value); }} />}</Field>
         <Field label="Đến ngày">{(id) => <Input id={id} type="date" value={to} onChange={(e) => { setTouched(true); setTo(e.target.value); }} />}</Field>
@@ -237,7 +238,6 @@ export function DashboardPage() {
           Về khoảng pilot
         </Button>
       </div>
-      <Banner tone="info">Mẫu nhỏ (khoảng 6 báo giá và 15 task mỗi tháng): kết quả 4 tuần chỉ mang tính chỉ báo. Trong báo cáo, gắn nhãn P/A cho kết luận rút ra từ đây.</Banner>
       {!range.ok ? (
         <Banner tone="warn">Ngày kết thúc phải sau ngày bắt đầu.</Banner>
       ) : loading ? (
@@ -250,7 +250,8 @@ export function DashboardPage() {
             {seeTasks && (
               <Card
                 title="Dự án & Task (S1)"
-                subtitle={`${k.s1.judged} task có deadline tính KPI trong khoảng · ${k.s1.open} chưa đến hạn hoặc đang chờ duyệt${settings?.lark_mode === 'simulation' ? ' · đang chạy chế độ mô phỏng' : ''}`}
+                subtitle={`${k.s1.judged} task đã tính · ${k.s1.open} chưa tính${settings?.lark_mode === 'simulation' ? ' · mô phỏng' : ''}`}
+                info="Task tính khi có deadline tính KPI trong khoảng ngày. Chưa tính: chưa đến hạn hoặc đang chờ duyệt."
                 actions={
                   <>
                     <Button size="sm" variant="secondary" icon="download" onClick={exportLarkTasks}>
@@ -280,7 +281,7 @@ export function DashboardPage() {
                     value={k.s1.judged ? `${k.s1.onTime}/${k.s1.judged}` : '–'}
                     good={null}
                   >
-                    <div className="text-[13px] text-ink-3">Lần nộp được PM duyệt, nộp trước hoặc đúng deadline tính KPI.</div>
+                    <div className="text-[13px] text-ink-3">Nộp đúng deadline tính KPI, được duyệt.</div>
                   </KpiTile>
                   <KpiTile label="Bot đã nhắc" value={`${k.s1.reminders} lần`} good={null}>
                     <div className="text-[13px] text-ink-3">
@@ -310,14 +311,15 @@ export function DashboardPage() {
               </Card>
             )}
             {seeTasks && data && (
-              <Card title="Lịch sử bản tóm tắt gửi PM" subtitle="Tin 08:30 và 17:30 đã gửi trong khoảng ngày đã chọn (ảnh chụp số liệu lúc gửi).">
+              <Card title="Lịch sử bản tóm tắt gửi PM" subtitle="Số liệu lúc gửi tin 08:30 và 17:30.">
                 <MessageHistory messages={data.summaries} />
               </Card>
             )}
             {seeQuotes && (
               <Card
                 title="Báo giá (S2)"
-                subtitle={`${k.quote.count} báo giá gửi trong khoảng đã chọn · thời gian = giờ làm việc từ lúc khách yêu cầu đến lúc gửi`}
+                subtitle={`${k.quote.count} báo giá đã gửi`}
+                info="Thời gian báo giá = giờ làm việc từ lúc khách yêu cầu đến lúc gửi."
                 actions={
                   <>
                     <Button size="sm" variant="ghost" onClick={() => setTable((v) => !v)}>

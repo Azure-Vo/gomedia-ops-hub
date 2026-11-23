@@ -85,7 +85,8 @@ export function SettingsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Cài đặt"
-        subtitle="Mọi thời lượng trong app tính bằng giờ làm việc theo lịch này. Đổi lịch giữa pilot thì ghi ngày đổi vào báo cáo."
+        subtitle="Mọi thời lượng trong app tính theo lịch này."
+        info="Đổi lịch giữa pilot thì ghi ngày đổi vào báo cáo."
         actions={
           <Button busy={busy} disabled={problems.length > 0} onClick={save}>
             Lưu cài đặt
@@ -158,7 +159,7 @@ export function SettingsPage() {
                   Thêm
                 </Button>
               </div>
-              <p className="mt-2 text-[13px] text-ink-3">Quốc khánh 2026: nghỉ 2/9 và một ngày liền kề (1/9 hoặc 3/9) do công ty chọn. Hỏi Go Media rồi thêm ngày đó nếu cần.</p>
+              <p className="mt-2 text-[13px] text-ink-3">Quốc khánh 2026: thêm 1/9 hoặc 3/9 nếu công ty nghỉ.</p>
             </div>
             <Field label="Múi giờ">{(id) => <Input id={id} value={s.timezone} onChange={(e) => setS({ ...s, timezone: e.target.value })} />}</Field>
           </div>
@@ -182,7 +183,8 @@ export function SettingsPage() {
               <Field label="Bot Telegram">{(id) => <Input id={id} disabled value={s.telegram_bot_username ? `@${s.telegram_bot_username}` : 'chưa kết nối (xem Diagnostics)'} />}</Field>
             </div>
           </Card>
-          <Card title="Báo giá: công ty và thuế" subtitle="In trên PDF báo giá theo mẫu Go Media. Đổi thuế suất chỉ áp cho báo giá tạo sau đó.">
+          <Card title="Báo giá: công ty và thuế" subtitle="In trên PDF báo giá."
+            info="Đổi thuế suất chỉ áp cho báo giá tạo sau đó.">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Tên ngắn (chữ ký: ĐẠI DIỆN …)">{(id) => <Input id={id} value={s.company_name} onChange={(e) => setS({ ...s, company_name: e.target.value })} />}</Field>
               <Field label="Tên pháp lý (đầu trang)">{(id) => <Input id={id} value={s.company_legal_name} onChange={(e) => setS({ ...s, company_legal_name: e.target.value })} />}</Field>
@@ -198,7 +200,8 @@ export function SettingsPage() {
               </label>
             </div>
           </Card>
-          <Card title="Pilot và mục tiêu" subtitle="Dashboard mặc định hiển thị khoảng pilot. Mục tiêu đang là đề xuất của nhóm, chờ CEO xác nhận.">
+          <Card title="Pilot và mục tiêu" subtitle="Khoảng ngày mặc định của Dashboard."
+            info="Mục tiêu là đề xuất của nhóm, chờ CEO xác nhận.">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Pilot bắt đầu">{(id) => <Input id={id} type="date" value={s.pilot_start ?? ''} onChange={(e) => setS({ ...s, pilot_start: e.target.value || null })} />}</Field>
               <Field label="Pilot kết thúc">{(id) => <Input id={id} type="date" value={s.pilot_end ?? ''} onChange={(e) => setS({ ...s, pilot_end: e.target.value || null })} />}</Field>

@@ -112,7 +112,8 @@ export function LarkSetupPage() {
   if (loading || !settings) return <Loading />;
   return (
     <div>
-      <PageHeader title="Kết nối Lark & nhắc việc" subtitle="Custom App + bot trên Lark của Go Media. Secret được lưu trong Supabase Vault, không hiện lại trên web." />
+      <PageHeader title="Kết nối Lark & nhắc việc" subtitle="Bot Lark của Go Media."
+        info="Custom App + bot. Secret lưu trong Supabase Vault, không hiện lại trên web." />
       <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
         <div className="flex flex-col gap-4">
           <Card title="Chế độ">
@@ -140,7 +141,8 @@ export function LarkSetupPage() {
             )}
           </Card>
 
-          <Card title="Lark App" subtitle="Lấy ở Lark Developer Console → app của bạn → Credentials & Basic Info, và Events & Callbacks.">
+          <Card title="Lark App" subtitle="Lấy ở Lark Developer Console."
+            info="App của bạn → Credentials & Basic Info, và Events & Callbacks.">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Máy chủ Lark">
                 {(id) => (
@@ -157,7 +159,7 @@ export function LarkSetupPage() {
               <Field label="Verification Token" hint={status?.hasVerificationToken ? 'Đã lưu. Để trống Encrypt Key.' : 'Ở mục Events & Callbacks → Encryption Strategy'}>
                 {(id) => <Input id={id} type="password" autoComplete="off" value={vtoken} onChange={(e) => setVtoken(e.target.value)} placeholder={status?.hasVerificationToken ? '••••••••' : ''} />}
               </Field>
-              <Field label="chat_id group chung (chỉ cho dự án tạo trước bản 1.6)" hint="Từ 1.6 mỗi dự án gắn group riêng; có thể để trống." className="sm:col-span-2">
+              <Field label="chat_id group chung (chỉ cho dự án tạo trước bản 1.6)" hint="Có thể để trống" className="sm:col-span-2">
                 {(id) => <Input id={id} value={f.lark_chat_id} placeholder="oc_…" onChange={(e) => setF({ ...f, lark_chat_id: e.target.value.trim() })} />}
               </Field>
             </div>
@@ -167,7 +169,15 @@ export function LarkSetupPage() {
             </div>
           </Card>
 
-          <Card title="Lịch nhắc và tóm tắt" subtitle="Từ 1.6, mốc nhắc tuỳ độ dài task: Ngắn (≤ 3 ngày) nhắc D0; Vừa (4–7 ngày) hỏi tiến độ ở 50%, nhắc D-1, D0; Dài (≥ 8 ngày) hỏi ở 50% và 75%, nhắc D-2, D-1, D0. Quá hạn nhắc mỗi ngày.">
+          <Card title="Lịch nhắc và tóm tắt" subtitle="Mốc nhắc tự chọn theo độ dài task."
+            info={
+              <ul className="flex flex-col gap-1">
+                <li><b>Ngắn</b> (≤ 3 ngày): nhắc D0.</li>
+                <li><b>Vừa</b> (4–7 ngày): hỏi tiến độ 50%, nhắc D-1, D0.</li>
+                <li><b>Dài</b> (≥ 8 ngày): hỏi 50%, 75%, nhắc D-2, D-1, D0.</li>
+                <li>Quá hạn: nhắc mỗi ngày.</li>
+              </ul>
+            }>
             <div className="grid gap-3 sm:grid-cols-3">
               <Field label="Giờ nhắc hạn và hỏi tiến độ" hint="Mặc định 09:00">
                 {(id) => <Input id={id} type="time" value={f.lark_notify_time} onChange={(e) => setF({ ...f, lark_notify_time: e.target.value })} />}
@@ -185,7 +195,8 @@ export function LarkSetupPage() {
             </label>
           </Card>
 
-          <Card title="Quy chuẩn mã (bản 1.5)" subtitle="Từ 1.6, PM nhập mã dự án (VD: MT35) và hệ thống tự sinh mã task (MT35-01). Mẫu dưới đây chỉ còn dùng để đọc các task cũ.">
+          <Card title="Quy chuẩn mã (bản 1.5)" subtitle="Chỉ dùng để đọc task cũ."
+            info="Từ 1.6, PM nhập mã dự án (VD MT35), hệ thống tự sinh mã task (MT35-01).">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Mẫu mã task mẹ">{(id) => <Input id={id} className="font-mono" value={f.lark_parent_pattern} onChange={(e) => setF({ ...f, lark_parent_pattern: e.target.value })} />}</Field>
               <Field label="Ví dụ">{(id) => <Input id={id} className="font-mono" value={f.lark_parent_example} onChange={(e) => setF({ ...f, lark_parent_example: e.target.value })} />}</Field>
@@ -199,7 +210,7 @@ export function LarkSetupPage() {
               </Field>
               {tried && <Badge tone={tried.length ? 'bad' : 'ok'}>{tried.length ? tried[0] : 'Hợp lệ'}</Badge>}
             </div>
-            <p className="mt-2 text-[13px] text-ink-3">Mặc định suy từ ví dụ duy nhất trong brief (DA056 / DA056-04-S44). Cần CEO gửi quy chuẩn mã thực tế để chỉnh.</p>
+            <p className="mt-2 text-[13px] text-ink-3">Suy từ ví dụ DA056 / DA056-04-S44 trong brief.</p>
           </Card>
 
           <div className="flex gap-2">
@@ -214,7 +225,7 @@ export function LarkSetupPage() {
             </Button>
           </div>
           <p className="text-[13px] text-ink-3">
-            Hệ thống tự chạy 15 phút/lần. Nút “Chạy nhắc việc ngay” chỉ để kiểm thử và demo: gửi ngay các tin đến hạn hôm nay (mỗi tin tối đa 1 lần/ngày, bấm nhiều lần không gửi trùng).
+            Tự chạy 15 phút/lần. “Chạy ngay” dùng để thử; mỗi tin chỉ gửi 1 lần/ngày.
           </p>
 
           {settings.lark_mode === 'live' && <PeopleLinks />}
@@ -247,7 +258,7 @@ export function LarkSetupPage() {
             </li>
           </ol>
           <Banner tone="info" className="mt-4">
-            Chưa kiểm chứng trên Lark thật: tên quyền, dạng card và cách Lark gửi callback mới chỉ thử với Lark giả lập. Lần đầu nối, hãy thử lệnh /taomoi duan trong group của một dự án và xem Lịch sử nhắc việc bên dưới.
+            Mới thử với Lark giả lập. Lần đầu nối Lark thật: gõ /taomoi duan trong group dự án, rồi xem Lịch sử nhắc việc.
           </Banner>
         </Card>
       </div>
@@ -268,9 +279,10 @@ function PeopleLinks() {
   if (data.loading || !data.data) return <Loading />;
   const { people, profiles } = data.data;
   return (
-    <Card title="Liên kết tài khoản Lark" subtitle="Bot biết người trên Lark qua thành viên group và @tag. Gán mỗi người với tài khoản Ops Hub để bot @tag đúng, nhắn riêng được và nhận ra ai là PM.">
+    <Card title="Liên kết tài khoản Lark" subtitle="Gán người trên Lark với tài khoản Ops Hub."
+      info="Bot biết người qua thành viên group và @tag. Có liên kết thì bot @tag đúng người, nhắn riêng được và nhận ra PM.">
       {!people.length ? (
-        <p className="text-[14px] text-ink-3">Chưa có ai. Thêm bot vào group dự án; danh sách sẽ tự cập nhật.</p>
+        <p className="text-[14px] text-ink-3">Chưa có ai. Thêm bot vào group dự án để cập nhật.</p>
       ) : (
         <ul className="divide-y divide-line-soft">
           {people.map((p) => (

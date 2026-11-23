@@ -22,10 +22,10 @@ export function ReviewPage() {
   const canReview = me.role === 'pm';
   return (
     <div>
-      <PageHeader title="Chờ duyệt" subtitle="Đối chiếu kết quả cần nộp với bằng chứng nhân sự gửi. Duyệt để đóng task, hoặc yêu cầu sửa kèm góp ý (có thể gia hạn)." />
-      {me.role === 'ceo' && <Banner className="mb-4">Bạn đang xem với vai trò CEO: chỉ PM phụ trách dự án mới duyệt được.</Banner>}
+      <PageHeader title="Chờ duyệt" subtitle="So bằng chứng với kết quả cần nộp, rồi Duyệt hoặc Yêu cầu sửa." />
+      {me.role === 'ceo' && <Banner className="mb-4">CEO chỉ xem. PM của dự án duyệt.</Banner>}
       {!waiting.length ? (
-        <EmptyState title="Không có task nào chờ duyệt">Khi nhân sự nộp kết quả, task hiện ở đây và bot @tag PM trong group dự án.</EmptyState>
+        <EmptyState title="Không có task nào chờ duyệt" />
       ) : (
         <ul className="flex flex-col gap-4">
           {waiting.map(({ t, days }) => (
