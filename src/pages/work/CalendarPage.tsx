@@ -20,7 +20,7 @@ import {
   tierOf,
   weekOf,
 } from '@/domain';
-import { Banner, Button, cx, ErrorBox, Field, Icon, IconButton, Input, Loading, Modal, Select, useToast } from '@/components/ui';
+import { Banner, Button, cx, ErrorBox, Field, Icon, IconButton, Input, Modal, Select, useToast, PageSkeleton } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
@@ -85,7 +85,7 @@ export function CalendarPage() {
     return scope.tasks.filter((t) => t.state === 'doing').flatMap((t) => checkinDates(t.start_date, t.due_date, tierOf({ startDate: t.start_date, dueDate: t.due_date, tier: t.tier }), calendar).map((c) => ({ date: c.date, task: t, pct: c.pct })));
   }, [scope.tasks, manager, calendar]);
 
-  if (loading && !data) return <Loading />;
+  if (loading && !data) return <PageSkeleton kind="calendar" />;
   if (error) return <ErrorBox error={error} />;
   if (!data) return null;
 
@@ -180,13 +180,13 @@ export function CalendarPage() {
       onDragStart={startDrag({ kind: 'task', id: t.id })}
       onDragEnd={endDrag}
       onClick={() => open(t)}
-      title={`${t.code} · ${t.name} · ${t.assignee_name ?? ''} · ${HEALTH_LABEL[t.health]}: ${t.reason}`}
+      title={`${t.code} ${t.name}\n${t.assignee_name ?? ''}\n${HEALTH_LABEL[t.health]}: ${t.reason}`}
       className={cx('flex w-full min-w-0 items-center gap-1.5 rounded-[5px] border border-l-[3px] border-line bg-white px-1.5 py-[3px] text-left text-[12.5px] leading-tight text-ink hover:border-ink-3', HEALTH_EDGE[t.health], t.state === 'done' && 'opacity-60', draggableTask(t) && 'cursor-grab active:cursor-grabbing', drag?.id === t.id && 'border-dashed opacity-40')}
     >
       <ProjectSwatch color={t.project.color} className="h-2 w-2" />
       <span className="truncate">
         <span className="font-mono text-[11.5px] text-ink-3">{t.code.split('-').pop()}</span> {t.name}
-        {!compact && manager && <span className="text-ink-3"> · {t.assignee_name?.split(' ').pop()}</span>}
+        {!compact && manager && <span className="text-ink-3"> ({t.assignee_name?.split(' ').pop()})</span>}
       </span>
     </button>
   );
@@ -197,7 +197,7 @@ export function CalendarPage() {
       draggable={canDrag && isProjectPm(p, me)}
       onDragStart={startDrag({ kind: 'project', id: p.id })}
       onDragEnd={endDrag}
-      title={`Deadline dự án ${p.code} · ${p.name}`}
+      title={`Deadline dự án ${p.code}: ${p.name}`}
       className={cx('flex min-w-0 items-center gap-1.5 rounded-[5px] px-1.5 py-[3px] text-[12.5px] font-semibold leading-tight text-white', canDrag && isProjectPm(p, me) && 'cursor-grab active:cursor-grabbing', drag?.id === p.id && 'opacity-40')}
       style={{ background: p.color ?? '#2F5BD3' }}
     >
@@ -292,7 +292,7 @@ export function CalendarPage() {
                 .filter((p) => p.state !== 'cancelled')
                 .map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.code} · {p.name}
+                    {p.code} {p.name}
                   </option>
                 ))}
             </Select>
@@ -460,7 +460,7 @@ function Agenda({ days, today, render }: { days: string[]; today: string; render
       {rows.map(([d, items]) => (
         <li key={d} className="rounded-xl border border-line bg-white p-3">
           <div className={cx('mb-2 text-[13px] font-semibold', d === today ? 'text-brand' : 'text-ink-2')}>
-            {d === today ? 'Hôm nay · ' : ''}
+            {d === today ? 'Hôm nay, ' : ''}
             {fmtDueDate(d)}
           </div>
           <div className="flex flex-col gap-1.5">
@@ -501,7 +501,7 @@ function StaffPanel({ tasks, projects, checkins, today, week }: { tasks: Task[];
             <ul className="flex flex-col gap-1 text-[13.5px]">
               {asks.map((c) => (
                 <li key={`${c.task.id}-${c.pct}`}>
-                  {fmtDueDate(c.date).slice(0, 5)} · <span className="font-mono text-[12.5px] text-brand">{c.task.code}</span> (mốc {c.pct}%)
+                  {fmtDueDate(c.date).slice(0, 5)} <span className="font-mono text-[12.5px] text-brand">{c.task.code}</span> (mốc {c.pct}%)
                 </li>
               ))}
             </ul>
@@ -516,7 +516,7 @@ function StaffPanel({ tasks, projects, checkins, today, week }: { tasks: Task[];
             <li key={p.id} className="flex items-center gap-2">
               <ProjectSwatch color={p.color} />
               <Link to={`/du-an/${encodeURIComponent(p.code)}`} className="truncate hover:underline">
-                {p.code} · {p.name}
+                {p.code} {p.name}
               </Link>
             </li>
           ))}
@@ -559,14 +559,14 @@ function PmPanel({ data, today, allTasks, onOpen }: { data: { tasks: Task[]; pro
           <p className="text-[13.5px] text-ink-3">Không có.</p>
         )}
       </PanelCard>
-      <PanelCard title="Deadline dự án · 14 ngày tới">
+      <PanelCard title="Deadline dự án trong 14 ngày tới">
         {soon.length ? (
           <ul className="flex flex-col gap-1.5 text-[13.5px]">
             {soon.map((p) => (
               <li key={p.id} className="flex items-center gap-2">
                 <ProjectSwatch color={p.color} />
                 <Link to={`/du-an/${encodeURIComponent(p.code)}`} className="truncate hover:underline">
-                  {fmtDueDate(p.due_date).slice(0, 5)} · {p.code}
+                  {fmtDueDate(p.due_date).slice(0, 5)}: {p.code}
                 </Link>
               </li>
             ))}

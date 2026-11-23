@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BAND_LABEL, BandLevel } from '@/domain';
-import { Banner, Button, Card, ErrorBox, Field, Input, Loading, PageHeader, useAsync, useToast } from '@/components/ui';
+import { Banner, Button, Card, ErrorBox, Field, Input, PageHeader, useAsync, useToast, PageSkeleton } from '@/components/ui';
 import { fmtVnDateTime } from '@/lib/format';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
@@ -32,7 +32,7 @@ export function PriceRulesPage() {
     setForm({ send_now: f('send_now'), pm: f('pm') });
   }, [data]);
 
-  if (loading) return <Loading />;
+  if (loading) return <PageSkeleton kind="list" />;
   if (error) return <ErrorBox error={error} />;
   if (!form) return null;
 

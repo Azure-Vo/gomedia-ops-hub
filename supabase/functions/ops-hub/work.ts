@@ -435,7 +435,7 @@ export async function deleteSimChat(ctx: Ctx, user: Profile, body: Record<string
   const chatId = String(body.chat_id ?? '');
   if (w.cfg.mode !== 'simulation' || !chatId.startsWith('sim-chat:')) throw new ApiError(400, 'live', 'Group Lark thật: giải tán hoặc xoá bot khỏi group trên Lark.');
   const holder = must(await ctx.db.from('lark_tasks').select('code, name').eq('kind', 'parent').eq('chat_id', chatId).is('deleted_at', null).limit(1).maybeSingle(), 'check chat') as { code: string; name: string } | null;
-  if (holder) throw new ApiError(409, 'in_use', `Group đang gắn với dự án ${holder.code} · ${holder.name}. Bỏ gắn trước khi xoá.`);
+  if (holder) throw new ApiError(409, 'in_use', `Group đang gắn với dự án ${holder.code} (${holder.name}). Bỏ gắn trước khi xoá.`);
   must(await ctx.db.from('lark_chats').delete().eq('chat_id', chatId), 'delete chat');
   return { ok: true };
 }
@@ -459,7 +459,7 @@ async function chatProblem(ctx: Ctx, w: WorkEnv, chatId: string, code: string, p
   if (!chat || !chat.active || chat.mode !== w.cfg.mode) return 'Bot chưa ở trong group này. Thêm bot vào group trên Lark rồi tải lại danh sách.';
   const others = must(await ctx.db.from('lark_tasks').select('id, code, name, chat_id, state').eq('kind', 'parent').is('deleted_at', null), 'load projects') as { id: string; code: string; name: string; chat_id: string | null; state: string }[];
   const holder = others.find((p) => p.id !== projectId && p.chat_id === chat.chat_id && p.state !== 'cancelled');
-  if (holder) return `Group "${chat.name}" đang gắn với dự án ${holder.code} · ${holder.name}.`;
+  if (holder) return `Group "${chat.name}" đang gắn với dự án ${holder.code} (${holder.name}).`;
   const clash = chatCodeConflict(chat.name, code, others.filter((p) => p.id !== projectId).map((p) => p.code));
   if (clash) return `Tên group "${chat.name}" mang mã ${clash} của dự án khác. Chọn group có mã ${normalizeProjectCode(code)}.`;
   return null;

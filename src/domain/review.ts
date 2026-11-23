@@ -44,8 +44,8 @@ export function canComment(role: string, isOwner: boolean, status: QuoteStatus):
 
 /** Snapshot label stored with a comment, so it still reads right after the line moves or is deleted. */
 export function anchorLabel(a: { anchor: CommentAnchor; position?: number | null; itemName?: string | null; sectionTitle?: string | null }): string {
-  if (a.anchor === 'line') return `Dòng ${a.position ?? '?'} · ${(a.itemName ?? '').trim() || 'Hạng mục'}`;
-  if (a.anchor === 'section') return `Phần · ${(a.sectionTitle ?? '').trim() || 'Hạng mục dịch vụ'}`;
+  if (a.anchor === 'line') return `Dòng ${a.position ?? '?'}: ${(a.itemName ?? '').trim() || 'Hạng mục'}`;
+  if (a.anchor === 'section') return `Phần: ${(a.sectionTitle ?? '').trim() || 'Hạng mục dịch vụ'}`;
   return ANCHOR_LABEL[a.anchor];
 }
 

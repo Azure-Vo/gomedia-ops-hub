@@ -92,10 +92,10 @@ export function AlertsPage() {
                     ) : (
                       '–'
                     )}
-                    <span className="text-[13px] text-ink-3">· {t ? data!.names.get(t.owner_id) : ''}</span>
+                    <span className="text-[13px] text-ink-3">{t ? data!.names.get(t.owner_id) : ''}</span>
                   </span>
                   <span className="text-[13px] text-ink-3" title={fmtVnShort(a.created_at, tz)}>
-                    {timeAgo(a.created_at)} · deadline {t ? fmtVnShort(t.due_at, tz) : '–'}
+                    {timeAgo(a.created_at)}, deadline {t ? fmtVnShort(t.due_at, tz) : '–'}
                   </span>
                 </div>
                 <div className="mt-2 grid gap-1 text-[14px]">
@@ -121,8 +121,8 @@ export function AlertsPage() {
                 <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
                   {a.acknowledged_at ? (
                     <span className="text-[13.5px] font-semibold text-ok-ink">
-                      Đã xử lý bởi {data!.names.get(a.acknowledged_by ?? '') ?? '–'} · {fmtVnShort(a.acknowledged_at, tz)}
-                      {a.note ? ` · ${a.note}` : ''}
+                      Đã xử lý bởi {data!.names.get(a.acknowledged_by ?? '') ?? '–'}, {fmtVnShort(a.acknowledged_at, tz)}
+                      {a.note ? `. ${a.note}` : ''}
                     </span>
                   ) : (
                     <span className="text-[13px] text-ink-3">{a.notified_at ? 'Đã gửi Telegram' : 'Sẽ gửi Telegram trong giờ làm việc'}</span>

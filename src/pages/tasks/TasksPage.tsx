@@ -104,9 +104,9 @@ export function TasksPage() {
                         {t.name}
                       </Link>
                       <div className="text-[13px] text-ink-3">
-                        {manager && <>Phụ trách: {ownerName(t.owner_id)} · </>}Deadline {fmtVnShort(t.due_at, tz)}
-                        {open && left > 0 && ` · còn ${fmtNum(left, 1)} giờ làm việc`}
-                        {next && open && ` · checkpoint tới ${fmtVnShort(next.scheduled_at, tz)}`}
+                        {manager && <>Phụ trách: {ownerName(t.owner_id)}, </>}Deadline {fmtVnShort(t.due_at, tz)}
+                        {open && left > 0 && `, còn ${fmtNum(left, 1)} giờ làm việc`}
+                        {next && open && `, checkpoint tới ${fmtVnShort(next.scheduled_at, tz)}`}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -235,7 +235,7 @@ function TaskImport({ open, onClose, onDone }: { open: boolean; onClose: () => v
               <ul className="mt-1 list-disc pl-5">
                 {sample.map((r) => (
                   <li key={`${r.name}-${r.startAt}`}>
-                    {r.name}: bắt đầu {fmtVnLong(r.startAt, tz)} · deadline {fmtVnLong(r.dueAt, tz)}
+                    {r.name}: bắt đầu {fmtVnLong(r.startAt, tz)}, deadline {fmtVnLong(r.dueAt, tz)}
                   </li>
                 ))}
               </ul>

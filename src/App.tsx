@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { HOME, Layout, RequireRole } from '@/components/Layout';
-import { Banner, Button, Loading } from '@/components/ui';
+import { Banner, Bone, Button, PageSkeleton } from '@/components/ui';
 import { isConfigured } from '@/lib/config';
 import { useSession } from '@/lib/session';
 import { SettingsProvider } from '@/lib/settings';
@@ -64,7 +64,7 @@ function ForgetReturnPath() {
 export function App() {
   const { loading, session, profile, profileError, signOut } = useSession();
   if (!isConfigured()) return <NotConfiguredPage />;
-  if (loading) return <Loading label="Đang mở Ops Hub…" />;
+  if (loading) return <AppSkeleton />;
   if (!session) return <LoginPage />;
   if (!profile || !profile.active) {
     return (
@@ -111,5 +111,28 @@ export function App() {
         </Route>
       </Routes>
     </SettingsProvider>
+  );
+}
+
+/** First load (session check): the app shell with placeholders, so the page does not flash a spinner. */
+function AppSkeleton() {
+  return (
+    <div className="flex min-h-screen bg-canvas">
+      <aside className="hidden w-[260px] shrink-0 flex-col gap-2 border-r border-line bg-paper px-3.5 pt-5 lg:flex">
+        <div className="mb-6 flex items-center gap-2.5 px-1.5">
+          <Bone className="h-7 w-7 rounded-lg" />
+          <Bone className="h-5 w-24" />
+        </div>
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i} className="flex items-center gap-2.5 px-2.5 py-2">
+            <Bone className="h-[18px] w-[18px] rounded" />
+            <Bone className={i % 3 ? 'h-3.5 w-28' : 'h-3.5 w-36'} />
+          </div>
+        ))}
+      </aside>
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-10 sm:py-8">
+        <PageSkeleton kind="stats" />
+      </main>
+    </div>
   );
 }

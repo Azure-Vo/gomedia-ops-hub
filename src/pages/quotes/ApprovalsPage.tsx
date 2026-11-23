@@ -60,7 +60,7 @@ export function ApprovalsPage() {
         subtitle={level === 'ceo' ? 'Báo giá chờ bạn duyệt hoặc ký.' : `Báo giá ngoài khung giá cần ${ROLE_LABEL[level]} duyệt.`}
       />
       {data && data.extra.length > 0 && (
-        <Card className="mb-6" title={level === 'ceo' ? `Chờ bạn ký · ${data.extra.length}` : `Báo giá dự án cần góp ý · ${data.extra.length}`} subtitle={level === 'ceo' ? 'PM đã duyệt. Mở báo giá, xem trước rồi bấm Ký.' : 'CEO duyệt; PM góp ý ngay trên báo giá.'}>
+        <Card className="mb-6" title={level === 'ceo' ? `Chờ bạn ký (${data.extra.length})` : `Báo giá dự án cần góp ý (${data.extra.length})`} subtitle={level === 'ceo' ? 'PM đã duyệt. Mở báo giá, xem trước rồi bấm Ký.' : 'CEO duyệt; PM góp ý ngay trên báo giá.'}>
           <ul className="flex flex-col">
             {data.extra.map((q) => (
               <li key={q.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-soft py-2.5 last:border-b-0">
@@ -70,7 +70,7 @@ export function ApprovalsPage() {
                 <span className="text-ink">{q.client || '(chưa nhập)'}</span>
                 {q.kind === 'project' && <Badge tone="accent">Dự án</Badge>}
                 <span className="text-[13px] text-ink-3">
-                  {personName(data.people, q.created_by)} · chờ {fmtNum(workingHoursBetween(level === 'ceo' ? q.updated_at : q.approval_requested_at ?? q.updated_at, Date.now(), calendar), 1)} giờ làm việc
+                  {personName(data.people, q.created_by)}, chờ {fmtNum(workingHoursBetween(level === 'ceo' ? q.updated_at : q.approval_requested_at ?? q.updated_at, Date.now(), calendar), 1)} giờ làm việc
                 </span>
               </li>
             ))}
@@ -101,7 +101,7 @@ export function ApprovalsPage() {
                     {open > 0 && <Badge tone="warn">{open} góp ý đang mở</Badge>}
                   </span>
                 }
-                subtitle={`${q.client} · ${personName(data!.people, q.created_by)} · gửi duyệt ${q.approval_requested_at ? fmtVnDateTime(q.approval_requested_at, tz) : ''} · đã chờ ${fmtNum(waiting, 1)} giờ làm việc`}
+                subtitle={`${q.client}, ${personName(data!.people, q.created_by)}. Gửi duyệt ${q.approval_requested_at ? fmtVnDateTime(q.approval_requested_at, tz) : ''}, đã chờ ${fmtNum(waiting, 1)} giờ làm việc`}
                 actions={
                   <>
                     <Link to={`/quotes/${q.id}`} className="inline-flex min-h-[38px] items-center gap-2 whitespace-nowrap rounded-full border border-line-edge bg-paper px-4 text-[14px] font-semibold text-ink hover:border-line-control">
@@ -158,7 +158,7 @@ export function ApprovalsPage() {
                 </div>
                 <div className="mt-3 flex flex-wrap justify-end gap-6 text-[15px]">
                   <span>Chiết khấu: <b>{fmtNum(q.discount_pct, 1)}%</b></span>
-                  <span>Tổng trước VAT: <b>{fmtVnd(q.total)}</b> · thanh toán {fmtVnd(payable(q))}</span>
+                  <span>Tổng trước VAT: <b>{fmtVnd(q.total)}</b>, thanh toán {fmtVnd(payable(q))}</span>
                 </div>
               </Card>
             );

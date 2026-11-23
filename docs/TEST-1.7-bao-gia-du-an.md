@@ -38,15 +38,15 @@ Ghi kết quả: ✅ đúng · ❌ sai (chụp màn hình, ghi bước) · ⚠�
 |---|---|---|---|---|
 | A1 | Account | Báo giá → **Tạo báo giá**. Bấm **Báo giá dự án** | Nút chuyển sang Dự án, góc trên ghi "Đã lưu" (không còn "Lỗi lưu") | |
 | A2 | Account | Nhập Kính gửi, Dự án, Địa điểm; thêm 2 hạng mục từ Thư viện giá | Tổng tiền tính đúng, lưu tự động | |
-| A3 | Account | Ở **Hình thức thanh toán · chọn 1**: bấm 60/40 rồi bấm 50/30/20 | Chỉ 1 ô được chọn; chọn ô mới thì ô cũ tự bỏ | |
-| A4 | Account | Xem khối trạng thái cuối báo giá | Thấy "Báo giá dự án · PM, CEO góp ý rồi CEO ký" và nút **Gửi PM & CEO góp ý** (không có nút gửi khách) | |
-| A5 | Account | Bấm **Gửi PM & CEO góp ý** | Trạng thái **Chờ duyệt**, banner "Đang chờ PM, CEO góp ý · CEO duyệt" | |
+| A3 | Account | Ở **Hình thức thanh toán (chọn 1)**: bấm 60/40 rồi bấm 50/30/20 | Chỉ 1 ô được chọn; chọn ô mới thì ô cũ tự bỏ | |
+| A4 | Account | Xem khối trạng thái cuối báo giá | Thấy "Báo giá dự án: PM, CEO góp ý rồi CEO ký" và nút **Gửi PM & CEO góp ý** (không có nút gửi khách) | |
+| A5 | Account | Bấm **Gửi PM & CEO góp ý** | Trạng thái **Chờ duyệt**, banner "Đang chờ PM, CEO góp ý và CEO duyệt" | |
 | A6 | PM | Duyệt báo giá | Có mục **Báo giá dự án cần góp ý** chứa báo giá A1. Mở ra: góp ý được trên từng dòng, **không** có nút Duyệt | |
 | A7 | PM | Góp ý 1 dòng (VD "Giảm SL") | Góp ý hiện trên báo giá | |
 | A8 | CEO | Duyệt báo giá → mở báo giá A1 | Nút **Duyệt** bị khoá khi còn góp ý mở | |
 | A9 | Account | Trả lời góp ý, bấm **Đã xử lý** | Góp ý đóng | |
 | A10 | CEO | Bấm **Xem trước PDF** | PDF có logo, chữ ký mẫu kèm dấu "XEM TRƯỚC" | |
-| A11 | CEO | Bấm **Duyệt & ký** | Trạng thái **Đã ký, sẵn sàng gửi**; banner "CEO đã ký · giờ ký" (không qua bước Chờ CEO ký) | |
+| A11 | CEO | Bấm **Duyệt & ký** | Trạng thái **Đã ký, sẵn sàng gửi**; banner "CEO đã ký lúc <giờ ký>, sẵn sàng gửi" (không qua bước Chờ CEO ký) | |
 | A15 | Account | Bấm **Xuất PDF & gửi** | Trạng thái **Đã gửi**; PDF tải về **có chữ ký CEO** và dòng "Đã ký trên Go Media Ops Hub"; khối **Khách trả lời** xuất hiện | |
 | A15b | Account | Mở PDF | Logo Go Media, tiêu đề bảng đọc rõ (chữ trắng trên nền xanh), không dính chữ | |
 
@@ -82,7 +82,7 @@ Ghi kết quả: ✅ đúng · ❌ sai (chụp màn hình, ghi bước) · ⚠�
 
 | # | Vai trò | Thao tác | Kết quả mong đợi | KQ |
 |---|---|---|---|---|
-| D1 | Account | Tạo báo giá, để **Báo giá nhanh**, hạng mục giá thư viện, chiết khấu 0 | Banner xanh "Trong khung giá · Account gửi được ngay" | |
+| D1 | Account | Tạo báo giá, để **Báo giá nhanh**, hạng mục giá thư viện, chiết khấu 0 | Banner xanh "Trong khung giá: Account gửi được ngay" | |
 | D2 | Account | Bấm **Xuất PDF & gửi** | **Đã gửi** ngay, không qua bước ký; PDF **có chữ ký mẫu** của CEO | |
 | D3 | Account | Ghi **Khách đã chốt**, chọn PM Thử nghiệm | Lưu được | |
 | D4 | PM | Trang dự án BX01 → **Gắn báo giá** → chọn D1 | Dòng Báo giá có thêm D1 | |

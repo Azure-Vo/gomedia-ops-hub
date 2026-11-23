@@ -101,7 +101,7 @@ function StarOutlook({ outlook, onUseSuggestion, details }: { outlook: ReturnTyp
         <div className="flex items-center gap-2 text-[13px] text-ink-2">
           <Stars n={outlook.likely} px={16} />
           <span>
-            Dự kiến <b className="text-ink">{outlook.likely}/5</b> · chắc chắn {outlook.sure} · tối đa {outlook.max}
+            Dự kiến <b className="text-ink">{outlook.likely}/5</b> (chắc chắn {outlook.sure}, tối đa {outlook.max})
           </span>
         </div>
       </div>
@@ -115,7 +115,7 @@ function StarOutlook({ outlook, onUseSuggestion, details }: { outlook: ReturnTyp
                 <span className="truncate text-[12.5px] font-semibold text-ink">{c.name}</span>
               </div>
               <span className="text-[12px] text-ink-3">
-                {[SLOT_STYLE[x.state].label, x.note || details[x.key]].filter(Boolean).join(' · ')}
+                {[SLOT_STYLE[x.state].label, x.note || details[x.key]].filter(Boolean).join(': ')}
               </span>
               {x.suggest !== undefined && onUseSuggestion && (
                 <button type="button" onClick={onUseSuggestion} className="self-start text-[12px] font-semibold text-brand hover:underline">
@@ -281,12 +281,12 @@ export function GoStarPage() {
   return (
     <div>
       <PageHeader
-        title="Go Star · Ghi nhận nhân viên"
+        title="Go Star: Ghi nhận nhân viên"
         info="Hạng 1 nhận thêm danh hiệu Employee of the Month. Người 0 sao không xếp hạng."
         subtitle={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>Mỗi tiêu chí đạt = 1 sao</span>
-            <span className="text-ink-2">Thưởng: hạng 1 · 1.000.000đ, hạng 2 · 500.000đ, hạng 3 · 200.000đ</span>
+            <span className="text-ink-2">Thưởng: hạng 1 được 1.000.000đ, hạng 2 được 500.000đ, hạng 3 được 200.000đ</span>
           </span>
         }
         actions={
@@ -295,7 +295,7 @@ export function GoStarPage() {
               {months.map((m) => (
                 <option key={m} value={m}>
                   {monthLabel(m)}
-                  {m === thisMonth ? ' (đang chạy)' : data?.months.some((x) => x.month === m) ? ' · đã chốt' : ''}
+                  {m === thisMonth ? ' (đang chạy)' : data?.months.some((x) => x.month === m) ? ' (đã chốt)' : ''}
                 </option>
               ))}
             </Select>
@@ -351,7 +351,7 @@ export function GoStarPage() {
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-3">
                           <span>
                             Hạng {hit?.rank ?? place}
-                            {r?.tied ? ' · đồng hạng' : ''}
+                            {r?.tied ? ' (đồng hạng)' : ''}
                           </span>
                           {isEom && <Badge tone="brand">{closed ? 'Employee of the Month' : 'Dự kiến Employee of the Month'}</Badge>}
                         </div>
@@ -409,7 +409,7 @@ export function GoStarPage() {
                         const detail: Record<GoStarCriterion, string> = {
                           completion: t.judged ? `${t.done}/${t.judged} task đã được duyệt` : 'Không có task đến hạn',
                           deadline: t.judged ? `Trễ ${t.late + t.openLate}/${t.judged} (${t.latePct}%)` : 'Không có task đến hạn',
-                          quality: r.score.quality !== null ? `${r.score.quality}/5` : suggestOf(r) ? `Chưa chấm · gợi ý ${suggestOf(r)!.score}/5` : 'Chưa chấm',
+                          quality: r.score.quality !== null ? `${r.score.quality}/5` : suggestOf(r) ? `Chưa chấm, gợi ý ${suggestOf(r)!.score}/5` : 'Chưa chấm',
                           kpi: r.score.kpiPct !== null ? `${r.score.kpiPct}%` : 'Chưa nhập',
                           teamwork: r.score.teamwork !== null ? `${r.score.teamwork}/5` : 'Chưa chấm',
                         };
@@ -587,11 +587,11 @@ function ScoreModal({
   const scale = (
     <>
       <option value="">Chưa chấm</option>
-      <option value="5">5 · Vượt kỳ vọng</option>
-      <option value="4">4 · Đạt tốt</option>
-      <option value="3">3 · Đạt, còn phải sửa</option>
-      <option value="2">2 · Chưa đạt</option>
-      <option value="1">1 · Kém</option>
+      <option value="5">5: Vượt kỳ vọng</option>
+      <option value="4">4: Đạt tốt</option>
+      <option value="3">3: Đạt, còn phải sửa</option>
+      <option value="2">2: Chưa đạt</option>
+      <option value="1">1: Kém</option>
     </>
   );
 
@@ -600,10 +600,10 @@ function ScoreModal({
       open
       onClose={onClose}
       wide="xl"
-      title={`Chấm điểm ${monthLabel(month)} · ${row.name}`}
+      title={`Chấm điểm ${monthLabel(month)}: ${row.name}`}
       footer={
         <>
-          {existing && <span className="mr-auto self-center text-[12.5px] text-ink-3">Sửa lần cuối: {updatedByName(existing.updated_by)} · {fmtVnDateTime(existing.updated_at, tz)}</span>}
+          {existing && <span className="mr-auto self-center text-[12.5px] text-ink-3">Sửa lần cuối: {updatedByName(existing.updated_by)}, {fmtVnDateTime(existing.updated_at, tz)}</span>}
           <Button variant="ghost" onClick={onClose}>
             Huỷ
           </Button>
@@ -633,7 +633,7 @@ function ScoreModal({
               {(id) => <Input id={id} inputMode="decimal" value={kpi} onChange={(e) => setKpi(e.target.value)} placeholder="105" />}
             </Field>
           </div>
-          <Field label="Work Quality" hint={facts.data && facts.data.onTime + facts.data.late > 0 ? `≥ 4 → 1 sao · ${facts.data.firstPass}/${facts.data.onTime + facts.data.late} duyệt ngay lần đầu` : '≥ 4 → 1 sao'}>
+          <Field label="Work Quality" hint={facts.data && facts.data.onTime + facts.data.late > 0 ? `≥ 4 → 1 sao. ${facts.data.firstPass}/${facts.data.onTime + facts.data.late} duyệt ngay lần đầu` : '≥ 4 → 1 sao'}>
             {(id) => (
               <Select id={id} value={quality} onChange={(e) => setQuality(e.target.value)}>
                 {scale}
@@ -732,12 +732,12 @@ function PersonFacts({ state, name, month, row }: { state: { data: PersonMonthSt
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <Tile label="Task trong tháng" value={s.total} sub={`${approved} đã duyệt${s.pending ? ` · ${s.pending} chờ duyệt` : ''}${s.open ? ` · ${s.open} chưa đến hạn` : ''}`} />
+            <Tile label="Task trong tháng" value={s.total} sub={`${approved} đã duyệt${s.pending ? `, ${s.pending} chờ duyệt` : ''}${s.open ? `, ${s.open} chưa đến hạn` : ''}`} />
             <Tile label="Đúng hạn" value={`${s.onTime}/${judged || 0}`} sub="Theo lúc nộp" tone={judged && s.onTime === judged ? 'ok' : undefined} />
-            <Tile label="Trễ / quá hạn" value={latePct === null ? '—' : `${latePct}%`} sub={`${s.late} nộp trễ · ${s.overdue} chưa nộp`} tone={latePct === null ? undefined : latePct < 20 ? 'ok' : 'bad'} />
+            <Tile label="Trễ / quá hạn" value={latePct === null ? '—' : `${latePct}%`} sub={`${s.late} nộp trễ, ${s.overdue} chưa nộp`} tone={latePct === null ? undefined : latePct < 20 ? 'ok' : 'bad'} />
             <Tile label="Duyệt ngay lần đầu" value={approved ? `${s.firstPass}/${approved}` : '—'} sub={`${s.sentBack} lần bị trả về sửa`} tone={approved && s.firstPass / approved >= 0.8 ? 'ok' : s.sentBack ? 'warn' : undefined} />
-            <Tile label="Gia hạn" value={s.extScope + s.extQuality} sub={`${s.extScope} đổi yêu cầu · ${s.extQuality} do người làm`} tone={s.extQuality ? 'warn' : undefined} />
-            <Tile label="Trả lời tiến độ" value={s.asked ? `${s.answered}/${s.asked}` : '—'} sub={s.blocked || s.behind ? `${s.blocked} bị chặn · ${s.behind} chậm` : 'Không báo chậm'} tone={s.asked && s.answered < s.asked ? 'warn' : undefined} />
+            <Tile label="Gia hạn" value={s.extScope + s.extQuality} sub={`${s.extScope} đổi yêu cầu, ${s.extQuality} do người làm`} tone={s.extQuality ? 'warn' : undefined} />
+            <Tile label="Trả lời tiến độ" value={s.asked ? `${s.answered}/${s.asked}` : '—'} sub={s.blocked || s.behind ? `${s.blocked} bị chặn, ${s.behind} chậm` : 'Không báo chậm'} tone={s.asked && s.answered < s.asked ? 'warn' : undefined} />
           </div>
           <div className="mt-3 rounded-lg border border-line-soft">
             <div className="px-3 py-2 text-[13px] font-semibold text-ink-2">{s.total} task tính trong tháng</div>
@@ -756,7 +756,7 @@ function PersonFacts({ state, name, month, row }: { state: { data: PersonMonthSt
                   {s.tasks.map((t) => (
                     <tr key={t.id} className="border-t border-line-soft">
                       <td className="max-w-[260px] px-3 py-1.5">
-                        <Link to={`/du-an/${encodeURIComponent(t.code.split('-')[0])}?task=${t.id}`} target="_blank" rel="noopener" className="block truncate hover:underline" title={`${t.code} · ${t.name} · ${TASK_STAGE_LABEL[t.state]} (mở ở tab mới)`}>
+                        <Link to={`/du-an/${encodeURIComponent(t.code.split('-')[0])}?task=${t.id}`} target="_blank" rel="noopener" className="block truncate hover:underline" title={`${t.code} ${t.name}, ${TASK_STAGE_LABEL[t.state]} (mở ở tab mới)`}>
                           <span className="font-mono text-[12px] text-brand">{t.code}</span> {t.name}
                         </Link>
                       </td>

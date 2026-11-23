@@ -140,7 +140,7 @@ export function TaskFormModal({ open, onClose, initial, owners, types, onSaved }
               <option value="">— Chọn —</option>
               {owners.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {(o.full_name || o.email) + (o.telegram_linked ? ' · Telegram' : ' · chỉ web')}
+                  {(o.full_name || o.email) + (o.telegram_linked ? ' (Telegram)' : ' (chỉ web)')}
                 </option>
               ))}
             </Select>
@@ -189,7 +189,7 @@ export function TaskFormModal({ open, onClose, initial, owners, types, onSaved }
           <div className="mt-1 flex flex-wrap gap-2">
             {preview.map((t, i) => (
               <Badge key={i} tone="brand">
-                {[25, 50, 75, 99][i]}% · {fmtVnShort(t.getTime(), tz)}
+                {[25, 50, 75, 99][i]}%: {fmtVnShort(t.getTime(), tz)}
               </Badge>
             ))}
           </div>
@@ -227,7 +227,7 @@ export function BlockerModal({ task, onClose, onDone }: { task: TaskRow | null; 
     <Modal
       open={!!task}
       onClose={onClose}
-      title={`Báo bị chặn · ${task?.name ?? ''}`}
+      title={`Báo bị chặn: ${task?.name ?? ''}`}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>

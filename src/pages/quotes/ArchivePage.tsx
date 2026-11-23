@@ -78,16 +78,16 @@ export function ArchivePage() {
                   <Link to={`/quotes/${r.id}`} className="font-semibold text-brand underline-offset-[3px] hover:underline">
                     {r.code}
                   </Link>{' '}
-                  <span className="text-ink">· {r.client}</span> {r.source === 'import' && <Badge>lịch sử</Badge>}
+                  <span className="text-ink">{r.client}</span> {r.source === 'import' && <Badge>lịch sử</Badge>}
                   <div className="text-[13.5px] text-ink-3">
-                    {r.service_group ?? 'Chưa phân nhóm'} · {r.quote_lines.slice(0, 4).map((l) => `${Number(l.qty)} × ${l.item_name}`).join(', ')}
+                    {r.service_group ?? 'Chưa phân nhóm'}: {r.quote_lines.slice(0, 4).map((l) => `${Number(l.qty)} × ${l.item_name}`).join(', ')}
                     {r.quote_lines.length > 4 ? '…' : ''}
                   </div>
                 </div>
                 <div className="text-right text-[14px]">
                   <div className="font-semibold">{fmtVnd(payable(r))}</div>
                   <div className="text-ink-3">
-                    {fmtVnDate(r.sent_at, tz)} · {fmtNum(workingHoursBetween(r.requested_at, r.sent_at, calendar), 1)} giờ
+                    {fmtVnDate(r.sent_at, tz)}, {fmtNum(workingHoursBetween(r.requested_at, r.sent_at, calendar), 1)} giờ
                   </div>
                 </div>
               </li>

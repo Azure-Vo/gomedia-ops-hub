@@ -28,7 +28,7 @@ import {
   validateQuote,
   workingHoursBetween,
 } from '@/domain';
-import { Badge, Banner, Button, Card, cx, ErrorBox, Field, Icon, IconButton, InfoTip, Input, Loading, Modal, NumberField, Select, Textarea, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Card, cx, ErrorBox, Field, Icon, IconButton, InfoTip, Input, Modal, NumberField, Select, Textarea, useToast, PageSkeleton } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { fmtVnd, fmtVnDate, fmtVnDateTime, fmtVnLong, fromLocalInput, toLocalInput } from '@/lib/format';
 import { useProfile } from '@/lib/session';
@@ -367,7 +367,7 @@ export function QuoteBuilderPage() {
   }, [bandInput, quote?.status]);
 
   if (loadError) return <ErrorBox error={loadError} />;
-  if (!quote || !header) return <Loading />;
+  if (!quote || !header) return <PageSkeleton kind="document" />;
 
   const vatOnPassThrough = !!settings?.vat_on_pass_through;
   const totals = quoteTotals(lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price, kind: l.kind })), header.discount_pct, { pct: header.vat_pct, onPassThrough: vatOnPassThrough });
@@ -686,7 +686,7 @@ export function QuoteBuilderPage() {
             <Icon name="clock" size={15} className={`self-center ${elapsed > (settings?.quote_late_hours ?? 8) ? 'text-bad' : 'text-ink-3'}`} />
             <span className="text-[13px] text-ink-3">Thời gian xử lý (giờ làm việc)</span>
             <b className={`text-[17px] font-semibold ${elapsed > (settings?.quote_late_hours ?? 8) ? 'text-bad' : 'text-ink'}`}>{fmtNum(elapsed, 2)} giờ</b>
-            <span className="text-[13px] text-ink-3">· mục tiêu ≤ {settings?.quote_late_hours ?? 8} giờ</span>
+            <span className="text-[13px] text-ink-3">(mục tiêu ≤ {settings?.quote_late_hours ?? 8} giờ</span>
           </div>
           <Button variant="secondary" size="sm" icon="link" onClick={copyLink}>
             Sao chép link
@@ -719,7 +719,7 @@ export function QuoteBuilderPage() {
             <Field label="Người liên hệ">{(fid) => <Input id={fid} value={header.contact} disabled={!editable} onChange={(e) => setH({ contact: e.target.value })} placeholder="Họ tên, SĐT" />}</Field>
             <Field label="Dự án">{(fid) => <Input id={fid} value={header.project} disabled={!editable} onChange={(e) => setH({ project: e.target.value })} placeholder="VD: Lễ khai giảng 2026" />}</Field>
             <Field label="Địa điểm">{(fid) => <Input id={fid} value={header.venue} disabled={!editable} onChange={(e) => setH({ venue: e.target.value })} placeholder="VD: Khách sạn 5 sao, Đà Nẵng" />}</Field>
-            <Field label="Khách gửi yêu cầu lúc" hint={`Bắt đầu tính giờ · ${fmtVnLong(header.requested_at, tz)}`}>
+            <Field label="Khách gửi yêu cầu lúc" hint={`Bắt đầu tính giờ từ ${fmtVnLong(header.requested_at, tz)}`}>
               {(fid) => (
                 <Input
                   id={fid}
@@ -818,7 +818,7 @@ export function QuoteBuilderPage() {
                           ) : (
                             <b className="font-semibold text-ink">{title}</b>
                           )}
-                          {sec && <CommentToggle target={{ anchor: 'section', sectionTitle: title }} label={`Phần ${toRoman(si + 1)} · ${title}`} className="shrink-0" />}
+                          {sec && <CommentToggle target={{ anchor: 'section', sectionTitle: title }} label={`Phần ${toRoman(si + 1)}: ${title}`} className="shrink-0" />}
                         </div>
                       </td>
                       <td className="whitespace-nowrap border-b border-line px-3 py-1.5 text-right font-semibold tabular-nums">{fmtVnd(sec?.amount ?? 0, false)}</td>
@@ -826,12 +826,12 @@ export function QuoteBuilderPage() {
                         {editable && <IconButton icon="trash" label={`Xoá phần ${title}`} onClick={() => removeSection(title)} />}
                       </td>
                     </tr>
-                    {sec && <CommentTableRow target={{ anchor: 'section', sectionTitle: title }} label={`Phần ${toRoman(si + 1)} · ${title}`} colSpan={7} />}
+                    {sec && <CommentTableRow target={{ anchor: 'section', sectionTitle: title }} label={`Phần ${toRoman(si + 1)}: ${title}`} colSpan={7} />}
                     {rows.map(({ line: l }, k) => {
                       const lp = libPrice(l);
                       const pass = l.kind === 'pass_through';
                       const custom = !pass && lp !== null && l.unit_price !== lp;
-                      const lineLabel = `Dòng ${before + k + 1} · ${l.item_name}`;
+                      const lineLabel = `Dòng ${before + k + 1}: ${l.item_name}`;
                       const idx = lines.indexOf(l);
                       const shownBand = band ?? quote.band_detail ?? null;
                       const flagged = !!shownBand?.reasons.some((r) => (r.code === 'deviation' || r.code === 'no_library_price') && r.line === idx);
@@ -847,8 +847,8 @@ export function QuoteBuilderPage() {
                             <div className="font-medium">{l.item_name}</div>
                             <div className="text-[13px] text-ink-3">
                               {l.library_item_id ? libMap.get(l.library_item_id)?.service_group : 'Không thuộc thư viện'}
-                              {pass && ' · chi hộ: không chiết khấu, không xét khung giá'}
-                              {lp !== null && custom && ` · giá thư viện ${fmtVnd(lp)}`}
+                              {pass && '. Chi hộ: không chiết khấu, không xét khung giá'}
+                              {lp !== null && custom && `. Giá thư viện ${fmtVnd(lp)}`}
                             </div>
                             {(editable || l.description) && (
                               <textarea
@@ -1048,7 +1048,7 @@ export function QuoteBuilderPage() {
             <p className="mt-0.5 text-[13px] text-ink-3">Chọn điều khoản in trên báo giá.</p>
             {termGroups.map(([g, ts]) => (
               <fieldset key={g} className="mt-3 rounded-lg border border-line-soft px-3 pb-2 pt-1">
-                <legend className="px-1 text-[13px] font-semibold text-ink-2">{g} · chọn 1</legend>
+                <legend className="px-1 text-[13px] font-semibold text-ink-2">{g} (chọn 1)</legend>
                 <ul className="flex flex-col gap-1.5">
                   {ts.map((t) => (
                     <li key={t.id}>
@@ -1127,7 +1127,7 @@ export function QuoteBuilderPage() {
               ) : header.kind === 'project' ? (
                 <Banner
                   tone="info"
-                  title="Báo giá dự án · PM, CEO góp ý rồi CEO ký"
+                  title="Báo giá dự án: PM, CEO góp ý rồi CEO ký"
                   actions={
                     <Button icon="send" busy={busy === 'submit'} disabled={!!problems.length || saveState === 'saving'} onClick={submit}>
                       Gửi PM & CEO góp ý
@@ -1139,20 +1139,20 @@ export function QuoteBuilderPage() {
               ) : band.level === 'send_now' ? (
                 <Banner
                   tone="ok"
-                  title="Trong khung giá · Account gửi được ngay"
+                  title="Trong khung giá: Account gửi được ngay"
                   actions={
                     <Button variant="success" icon="send" busy={busy === 'send'} disabled={!!problems.length || saveState === 'saving' || !sendBlock.ok} onClick={sendNow}>
                       Xuất PDF & gửi
                     </Button>
                   }
                 >
-                  Chiết khấu {fmtNum(band.discountPct, 1)}% · đơn giá lệch thư viện nhiều nhất {fmtNum(band.maxDeviationPct, 1)}%
+                  Chiết khấu {fmtNum(band.discountPct, 1)}%, đơn giá lệch thư viện nhiều nhất {fmtNum(band.maxDeviationPct, 1)}%
                   {!sendBlock.ok && <div className="mt-1 font-semibold">{sendBlock.error}</div>}
                 </Banner>
               ) : (
                 <Banner
                   tone="warn"
-                  title={`Ngoài khung giá · ${BAND_LABEL[band.level]}`}
+                  title={`Ngoài khung giá: ${BAND_LABEL[band.level]}`}
                   actions={
                     <Button icon="send" busy={busy === 'submit'} disabled={!!problems.length || saveState === 'saving'} onClick={submit}>
                       Gửi {band.level === 'pm' ? 'PM' : 'CEO'} duyệt
@@ -1174,7 +1174,7 @@ export function QuoteBuilderPage() {
           {quote.status === 'pending' && (
             <Banner
               tone="info"
-              title={quote.kind === 'project' ? 'Đang chờ PM, CEO góp ý · CEO duyệt' : `Đang chờ ${quote.approver === 'ceo' ? 'CEO' : 'PM'} duyệt`}
+              title={quote.kind === 'project' ? 'Đang chờ PM, CEO góp ý và CEO duyệt' : `Đang chờ ${quote.approver === 'ceo' ? 'CEO' : 'PM'} duyệt`}
               actions={isOwner && <Button variant="secondary" icon="edit" onClick={() => setConfirmReopen(true)}>Sửa báo giá</Button>}
             >
               Gửi duyệt lúc {quote.approval_requested_at ? fmtVnDateTime(quote.approval_requested_at, tz) : '–'}. Duyệt xong thì chờ CEO ký.
@@ -1246,7 +1246,7 @@ export function QuoteBuilderPage() {
           {quote.status === 'approved' && (
             <Banner
               tone="ok"
-              title={quote.signed_at ? `CEO đã ký · ${fmtVnDateTime(quote.signed_at, tz)} · sẵn sàng gửi` : `Đã được ${lastDecision ? ROLE_LABEL[lastDecision.level] : ''} duyệt · sẵn sàng gửi`}
+              title={quote.signed_at ? `CEO đã ký lúc ${fmtVnDateTime(quote.signed_at, tz)}, sẵn sàng gửi` : `Đã được ${lastDecision ? ROLE_LABEL[lastDecision.level] : ''} duyệt, sẵn sàng gửi`}
               actions={
                 isOwner && (
                   <>
@@ -1268,7 +1268,7 @@ export function QuoteBuilderPage() {
           {quote.status === 'sent' && (
             <div className="border-t-2 border-rail pt-3">
               <div className="flex flex-wrap items-center justify-between gap-2 font-semibold text-rail">
-                <span>Đã gửi {quote.client} · {quote.sent_at && fmtVnDateTime(quote.sent_at, tz)}</span>
+                <span>Đã gửi {quote.client} lúc {quote.sent_at && fmtVnDateTime(quote.sent_at, tz)}</span>
                 <span>Xử lý trong {fmtNum(elapsed, 2)} giờ làm việc</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
@@ -1295,7 +1295,7 @@ export function QuoteBuilderPage() {
             </div>
           )}
           <p className="text-[13px] text-ink-3">
-            Người lập: {accountName} · tạo lúc {fmtVnDateTime(quote.created_at, tz)}
+            Người lập: {accountName}, tạo lúc {fmtVnDateTime(quote.created_at, tz)}
           </p>
         </section>
 
@@ -1400,12 +1400,12 @@ function SimilarCard({
           {q.code}
         </Link>
         <span className="whitespace-nowrap text-[12px] text-ink-3">
-          {sameGroup ? 'Cùng nhóm' : 'Khác nhóm'} · {sharedItems} hạng mục trùng
+          {sameGroup ? 'Cùng nhóm' : 'Khác nhóm'}, {sharedItems} hạng mục trùng
         </span>
       </div>
       <div className="text-[14.5px] font-medium leading-snug text-ink">{q.client}</div>
       <div className="text-[13.5px] text-ink-3">
-        <span className="whitespace-nowrap">{fmtVnDate(q.sent_at, tz)}</span> · <span className="whitespace-nowrap font-semibold text-ink-2">{fmtVnd(q.total)}</span>
+        <span className="whitespace-nowrap">{fmtVnDate(q.sent_at, tz)}</span> <span className="whitespace-nowrap font-semibold text-ink-2">{fmtVnd(q.total)}</span>
       </div>
       <button
         type="button"

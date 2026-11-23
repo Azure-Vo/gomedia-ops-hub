@@ -51,7 +51,7 @@ export function OutcomeBlock({ quote, people, canEdit, onSaved }: { quote: Quote
       {quote.outcome === 'lost' && quote.lost_reason && (
         <span className="text-ink-2">
           {LOST_REASON_LABEL[quote.lost_reason]}
-          {quote.lost_note ? ` · ${quote.lost_note}` : ''}
+          {quote.lost_note ? `: ${quote.lost_note}` : ''}
         </span>
       )}
       {quote.outcome_at && <span className="text-[12.5px] text-ink-3">{fmtVnDateTime(quote.outcome_at, tz)}</span>}

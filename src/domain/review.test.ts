@@ -29,8 +29,8 @@ describe('review comments on a quote', () => {
   });
 
   it('labels the place a comment points at', () => {
-    expect(anchorLabel({ anchor: 'line', position: 3, itemName: 'Video TikTok ngắn' })).toBe('Dòng 3 · Video TikTok ngắn');
-    expect(anchorLabel({ anchor: 'section', sectionTitle: 'Quảng cáo' })).toBe('Phần · Quảng cáo');
+    expect(anchorLabel({ anchor: 'line', position: 3, itemName: 'Video TikTok ngắn' })).toBe('Dòng 3: Video TikTok ngắn');
+    expect(anchorLabel({ anchor: 'section', sectionTitle: 'Quảng cáo' })).toBe('Phần: Quảng cáo');
     expect(anchorLabel({ anchor: 'totals' })).toBe('Chiết khấu, thuế và tổng tiền');
   });
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Answer, ANSWER_LABEL, checkpointIndex } from '@/domain';
-import { Banner, Button, Card, EmptyState, ErrorBox, Field, Input, Loading, PageHeader, Textarea, useAsync, useToast } from '@/components/ui';
+import { Banner, Button, Card, EmptyState, ErrorBox, Field, Input, PageHeader, Textarea, useAsync, useToast, PageSkeleton } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { fmtVnShort } from '@/lib/format';
 import { useProfile } from '@/lib/session';
@@ -41,7 +41,7 @@ export function MyCheckinsPage() {
   const set = (id: number, patch: Partial<{ mode: Answer | null; evidence: string; reason: string }>) =>
     setDrafts((x) => ({ ...x, [id]: { ...(x[id] ?? { mode: null, evidence: '', reason: '' }), ...patch } }));
 
-  if (loading) return <Loading />;
+  if (loading) return <PageSkeleton kind="list" />;
   if (error) return <ErrorBox error={error} />;
   const items = data!.tasks
     .map((t) => {
@@ -80,7 +80,7 @@ export function MyCheckinsPage() {
               return (
                 <div key={cp.id} className="rounded-xl border border-brand-line bg-brand-soft/40 p-4">
                   <div className="text-[12px] font-semibold text-accent">
-                    CHECKPOINT {cp.pct}% · {fmtVnShort(cp.sent_at as string, tz)}
+                    CHECKPOINT {cp.pct}%, {fmtVnShort(cp.sent_at as string, tz)}
                   </div>
                   <div className="mt-1 text-[16px] font-bold text-ink">{t.name}</div>
                   <div className="mt-1 text-[14.5px] text-ink-2">

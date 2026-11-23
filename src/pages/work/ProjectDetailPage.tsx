@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fmtDueDate, MEMBER_STATUS_LABEL } from '@/domain';
-import { Badge, Banner, Button, Card, cx, EmptyState, ErrorBox, Field, Loading, Modal, PageHeader, Select, Textarea, useAsync, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Card, cx, EmptyState, ErrorBox, Field, Loading, Modal, PageHeader, Select, Textarea, useAsync, useToast, PageSkeleton } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { useProfile } from '@/lib/session';
 import { isMine, isProjectPm, loadMessages, loadProjectQuotes, loadWonQuotes, MemberRow, PersonRow } from './data';
@@ -24,7 +24,7 @@ export function ProjectDetailPage() {
   const [checking, setChecking] = useState(false);
   const project = data?.projects[0] ?? null;
   const history = useAsync(() => (project && tab === 'history' ? loadMessages({ projectId: project.id }) : Promise.resolve([])), [project?.id, tab]);
-  if (loading && !data) return <Loading />;
+  if (loading && !data) return <PageSkeleton kind="list" />;
   if (error) return <ErrorBox error={error} />;
   if (!project || !data) return <EmptyState title={`Không thấy dự án ${code}`}>Dự án không tồn tại hoặc bạn không phải thành viên. <Link className="underline" to="/du-an">Về danh sách dự án</Link></EmptyState>;
   const pm = isProjectPm(project, me);
@@ -63,7 +63,7 @@ export function ProjectDetailPage() {
             {project.name}
           </span>
         }
-        subtitle={[project.client, `PM ${project.assignee_name ?? '—'}`, `Bắt đầu ${fmtDueDate(project.start_date)}`, `Deadline ${fmtDueDate(project.due_date)}`].filter(Boolean).join(' · ')}
+        subtitle={[project.client, `PM ${project.assignee_name ?? '—'}`, `Bắt đầu ${fmtDueDate(project.start_date)}`, `Deadline ${fmtDueDate(project.due_date)}`].filter(Boolean).join(', ')}
         actions={
           pm && activeProject ? (
             <>
@@ -109,7 +109,7 @@ export function ProjectDetailPage() {
             Group Lark: {project.chat_status === 'linked' ? <b className="text-ink-2">{project.chat_name}</b> : 'chưa gắn'}
             {project.lark_url && (
               <>
-                {' · '}
+                {', '}
                 <a className="underline" href={project.lark_url} target="_blank" rel="noreferrer">
                   Mở trên Lark
                 </a>
@@ -126,7 +126,7 @@ export function ProjectDetailPage() {
         {(
           [
             ['tasks', `Task (${project.rollup.total})`],
-            ['members', `Thành viên (${project.members.filter((m) => m.status === 'accepted').length}${project.members.some((m) => m.status === 'invited') ? ` · ${project.members.filter((m) => m.status === 'invited').length} đang mời` : ''})`],
+            ['members', `Thành viên (${project.members.filter((m) => m.status === 'accepted').length}${project.members.some((m) => m.status === 'invited') ? `, ${project.members.filter((m) => m.status === 'invited').length} đang mời` : ''})`],
             ['history', 'Lịch sử nhắc việc'],
           ] as [Tab, string][]
         ).map(([k, label]) => (
@@ -247,8 +247,8 @@ function Members({ projectId, members, people, canEdit, live, onChanged }: { pro
               </div>
               <div className="text-[12.5px] text-ink-3">
                 {SOURCE[m.source]}
-                {m.status === 'invited' && m.invited_at && ` · mời ngày ${fmtAt(m.invited_at)}`}
-                {m.status !== 'invited' && m.responded_at && m.source === 'manual' && ` · trả lời ngày ${fmtAt(m.responded_at)}`}
+                {m.status === 'invited' && m.invited_at && `, mời ngày ${fmtAt(m.invited_at)}`}
+                {m.status !== 'invited' && m.responded_at && m.source === 'manual' && `, trả lời ngày ${fmtAt(m.responded_at)}`}
               </div>
               {m.status === 'declined' && <div className="mt-1 text-[13.5px] text-bad">Lý do: {m.decline_reason || 'không ghi'}</div>}
             </div>
@@ -374,7 +374,7 @@ function ProjectQuotes({ projectId, canLink }: { projectId: string; canLink: boo
           Gắn báo giá
         </Button>
       )}
-      {mineOnly && <span className="text-[12.5px] text-ink-3">· Bạn xem dự án này vì báo giá là của bạn.</span>}
+      {mineOnly && <span className="text-[12.5px] text-ink-3">Bạn xem dự án này vì báo giá là của bạn.</span>}
       <Modal
         open={picking}
         onClose={() => setPicking(false)}
@@ -410,7 +410,7 @@ function ProjectQuotes({ projectId, canLink }: { projectId: string; canLink: boo
                 <option value="">Chọn báo giá…</option>
                 {won.data!.map((q) => (
                   <option key={q.id} value={q.id}>
-                    {q.code} · {q.client || '(chưa có khách)'}
+                    {q.code}: {q.client || '(chưa có khách)'}
                   </option>
                 ))}
               </Select>

@@ -561,7 +561,7 @@ export function starOutlook(
   else {
     const q = stats ? suggestQuality(stats) : null;
     if (!q) slots.push({ key: 'quality', state: 'open', note: 'Chưa có task được duyệt' });
-    else slots.push({ key: 'quality', state: q.score >= rules.qualityMinScore ? 'likely' : 'unlikely', note: `Gợi ý ${q.score}/5${q.thin ? ' · ít dữ liệu' : ''}`, suggest: q.score });
+    else slots.push({ key: 'quality', state: q.score >= rules.qualityMinScore ? 'likely' : 'unlikely', note: `Gợi ý ${q.score}/5${q.thin ? ' (ít dữ liệu)' : ''}`, suggest: q.score });
   }
   if (row.score.kpiPct !== null) done('kpi', `${row.score.kpiPct}%`);
   else slots.push({ key: 'kpi', state: 'open', note: 'Chờ nhập % KPI' });
@@ -740,7 +740,7 @@ export function reviewNudgeMessage(items: { code: string; name: string; days: nu
   return {
     tone: 'orange',
     title: `⏳ ${items.length} task chờ bạn duyệt`,
-    lines: [...items.slice(0, 10).map((i) => ({ icon: '📥', text: `${taskTitle(i.code, i.name)} · chờ ${i.days} ngày làm việc` })), ...(items.length > 10 ? [{ icon: '…', text: `và ${items.length - 10} task khác` }] : []), ...linkLine(url, 'Mở trang Chờ duyệt')],
+    lines: [...items.slice(0, 10).map((i) => ({ icon: '📥', text: `${taskTitle(i.code, i.name)}, chờ ${i.days} ngày làm việc` })), ...(items.length > 10 ? [{ icon: '…', text: `và ${items.length - 10} task khác` }] : []), ...linkLine(url, 'Mở trang Chờ duyệt')],
   };
 }
 
@@ -827,7 +827,7 @@ export function morningSummaryMessage(list: SummaryProject[], today: string, url
       s.behind.length && `${s.behind.length} báo chậm`,
       s.noUpdate.length && `${s.noUpdate.length} chưa cập nhật`,
     ].filter(Boolean);
-    lines.push({ icon: s.status === 'ok' ? '🟢' : s.status === 'risk' ? '🟡' : '🔴', label: `${s.code} · ${PROJECT_STATUS_LABEL[s.status]}`, text: bits.length ? bits.join(' · ') : 'không có việc cần xử lý' });
+    lines.push({ icon: s.status === 'ok' ? '🟢' : s.status === 'risk' ? '🟡' : '🔴', label: `${s.code} (${PROJECT_STATUS_LABEL[s.status]})`, text: bits.length ? bits.join(', ') : 'không có việc cần xử lý' });
   }
   if (!lines.length) lines.push({ icon: '✅', text: 'Không có dự án nào đang chạy.' });
   return { tone: rows.some((s) => s.status === 'late' || s.status === 'red') ? 'red' : 'blue', title: `☀️ Tóm tắt sáng ${fmtDueDate(today)}`, lines: [...lines, ...linkLine(url, 'Mở Tóm tắt hôm nay')], note: 'Bản chụp lúc gửi. Số mới nhất luôn có trên trang Tóm tắt hôm nay.' };
@@ -838,7 +838,7 @@ export function eveningSummaryMessage(list: SummaryProject[], today: string, url
   const rows = sortSummary(list).filter((s) => s.status !== 'cancelled');
   const sum = (f: (s: SummaryProject) => number) => rows.reduce((n, s) => n + f(s), 0);
   const lines: BotMessage['lines'] = [
-    { icon: '✅', label: 'Hôm nay', text: `${sum((s) => s.approvedToday)} task được duyệt · ${sum((s) => s.submittedToday)} task được nộp` },
+    { icon: '✅', label: 'Hôm nay', text: `${sum((s) => s.approvedToday)} task được duyệt, ${sum((s) => s.submittedToday)} task được nộp` },
     { icon: '📥', label: 'Còn chờ duyệt', text: String(sum((s) => s.review.length)) },
   ];
   const dueTomorrow = rows.flatMap((s) => s.dueTomorrow);

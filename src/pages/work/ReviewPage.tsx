@@ -1,5 +1,5 @@
 import { fmtDueDate, localDateKey, workDaysAfter } from '@/domain';
-import { Badge, Banner, Button, EmptyState, ErrorBox, Loading, PageHeader } from '@/components/ui';
+import { Badge, Banner, Button, EmptyState, ErrorBox, PageHeader, PageSkeleton } from '@/components/ui';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { isProjectPm } from './data';
@@ -12,7 +12,7 @@ export function ReviewPage() {
   const { calendar, tz } = useSettings();
   const { data, loading, error, reload } = useWork();
   const { open } = useOpenTask(data);
-  if (loading && !data) return <Loading />;
+  if (loading && !data) return <PageSkeleton kind="list" />;
   if (error) return <ErrorBox error={error} />;
   if (!data) return null;
   const waiting = data.tasks

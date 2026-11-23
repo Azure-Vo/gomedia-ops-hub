@@ -186,7 +186,7 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
                 <div className="sticky top-0 z-10 flex items-baseline justify-between border-b border-line-soft bg-white/95 px-4 pb-1.5 pt-3 backdrop-blur">
                   <span className="text-[12px] font-bold uppercase tracking-[0.06em] text-ink-2">
                     {header}
-                    {header === preferredGroup && <span className="ml-2 normal-case tracking-normal text-brand">· nhóm của báo giá</span>}
+                    {header === preferredGroup && <span className="ml-2 normal-case tracking-normal text-brand">(nhóm của báo giá)</span>}
                   </span>
                   <span className="text-[12px] tabular-nums text-ink-3">{groups.find((g) => g.name === header)?.n}</span>
                 </div>
@@ -215,8 +215,8 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
                     </span>
                     {i.kind === 'pass_through' && <span className="rounded bg-info-soft px-1 text-[11px] font-bold text-info">CHI HỘ</span>}
                     {i.code && <span className="hidden font-mono text-[11.5px] sm:inline">{i.code}</span>}
-                    {!showHeaders && <span>· {i.service_group}</span>}
-                    {group === POPULAR && <span>· dùng trong {usage.get(i.id)} báo giá</span>}
+                    {!showHeaders && <span>{i.service_group}</span>}
+                    {group === POPULAR && <span>dùng trong {usage.get(i.id)} báo giá</span>}
                   </div>
                 </div>
                 <div className="hidden shrink-0 text-right sm:block">
@@ -227,7 +227,7 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
                   {qty ? (
                     <span className={cx('inline-flex min-h-[36px] items-center gap-1 rounded-full px-2.5 text-[12.5px] font-semibold', flash === i.id ? 'bg-ok text-white' : 'bg-ok-soft text-ok-ink')}>
                       <Icon name="check" size={14} />
-                      <span className="hidden sm:inline">Đã có · </span>SL {qty}
+                      <span className="hidden sm:inline">Đã có, </span>SL {qty}
                     </span>
                   ) : (
                     <span className={cx('inline-flex min-h-[36px] min-w-[36px] items-center justify-center gap-1 rounded-full border px-2 text-[12.5px] font-semibold sm:px-2.5', isActive ? 'border-brand bg-brand text-white' : 'border-line text-brand group-hover:border-brand')}>
@@ -255,11 +255,11 @@ export function LibraryPicker({ library, lines, usage, preferredGroup, onAdd, on
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-soft bg-canvas/50 px-4 py-2 text-[12.5px] text-ink-3">
         <span className="hidden sm:inline">
-          <kbd className="rounded border border-line bg-white px-1">↑</kbd> <kbd className="rounded border border-line bg-white px-1">↓</kbd> chọn ·{' '}
-          <kbd className="rounded border border-line bg-white px-1">Enter</kbd> thêm · <kbd className="rounded border border-line bg-white px-1">Esc</kbd> đóng · gõ không dấu cũng được · bấm lại mục đã có để +1 SL
+          <kbd className="rounded border border-line bg-white px-1">↑</kbd> <kbd className="rounded border border-line bg-white px-1">↓</kbd> chọn,{' '}
+          <kbd className="rounded border border-line bg-white px-1">Enter</kbd> thêm, <kbd className="rounded border border-line bg-white px-1">Esc</kbd> đóng, gõ không dấu cũng được, bấm lại mục đã có để +1 SL
         </span>
         <span className="tabular-nums" aria-live="polite">
-          {rows.length}/{items.length} hạng mục{added > 0 && <b className="ml-2 text-ok-ink">· đã thêm {added} lần</b>}
+          {rows.length}/{items.length} hạng mục{added > 0 && <b className="ml-2 text-ok-ink">Đã thêm {added} lần</b>}
         </span>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ANSWER_LABEL, fmtNum, workingHoursBetween } from '@/domain';
-import { Badge, Banner, Button, Card, ErrorBox, Field, Icon, Input, Loading, Modal, Textarea, useAsync, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Card, ErrorBox, Field, Icon, Input, Modal, Textarea, useAsync, useToast, PageSkeleton } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { fmtVnDateTime, fmtVnShort } from '@/lib/format';
 import { useProfile } from '@/lib/session';
@@ -29,7 +29,7 @@ export function TaskDetailPage() {
     return { ...bundle, owners, types, names };
   }, [id]);
 
-  if (loading) return <Loading />;
+  if (loading) return <PageSkeleton kind="list" />;
   if (error) return <ErrorBox error={error} />;
   const t = data!.tasks[0];
   if (!t) return <ErrorBox error="Không tìm thấy task hoặc bạn không có quyền xem." />;
@@ -85,7 +85,7 @@ export function TaskDetailPage() {
             <Icon name="chevronRight" className="rotate-180" />
           </Link>
           <div className="min-w-0">
-            <div className="text-[13px] font-bold text-accent">Task · S1 Checkpoint</div>
+            <div className="text-[13px] font-bold text-accent">Task S1 Checkpoint</div>
             <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold text-ink">
               {t.name} <TaskStatusBadge status={t.status} waiting={!!live} />
               {t.closed_as && <Badge tone={t.closed_as === 'on_time' ? 'ok' : 'bad'}>{t.closed_as === 'on_time' ? 'Đúng hạn' : 'Trễ hạn'}</Badge>}
@@ -151,7 +151,7 @@ export function TaskDetailPage() {
                   {m.done_at ? `Xong ${fmtVnShort(m.done_at, tz)}` : 'Chưa xong'}
                   {m.evidence_url && (
                     <>
-                      {' · '}
+                      {', '}
                       <a href={m.evidence_url} target="_blank" rel="noreferrer" className="font-semibold text-brand underline">
                         bằng chứng
                       </a>
@@ -180,11 +180,11 @@ export function TaskDetailPage() {
                 <tr key={c.id} className="border-b border-line-soft">
                   <td className="py-2 pr-3 font-semibold">{c.pct}%</td>
                   <td className="py-2 pr-3">{fmtVnShort(c.scheduled_at, tz)}</td>
-                  <td className="py-2 pr-3">{c.sent_at ? `${fmtVnShort(c.sent_at, tz)} · ${c.sent_via === 'telegram' ? 'Telegram' : 'web'}` : '–'}</td>
+                  <td className="py-2 pr-3">{c.sent_at ? `${fmtVnShort(c.sent_at, tz)} (${c.sent_via === 'telegram' ? 'Telegram' : 'web'})` : '–'}</td>
                   <td className="py-2 pr-3">
                     {c.answer ? (
                       <span>
-                        <b>{ANSWER_LABEL[c.answer]}</b> · {fmtVnShort(c.answered_at as string, tz)} · {c.answer_via === 'telegram' ? 'Telegram' : 'web'}
+                        <b>{ANSWER_LABEL[c.answer]}</b>, {fmtVnShort(c.answered_at as string, tz)} ({c.answer_via === 'telegram' ? 'Telegram' : 'web'})
                       </span>
                     ) : c.expired_at && c.sent_at ? (
                       <Badge tone="bad">Không trả lời</Badge>
@@ -214,7 +214,7 @@ export function TaskDetailPage() {
                   </span>
                   <span className="text-[13px] text-ink-3">
                     {fmtVnShort(a.created_at, tz)}
-                    {a.acknowledged_at ? ` · đã xử lý: ${a.note ?? ''}` : ' · chưa xử lý'}
+                    {a.acknowledged_at ? `, đã xử lý: ${a.note ?? ''}` : ', chưa xử lý'}
                   </span>
                 </li>
               ))}

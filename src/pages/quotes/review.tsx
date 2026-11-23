@@ -321,7 +321,7 @@ function Message({ c, people, tz }: { c: ReviewComment; people: People; tz: stri
       <div className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
         <b className="text-ink">{personName(people, c.authorId)}</b>
         {role && <span className="text-ink-3">{ROLE_LABEL[role] ?? role}</span>}
-        <span className="text-ink-3">· {fmtVnDateTime(c.createdAt, tz)}</span>
+        <span className="text-ink-3">{fmtVnDateTime(c.createdAt, tz)}</span>
       </div>
       <p className="whitespace-pre-wrap break-words text-[14.5px] text-ink">{c.body}</p>
     </div>
@@ -460,7 +460,7 @@ export function CommentTableRow({ target, label, colSpan }: { target: AnchorTarg
   return (
     <tr>
       <td colSpan={colSpan} className="border-b border-line-soft bg-warn-soft/30 px-3 py-3">
-        <div className="mb-1.5 text-[12.5px] font-bold text-warn">Góp ý · {label}</div>
+        <div className="mb-1.5 text-[12.5px] font-bold text-warn">Góp ý: {label}</div>
         <div className="sticky left-3 max-w-[min(640px,calc(100vw-3.5rem))]">
           <AnchorThreads target={target} label={label} />
         </div>
@@ -512,7 +512,7 @@ export function ReviewCard({ quoteId, code, locked }: { quoteId: string; code: s
                     <span className="block truncate text-[14px] text-ink">{t.root.body}</span>
                     <span className="block text-[12.5px] text-ink-3">
                       {personName(r.people, t.root.authorId)}
-                      {t.replies.length > 0 && ` · ${t.replies.length} trả lời`}
+                      {t.replies.length > 0 && `, ${t.replies.length} trả lời`}
                     </span>
                   </button>
                 </li>

@@ -192,7 +192,7 @@ export function goStarMessage(month: string, rows: GoStarRow[], fmtMoney: (v: nu
   const lines: BotMessage['lines'] = [];
   if (eom.length === 1) lines.push({ icon: '🏆', label: 'Employee of the Month', text: eom[0].name, mentionOpenId: eom[0].openId });
   for (const r of rows.filter((x) => x.prize > 0)) {
-    lines.push({ icon: MEDAL[r.rank - 1] ?? '⭐', text: `Hạng ${r.rank}${r.tied ? ' (đồng hạng)' : ''}: ${r.name} · ${r.starCount}/5 ⭐ · thưởng ${fmtMoney(r.prize)}` });
+    lines.push({ icon: MEDAL[r.rank - 1] ?? '⭐', text: `Hạng ${r.rank}${r.tied ? ' (đồng hạng)' : ''}: ${r.name}, ${r.starCount}/5 ⭐, thưởng ${fmtMoney(r.prize)}` });
   }
   return {
     tone: 'green',

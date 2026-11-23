@@ -79,8 +79,26 @@ function GlyphIcon({ e, size }: { e: string; size: number }) {
   return <Icon size={size} strokeWidth={1.75} aria-hidden="true" className={cx('inline-block shrink-0', g.fill && 'fill-current', g.className)} />;
 }
 
-/** Text with any emoji swapped for an inline Lucide icon. */
+const LINK = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+
+/** Text with Lark markdown links drawn as links and any emoji swapped for an inline Lucide icon. */
 function Rich({ text, size = 15 }: { text: string; size?: number }): ReactNode {
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(LINK)) {
+    out.push(<Plain key={`t${last}`} text={text.slice(last, m.index)} size={size} />);
+    out.push(
+      <a key={`l${m.index}`} href={m[2]} target="_blank" rel="noopener" className="font-semibold text-brand underline-offset-2 hover:underline">
+        {m[1]}
+      </a>,
+    );
+    last = (m.index ?? 0) + m[0].length;
+  }
+  out.push(<Plain key={`t${last}`} text={text.slice(last)} size={size} />);
+  return out;
+}
+
+function Plain({ text, size }: { text: string; size: number }): ReactNode {
   const parts = text.split(EMOJI_G);
   return parts.map((p, i) =>
     i % 2 ? (
@@ -88,7 +106,7 @@ function Rich({ text, size = 15 }: { text: string; size?: number }): ReactNode {
         <GlyphIcon e={p} size={size} />
       </span>
     ) : (
-      p.replace(/\s{2,}/g, ' ')
+      p.replace(/ · /g, ', ').replace(/\s{2,}/g, ' ')
     ),
   );
 }

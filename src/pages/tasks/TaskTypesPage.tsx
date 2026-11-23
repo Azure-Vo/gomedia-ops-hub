@@ -84,7 +84,7 @@ export function TaskTypesPage() {
               <ol className="flex flex-col gap-1.5 text-[14.5px]">
                 {typeMilestones(t).map((m, i) => (
                   <li key={i}>
-                    <span className="font-semibold text-ink-3">{[25, 50, 75, 99][i]}% · </span>
+                    <span className="font-semibold text-ink-3">{[25, 50, 75, 99][i]}%: </span>
                     {m}
                   </li>
                 ))}

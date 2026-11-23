@@ -75,7 +75,7 @@ export function QuotesPage() {
         actions={
           <Select aria-label="Lọc trạng thái" value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="w-56">
             <option value="open">Chưa gửi</option>
-            <option value="waiting">Đã gửi · chờ khách trả lời</option>
+            <option value="waiting">Đã gửi, chờ khách trả lời</option>
             <option value="won">{OUTCOME_LABEL.won}</option>
             <option value="lost">{OUTCOME_LABEL.lost}</option>
             <option value="all">Tất cả</option>

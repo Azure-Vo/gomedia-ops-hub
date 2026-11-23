@@ -113,7 +113,7 @@ export function DiagnosticsPage() {
         server.loading && <Loading label="Đang kiểm tra máy chủ…" />
       )}
 
-      <Card title={`Luật nghiệp vụ trong trình duyệt · ${browserPass}/${browser.length} PASS`} subtitle={`src/domain phiên bản ${DOMAIN_VERSION}`}>
+      <Card title={`Luật nghiệp vụ trong trình duyệt: ${browserPass}/${browser.length} PASS`} subtitle={`src/domain phiên bản ${DOMAIN_VERSION}`}>
         <CaseTable rows={browser} />
       </Card>
 
@@ -127,7 +127,7 @@ export function DiagnosticsPage() {
             <ul>
               <Check ok={serverPass === h.cases.length} label={`Luật nghiệp vụ trên máy chủ: ${serverPass}/${h.cases.length} PASS`} />
               <Check ok={versionOk} label="Edge Function chạy cùng phiên bản domain với web app">
-                Web {DOMAIN_VERSION} · máy chủ {h.domainVersion}
+                Web {DOMAIN_VERSION}, máy chủ {h.domainVersion}
                 {!versionOk && '. Dán lại file dist/edge/ops-hub/index.ts mới nhất vào Supabase rồi bấm Deploy.'}
               </Check>
               <Check ok={h.appEnv === config.environment} label={`Môi trường: web "${config.environment}", máy chủ "${h.appEnv}"`}>
@@ -149,7 +149,7 @@ export function DiagnosticsPage() {
               </Check>
               <Check ok={!!h.telegram.webhookOk} label="Webhook Telegram trỏ về ops-hub">
                 {h.telegram.webhookOk ? `${h.telegram.pending ?? 0} tin đang chờ` : `Hiện tại: ${h.telegram.webhookUrl || '(trống)'}. Bấm "Kết nối webhook".`}
-                {h.telegram.lastError && ` · Lỗi gần nhất: ${h.telegram.lastError}`}
+                {h.telegram.lastError && `. Lỗi gần nhất: ${h.telegram.lastError}`}
               </Check>
               <li className="flex flex-wrap gap-2 pt-3">
                 <Button size="sm" icon="link" busy={busy === 'hook'} disabled={!h.telegram.configured} onClick={() => action('hook', async () => { const r = await callApi<{ username: string }>('system.connect_telegram'); return `Đã kết nối webhook cho @${r.username}`; })}>
@@ -174,7 +174,7 @@ export function DiagnosticsPage() {
 
       <Card
         title="Baseline: 19 báo giá tháng 7–9/2026"
-        subtitle="So với số tính tay: 8,66 giờ · 52,6% trễ"
+        subtitle="So với số tính tay: 8,66 giờ, 52,6% trễ"
         info={<>Chỉ dùng báo giá nhập từ CSV lịch sử. Báo giá trễ = quá {lateHours} giờ làm việc.</>}
         actions={
           base.rows.length > 0 && (
@@ -209,7 +209,7 @@ export function DiagnosticsPage() {
           </Banner>
         ) : (
           <>
-            <Banner tone={base.check.pass ? 'ok' : 'warn'} title={base.check.pass ? 'PASS · khớp baseline' : 'LỆCH baseline · cần thống nhất cách tính trước pilot'}>
+            <Banner tone={base.check.pass ? 'ok' : 'warn'} title={base.check.pass ? 'PASS: khớp baseline' : 'LỆCH baseline: cần thống nhất cách tính trước pilot'}>
               App tính: {base.check.count} báo giá có ngày khách yêu cầu từ 01/07 đến 30/09/2026, trung bình {fmtNum(base.check.avgHours, 2)} giờ, {fmtNum(base.check.latePct, 1)}% trễ.
               {base.check.skipped > 0 && ` Bỏ qua ${base.check.skipped} báo giá lịch sử ngoài kỳ này.`} {base.check.pass ? '' : base.check.message}
             </Banner>
@@ -262,7 +262,7 @@ export function DiagnosticsPage() {
         </Card>
       )}
       <p className="text-[13px] text-ink-3">
-        Supabase: {config.supabaseUrl.replace(/^https?:\/\//, '')} · môi trường web: {config.environment} · giờ máy chủ: {h ? fmtVnDateTime(h.serverTime, tz) : '–'}
+        Supabase: {config.supabaseUrl.replace(/^https?:\/\//, '')}, môi trường web: {config.environment}, giờ máy chủ: {h ? fmtVnDateTime(h.serverTime, tz) : '–'}
       </p>
     </div>
   );

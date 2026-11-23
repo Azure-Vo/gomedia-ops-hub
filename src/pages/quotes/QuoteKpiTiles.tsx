@@ -55,7 +55,7 @@ export function KpiTile({
       {(base || target) && (
         <div className="text-[13px] text-ink-3">
           {base && <>Baseline {base}</>}
-          {base && target && ' · '}
+          {base && target && ', '}
           {target && <>Mục tiêu {target}</>}
         </div>
       )}
@@ -106,7 +106,7 @@ export function QuoteKpiTiles({
       >
         <div className="mt-1 border-t border-line-soft pt-2 text-[13px] text-ink-2">
           Riêng báo giá trễ: <b className="text-ink">{k.lateAvgHours === null ? '–' : `${fmtNum(k.lateAvgHours, 2)} h`}</b>
-          <span className="text-ink-3"> · baseline {fmtNum(base.quote_late_avg_hours ?? 10.7, 2)} h</span>
+          <span className="text-ink-3">, baseline {fmtNum(base.quote_late_avg_hours ?? 10.7, 2)} h</span>
         </div>
       </KpiTile>
       <div className="border-t-2 border-ink pt-2.5">
@@ -116,7 +116,7 @@ export function QuoteKpiTiles({
             <li key={b.level} className="flex justify-between gap-2 border-b border-line-soft py-1.5 last:border-0">
               <span>{BAND_LABEL[b.level]}</span>
               <span className="tabular-nums">
-                {b.count} · {b.avgHours === null ? '–' : `${fmtNum(b.avgHours, 2)} h`}
+                {b.count} báo giá, {b.avgHours === null ? '–' : `${fmtNum(b.avgHours, 2)} h`}
               </span>
             </li>
           ))}

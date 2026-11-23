@@ -13,8 +13,8 @@ export function StatusBadge({ status }: { status: QuoteStatus }) {
 /** Where the price band sent the quote. Read as a fact about pricing, not as a pending status. */
 const BAND_ROUTE: Record<BandLevel, [string, string]> = {
   send_now: ['Trong khung', 'bg-ok'],
-  pm: ['Ngoài khung · PM duyệt', 'bg-accent-strong'],
-  ceo: ['Ngoài khung · CEO duyệt', 'bg-bad'],
+  pm: ['Ngoài khung, PM duyệt', 'bg-accent-strong'],
+  ceo: ['Ngoài khung, CEO duyệt', 'bg-bad'],
 };
 
 export function BandBadge({ level }: { level: BandLevel | null }) {
@@ -68,9 +68,9 @@ const RULER_SPAN = 30;
  * thresholds themselves stay with the CEO and are never drawn.
  */
 export function BandRuler({ unitPrice, libraryPrice, kind, flagged }: { unitPrice: number; libraryPrice: number | null; kind?: LineKind; flagged: boolean }) {
-  if (kind === 'pass_through') return <span className="text-[12px] font-medium text-info">Chi hộ · không xét khung giá</span>;
+  if (kind === 'pass_through') return <span className="text-[12px] font-medium text-info">Chi hộ, không xét khung giá</span>;
   if (libraryPrice === null)
-    return <span className={`text-[12px] font-medium ${flagged ? 'text-accent' : 'text-ink-3'}`}>Ngoài thư viện{flagged ? ' · cần duyệt' : ''}</span>;
+    return <span className={`text-[12px] font-medium ${flagged ? 'text-accent' : 'text-ink-3'}`}>Ngoài thư viện{flagged ? ', cần duyệt' : ''}</span>;
   const dev = libraryPrice > 0 ? ((unitPrice - libraryPrice) * 100) / libraryPrice : 0;
   const same = Math.abs(dev) < 0.005;
   const clamped = Math.max(-RULER_SPAN, Math.min(RULER_SPAN, dev));
@@ -202,7 +202,7 @@ export const QuotePdf = forwardRef<
           <div style={{ color: PDF.navy, fontWeight: 700, fontSize: '12px' }}>{company.name.toUpperCase()}</div>
           {company.taxCode && <div>MST {company.taxCode}</div>}
           {company.address && <div>{company.address}</div>}
-          {(company.phone || company.website) && <div>{[company.phone, company.website].filter(Boolean).join(' · ')}</div>}
+          {(company.phone || company.website) && <div>{[company.phone, company.website].filter(Boolean).join('   |   ')}</div>}
         </div>
       </div>
       <BrandBar />
@@ -344,7 +344,7 @@ export const QuotePdf = forwardRef<
           </div>
           {company.signerName && <div style={{ fontWeight: 700 }}>{company.signerName}</div>}
           {company.signerTitle && <div style={{ color: PDF.mute }}>{company.signerTitle}</div>}
-          {signature?.signedAt && <div style={{ color: PDF.mute, fontSize: '9.5px', marginTop: '3px' }}>Đã ký trên Go Media Ops Hub · {fmtVnDateTime(signature.signedAt, tz)}</div>}
+          {signature?.signedAt && <div style={{ color: PDF.mute, fontSize: '9.5px', marginTop: '3px' }}>Đã ký trên Go Media Ops Hub lúc {fmtVnDateTime(signature.signedAt, tz)}</div>}
         </div>
       </div>
 

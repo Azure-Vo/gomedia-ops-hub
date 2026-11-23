@@ -122,7 +122,7 @@ export function WeeklyChart({ points, baseline, target, lateHours }: { points: W
           <div className="font-bold">Tuần {weekLabel(hp.weekStart)}</div>
           <div>Trung bình: {fmtNum(hp.avgHours, 2)} giờ</div>
           <div>
-            {hp.count} báo giá · {fmtNum(hp.latePct, 0)}% quá {lateHours} giờ
+            {hp.count} báo giá, {fmtNum(hp.latePct, 0)}% quá {lateHours} giờ
           </div>
         </div>
       )}

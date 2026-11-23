@@ -1,7 +1,7 @@
 import { ReactNode, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { fmtDueDate, PROJECT_STATUS_RANK } from '@/domain';
-import { Badge, Button, cx, EmptyState, ErrorBox, Icon, Loading, PageHeader } from '@/components/ui';
+import { Badge, Button, cx, EmptyState, ErrorBox, Icon, PageHeader, PageSkeleton } from '@/components/ui';
 import { useProfile } from '@/lib/session';
 import { isMine, isProjectPm, Project } from './data';
 import { useWork } from './hooks';
@@ -34,7 +34,7 @@ export function ProjectsPage() {
   };
   const fromQuote = params.get('tu-bao-gia') ?? undefined;
   const [creating, setCreating] = useState(!!fromQuote && pm);
-  if (loading && !data) return <Loading />;
+  if (loading && !data) return <PageSkeleton kind="list" />;
   if (error) return <ErrorBox error={error} />;
   if (!data) return null;
 
@@ -102,7 +102,7 @@ export function ProjectsPage() {
                 {otherGroups.map(([name, rows]) => (
                   <div key={name}>
                     <h3 className="mb-1 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-ink-3">
-                      <Icon name="users" size={14} /> PM {name} · {rows.length}
+                      <Icon name="users" size={14} /> PM {name} ({rows.length})
                     </h3>
                     {list(rows, pm)}
                   </div>
@@ -173,7 +173,7 @@ function Section({ title, count, note, tone, children }: { title: string; count:
     <section>
       <div className={cx('mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-2 pb-2', tone === 'muted' ? 'border-line' : 'border-ink')}>
         <h2 className="text-[19px] font-semibold text-ink">
-          {title} <span className="text-[15px] font-normal text-ink-3">· {count}</span>
+          {title} <span className="text-[15px] font-normal text-ink-3">{count}</span>
         </h2>
         {note && <span className="text-[13.5px] text-ink-3">{note}</span>}
       </div>
@@ -201,8 +201,8 @@ function ProjectRowItem({ p, meId, showMine, isPm, readOnly, pmLabel }: { p: Pro
             )}
           </div>
           <div className="mt-1 text-[13.5px] text-ink-3">
-            {[p.client, `PM ${pmLabel}`, `Deadline ${fmtDueDate(p.due_date)}`, p.chat_status === 'linked' && p.chat_name ? `Group: ${p.chat_name}` : null].filter(Boolean).join(' · ')}
-            {showMine && mineOpen > 0 && <span className="ml-2 font-semibold text-ink-2">· {mineOpen} task của bạn đang mở</span>}
+            {[p.client, `PM ${pmLabel}`, `Deadline ${fmtDueDate(p.due_date)}`, p.chat_status === 'linked' && p.chat_name ? `Group: ${p.chat_name}` : null].filter(Boolean).join(', ')}
+            {showMine && mineOpen > 0 && <span className="ml-2 font-semibold text-ink-2">({mineOpen} task của bạn đang mở)</span>}
           </div>
           {['late', 'red', 'risk'].includes(p.rollup.status) && <div className="mt-1 text-[13px] text-ink-2">{p.rollup.reason}</div>}
         </div>

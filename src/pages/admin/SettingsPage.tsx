@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fmtNum, validateCalendar, WorkCalendar, workingHoursBetween, at } from '@/domain';
-import { Banner, Button, Card, Field, Icon, Input, Loading, PageHeader, useToast } from '@/components/ui';
+import { Banner, Button, Card, Field, Icon, Input, PageHeader, useToast, PageSkeleton } from '@/components/ui';
 import { SettingsRow, useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
 
@@ -21,7 +21,7 @@ export function SettingsPage() {
   const [holiday, setHoliday] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => setS(settings), [settings]);
-  if (!s) return <Loading />;
+  if (!s) return <PageSkeleton kind="form" />;
 
   const cal: WorkCalendar = { timeZone: s.timezone, workDays: s.work_days, blocks: s.work_blocks, holidays: s.holidays.map(String) };
   const problems = validateCalendar(cal);

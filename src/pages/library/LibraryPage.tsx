@@ -489,7 +489,7 @@ function HistoryImport({ open, onClose }: { open: boolean; onClose: () => void }
               <ul className="mt-1 list-disc pl-5">
                 {preview.sample.map((q) => (
                   <li key={q.code}>
-                    {q.code}: khách yêu cầu {fmtVnLong(q.requested_at, tz)} · gửi {fmtVnLong(q.sent_at, tz)}
+                    {q.code}: khách yêu cầu {fmtVnLong(q.requested_at, tz)}, gửi {fmtVnLong(q.sent_at, tz)}
                   </li>
                 ))}
               </ul>

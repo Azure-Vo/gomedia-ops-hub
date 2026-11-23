@@ -90,13 +90,13 @@ export function ProgressBar({ r, className, compact }: { r: Rollup; className?: 
           {parts.map(([n, cls, label]) => (n ? <span key={label} className={cls} style={{ width: `${(n / total) * 100}%` }} title={`${n} ${label}`} /> : null))}
         </div>
         <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums text-ink">
-          {r.done}/{r.total} · {r.pct}%
+          {r.done}/{r.total} ({r.pct}%)
         </span>
       </div>
       {!compact && (
         <div className="mt-1 text-[12.5px] text-ink-3">
-          {r.total ? parts.filter(([n]) => n).map(([n, , label]) => `${n} ${label}`).join(' · ') : 'Chưa có task'}
-          {r.total > 0 && ` · đã đi ${r.timePct}% thời gian`}
+          {r.total ? parts.filter(([n]) => n).map(([n, , label]) => `${n} ${label}`).join(', ') : 'Chưa có task'}
+          {r.total > 0 && `; đã đi ${r.timePct}% thời gian`}
         </div>
       )}
     </div>
@@ -252,7 +252,7 @@ export function TaskDrawer({ task, people, onClose, onChanged, initialPanel = nu
           <div>
             <dt className="text-[12.5px] text-ink-3">Dự án</dt>
             <dd className="flex items-center gap-1.5">
-              <ProjectSwatch color={task.project.color} /> {task.project.code} · {task.project.name}
+              <ProjectSwatch color={task.project.color} /> {task.project.code} {task.project.name}
             </dd>
           </div>
           <div>
@@ -296,7 +296,7 @@ export function TaskDrawer({ task, people, onClose, onChanged, initialPanel = nu
         )}
 
         {task.state === 'review' && (
-          <Section title={`Lần nộp đang chờ duyệt${task.pending ? ` · ${fmtAt(task.pending.submitted_at)}${task.pending.via === 'lark' ? ' (đánh dấu trên Lark)' : ''}` : ''}`}>
+          <Section title={`Lần nộp đang chờ duyệt${task.pending ? ` (${fmtAt(task.pending.submitted_at)})${task.pending.via === 'lark' ? ' (đánh dấu trên Lark)' : ''}` : ''}`}>
             {task.pending ? <Evidence sub={task.pending} taskId={task.id} /> : <p className="text-ink-3">—</p>}
             {!task.hasEvidence && <p className="mt-1 text-[13px] text-warn">Chưa có bằng chứng. Thêm link hoặc file để PM duyệt.</p>}
           </Section>
@@ -374,8 +374,8 @@ export function TaskDrawer({ task, people, onClose, onChanged, initialPanel = nu
                   {s.decision && (
                     <div className={cx('mt-2 rounded-md px-2.5 py-1.5 text-[13.5px]', s.decision === 'approved' ? 'bg-ok-soft text-ok-ink' : 'bg-warn-soft text-warn')}>
                       <b>{s.decision === 'approved' ? 'Đã duyệt' : 'Yêu cầu sửa'}</b>
-                      {s.decided_by && ` · ${nameOf(s.decided_by)}`}
-                      {s.decided_at && ` · ${fmtAt(s.decided_at)}`}
+                      {s.decided_by && `, ${nameOf(s.decided_by)}`}
+                      {s.decided_at && `, ${fmtAt(s.decided_at)}`}
                       {s.feedback && <p className="mt-1 whitespace-pre-wrap text-ink">{s.feedback}</p>}
                     </div>
                   )}
@@ -384,8 +384,8 @@ export function TaskDrawer({ task, people, onClose, onChanged, initialPanel = nu
               {hist.data.extensions.map((x) => (
                 <li key={x.id} className="flex gap-1.5 text-[13.5px] text-ink-2">
                   <Icon name="calendar" size={15} className="mt-[3px] shrink-0 text-ink-3" />
-                  <span>{fmtAt(x.created_at)} · Gia hạn {fmtDueDate(x.from_date)} → {fmtDueDate(x.to_date)} · {EXTEND_REASON_LABEL[x.reason]}
-                  {x.created_by && ` · ${nameOf(x.created_by)}`}</span>
+                  <span>{fmtAt(x.created_at)}: gia hạn {fmtDueDate(x.from_date)} → {fmtDueDate(x.to_date)} ({EXTEND_REASON_LABEL[x.reason]})
+                  {x.created_by && `, ${nameOf(x.created_by)}`}</span>
                 </li>
               ))}
               {hist.data.checkins
@@ -393,7 +393,7 @@ export function TaskDrawer({ task, people, onClose, onChanged, initialPanel = nu
                 .map((c) => (
                   <li key={c.pct} className="flex gap-1.5 text-[13.5px] text-ink-2">
                     <Icon name="ask" size={15} className="mt-[3px] shrink-0 text-ink-3" />
-                    <span>Hỏi tiến độ mốc {c.pct}% ({fmtDueDate(c.due_date)}): {c.answer ? `${PROGRESS_LABEL[c.answer]}${c.answer_reason ? ` · ${c.answer_reason}` : ''}` : 'chưa trả lời'}</span>
+                    <span>Hỏi tiến độ mốc {c.pct}% ({fmtDueDate(c.due_date)}): {c.answer ? `${PROGRESS_LABEL[c.answer]}${c.answer_reason ? `: ${c.answer_reason}` : ''}` : 'chưa trả lời'}</span>
                   </li>
                 ))}
               {!hist.data.submissions.length && !hist.data.extensions.length && !hist.data.checkins.some((c) => c.sent_at) && <li className="text-ink-3">Chưa có lần nộp hay thay đổi nào.</li>}
@@ -586,11 +586,11 @@ function ReviewForm({ task, onDone, onCancel }: { task: Task; onDone: (msg: stri
  */
 export function ExtendReasonPicker({ value, onChange, newDue, kpiDue }: { value: ExtendReason | ''; onChange: (v: ExtendReason) => void; newDue: string; kpiDue: string; subject?: 'task' | 'project' }) {
   const opts: { k: ExtendReason; title: string; effect: string; tone: 'ok' | 'warn' }[] = [
-    { k: 'scope', title: 'Yêu cầu thay đổi', effect: `Hạn KPI dời sang ${newDue ? fmtDueDate(newDue) : 'ngày mới'} · không tính trễ`, tone: 'ok' },
+    { k: 'scope', title: 'Yêu cầu thay đổi', effect: `Hạn KPI dời sang ${newDue ? fmtDueDate(newDue) : 'ngày mới'}, không tính trễ`, tone: 'ok' },
     {
       k: 'quality',
       title: 'Người làm cần thêm thời gian',
-      effect: `Hạn KPI giữ ${fmtDueDate(kpiDue)} · nộp sau vẫn tính trễ`,
+      effect: `Hạn KPI giữ ${fmtDueDate(kpiDue)}, nộp sau vẫn tính trễ`,
       tone: 'warn',
     },
   ];
@@ -746,7 +746,7 @@ export function TaskForm({ project, members, task, onDone, onCancel }: { project
   }
   return (
     <FormBox
-      title={task ? `Sửa ${task.code}` : `Task mới · mã ${taskCode(project.code, project.next_seq)}`}
+      title={task ? `Sửa ${task.code}` : `Task mới (mã ${taskCode(project.code, project.next_seq)})`}
       footer={
         <>
           <Button variant="ghost" onClick={onCancel}>
@@ -924,7 +924,7 @@ export function ProjectForm({ project, people, existingCodes, onDone, onCancel, 
   const pickQuote = (id: string) => {
     setQuoteId(id);
     const q = won.data?.find((x) => x.id === id);
-    if (q) setF((x) => ({ ...x, name: q.project || q.client || x.name, client: q.client || x.client, description: [q.venue && `Địa điểm: ${q.venue}`, q.contact && `Liên hệ: ${q.contact}`].filter(Boolean).join(' · ') || x.description }));
+    if (q) setF((x) => ({ ...x, name: q.project || q.client || x.name, client: q.client || x.client, description: [q.venue && `Địa điểm: ${q.venue}`, q.contact && `Liên hệ: ${q.contact}`].filter(Boolean).join('\n') || x.description }));
   };
   useEffect(() => {
     if (fromQuoteId && won.data?.some((x) => x.id === fromQuoteId)) pickQuote(fromQuoteId);
@@ -981,8 +981,8 @@ export function ProjectForm({ project, people, existingCodes, onDone, onCancel, 
                 <option value="">Không dùng báo giá</option>
                 {won.data!.map((q) => (
                   <option key={q.id} value={q.id}>
-                    {q.code} · {q.client || '(chưa có khách)'}
-                    {q.kind === 'project' ? ' · Dự án' : ''}
+                    {q.code}: {q.client || '(chưa có khách)'}
+                    {q.kind === 'project' ? ' (Dự án)' : ''}
                   </option>
                 ))}
               </Select>
@@ -1060,8 +1060,8 @@ export function MessageHistory({ messages }: { messages: BotMessageRow[] }) {
                 <div key={m.id}>
                   <BotCard message={m.message} time={m.sent_at ? new Date(m.sent_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : undefined} />
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 px-1 text-[12px] text-ink-3">
-                    <Badge tone={m.channel === 'dm' ? 'accent' : 'neutral'}>{m.channel === 'dm' ? `Riêng · ${m.to_name ?? '—'}` : 'Group dự án'}</Badge>
-                    {m.status === 'sent' ? <Badge tone="ok">Đã gửi lên Lark</Badge> : m.status === 'failed' ? <Badge tone="bad">Lỗi gửi · lần {m.attempts}</Badge> : <Badge>Mô phỏng</Badge>}
+                    <Badge tone={m.channel === 'dm' ? 'accent' : 'neutral'}>{m.channel === 'dm' ? `Riêng: ${m.to_name ?? '—'}` : 'Group dự án'}</Badge>
+                    {m.status === 'sent' ? <Badge tone="ok">Đã gửi lên Lark</Badge> : m.status === 'failed' ? <Badge tone="bad">Lỗi gửi, lần {m.attempts}</Badge> : <Badge>Mô phỏng</Badge>}
                     {m.last_error && m.status === 'failed' && <span className="text-bad">{m.last_error}</span>}
                   </div>
                 </div>

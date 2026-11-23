@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { checkChildCode, checkParentCode, parentCodeOf, validateCodeRules } from '@/domain';
-import { Badge, Banner, Button, Card, Field, Input, Loading, PageHeader, Select, useAsync, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Card, Field, Input, Loading, PageHeader, Select, useAsync, useToast, PageSkeleton } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { check, supabase } from '@/lib/supabase';
 import { useSettings } from '@/lib/settings';
@@ -109,7 +109,7 @@ export function LarkSetupPage() {
     }
   }
 
-  if (loading || !settings) return <Loading />;
+  if (loading || !settings) return <PageSkeleton kind="form" />;
   return (
     <div>
       <PageHeader title="Kết nối Lark & nhắc việc" subtitle="Bot Lark của Go Media."
@@ -147,8 +147,8 @@ export function LarkSetupPage() {
               <Field label="Máy chủ Lark">
                 {(id) => (
                   <Select id={id} value={f.lark_api_base} onChange={(e) => setF({ ...f, lark_api_base: e.target.value })}>
-                    <option value="https://open.larksuite.com">Lark (quốc tế) · open.larksuite.com</option>
-                    <option value="https://open.feishu.cn">Feishu (Trung Quốc) · open.feishu.cn</option>
+                    <option value="https://open.larksuite.com">Lark (quốc tế): open.larksuite.com</option>
+                    <option value="https://open.feishu.cn">Feishu (Trung Quốc): open.feishu.cn</option>
                   </Select>
                 )}
               </Field>
@@ -251,7 +251,7 @@ export function LarkSetupPage() {
               <b>Version Management & Release</b>: tạo bản phát hành; quản trị viên Lark của Go Media duyệt.
             </li>
             <li>
-              Thêm bot vào <b>group của từng dự án</b> (nên đặt tên group bắt đầu bằng mã dự án, VD “MT35 · …”). PM chọn group khi tạo dự án; nếu bot chưa có trong group, trang dự án sẽ báo.
+              Thêm bot vào <b>group của từng dự án</b> (nên đặt tên group bắt đầu bằng mã dự án, VD “MT35 - Tên dự án”). PM chọn group khi tạo dự án; nếu bot chưa có trong group, trang dự án sẽ báo.
             </li>
             <li>
               Chọn “Kết nối Lark thật” → Lưu → <b>Gửi tin thử vào group</b>.
@@ -306,7 +306,7 @@ function PeopleLinks() {
                   .filter((u) => u.active)
                   .map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.full_name || u.email} · {u.role}
+                      {u.full_name || u.email} ({u.role})
                     </option>
                   ))}
               </Select>

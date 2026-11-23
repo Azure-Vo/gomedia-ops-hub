@@ -186,7 +186,7 @@ export class LarkApi {
 }
 
 export function apiOf(ctx: Ctx, cfg: LarkConfig): LarkApi {
-  if (!cfg.appId || !cfg.appSecret) throw new ApiError(400, 'lark_config', 'Chưa có App ID / App Secret của Lark (Admin → S1 · Nhắc task Lark → Cấu hình).');
+  if (!cfg.appId || !cfg.appSecret) throw new ApiError(400, 'lark_config', 'Chưa có App ID / App Secret của Lark (Admin → Kết nối Lark & nhắc việc → Cấu hình).');
   return new LarkApi(cfg.apiBase, cfg.appId, cfg.appSecret, ctx.fetchImpl ?? fetch);
 }
 

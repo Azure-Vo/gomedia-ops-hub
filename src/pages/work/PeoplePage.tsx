@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSY_OPEN, daysBetween, fmtDueDate, Health, LOAD_LABEL, LoadState, loadState, shiftKey } from '@/domain';
-import { Badge, cx, EmptyState, ErrorBox, Icon, Loading, PageHeader } from '@/components/ui';
+import { Badge, cx, EmptyState, ErrorBox, Icon, PageHeader, PageSkeleton } from '@/components/ui';
 import { useProfile } from '@/lib/session';
 import { isProjectPm, Project, Task } from './data';
 import { TaskHost, useOpenTask, useWork } from './hooks';
@@ -37,7 +37,7 @@ export function PeoplePage() {
   const { data, loading, error, reload } = useWork();
   const { open: openTask } = useOpenTask(data);
   const [only, setOnly] = useState<LoadState | ''>('');
-  if (loading && !data) return <Loading />;
+  if (loading && !data) return <PageSkeleton kind="cards" />;
   if (error) return <ErrorBox error={error} />;
   if (!data) return null;
 
@@ -110,7 +110,7 @@ export function PeoplePage() {
           </div>
 
           <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12.5px] text-ink-3">
-            <span>Thanh = task đang làm, màu theo sức khoẻ · mốc dọc = {BUSY_OPEN} task</span>
+            <span>Thanh = task đang làm, màu theo sức khoẻ; mốc dọc = {BUSY_OPEN} task</span>
             <span>Ô ngày = số task đến hạn</span>
             {only && (
               <button type="button" className="font-semibold text-brand hover:underline" onClick={() => setOnly('')}>
@@ -186,7 +186,7 @@ function PersonItem({ p, days, today, onOpen }: { p: PersonCard; days: string[];
           return (
             <div key={d} className={cx('rounded-md px-1 py-1 text-center', n >= 3 ? 'bg-[#D3DCF3]' : n === 2 ? 'bg-brand-soft' : n === 1 ? 'bg-brand-soft/50' : weekend ? 'bg-canvas' : 'bg-white ring-1 ring-inset ring-line-soft')} title={`${fmtDueDate(d)}: ${n} task đến hạn`}>
               <div className={cx('text-[11px]', i === 0 ? 'font-semibold text-brand' : 'text-ink-3')}>{i === 0 ? 'Nay' : WD[new Date(`${d}T00:00:00Z`).getUTCDay()]}</div>
-              <div className={cx('text-[14px] font-semibold leading-tight', n ? 'text-ink' : 'text-ink-3/50')}>{n || '·'}</div>
+              <div className={cx('text-[14px] font-semibold leading-tight', n ? 'text-ink' : 'text-ink-3/50')}>{n || '–'}</div>
             </div>
           );
         })}

@@ -250,7 +250,7 @@ export function DashboardPage() {
             {seeTasks && (
               <Card
                 title="Dự án & Task (S1)"
-                subtitle={`${k.s1.judged} task đã tính · ${k.s1.open} chưa tính${settings?.lark_mode === 'simulation' ? ' · mô phỏng' : ''}`}
+                subtitle={`${k.s1.judged} task đã tính, ${k.s1.open} chưa tính${settings?.lark_mode === 'simulation' ? ' (mô phỏng)' : ''}`}
                 info="Task tính khi có deadline tính KPI trong khoảng ngày. Chưa tính: chưa đến hạn hoặc đang chờ duyệt."
                 actions={
                   <>
@@ -273,7 +273,7 @@ export function DashboardPage() {
                     bar={{ base: base.task_overdue_pct, now: k.s1.latePct, target: tgt.overdue_pct }}
                   >
                     <div className="text-[13px] text-ink-3">
-                      {k.s1.late + k.s1.openLate}/{k.s1.judged} task · {k.s1.late} nộp trễ, {k.s1.openLate} quá hạn chưa xong
+                      {k.s1.late + k.s1.openLate}/{k.s1.judged} task: {k.s1.late} nộp trễ, {k.s1.openLate} quá hạn chưa xong
                     </div>
                   </KpiTile>
                   <KpiTile
@@ -285,8 +285,8 @@ export function DashboardPage() {
                   </KpiTile>
                   <KpiTile label="Bot đã nhắc" value={`${k.s1.reminders} lần`} good={null}>
                     <div className="text-[13px] text-ink-3">
-                      {k.s1.remindedTasks} task được nhắc · {k.s1.completions} task được duyệt
-                      {k.s1.failed ? <span className="text-bad"> · {k.s1.failed} lỗi gửi</span> : null}
+                      {k.s1.remindedTasks} task được nhắc, {k.s1.completions} task được duyệt
+                      {k.s1.failed ? <span className="text-bad">, {k.s1.failed} lỗi gửi</span> : null}
                     </div>
                   </KpiTile>
                 </div>
@@ -304,7 +304,7 @@ export function DashboardPage() {
                   </KpiTile>
                   <KpiTile label="Gia hạn" value={`${k.extra.extScope + k.extra.extQuality} lần`} good={null}>
                     <div className="text-[13px] text-ink-3">
-                      {EXTEND_REASON_LABEL.scope}: {k.extra.extScope} · {EXTEND_REASON_LABEL.quality}: {k.extra.extQuality}
+                      {EXTEND_REASON_LABEL.scope}: {k.extra.extScope}, {EXTEND_REASON_LABEL.quality}: {k.extra.extQuality}
                     </div>
                   </KpiTile>
                 </div>

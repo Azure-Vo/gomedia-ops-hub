@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { daysBetween, fmtDueDate, invitationErrors, PROGRESS_LABEL } from '@/domain';
-import { Badge, Banner, Button, EmptyState, ErrorBox, Field, Loading, Modal, PageHeader, Stat, Textarea, useAsync, useToast } from '@/components/ui';
+import { Badge, Banner, Button, EmptyState, ErrorBox, Field, Modal, PageHeader, Stat, Textarea, useAsync, useToast, PageSkeleton } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { useProfile } from '@/lib/session';
 import { InvitationRow, isMine, loadInvitations, Task } from './data';
@@ -13,7 +13,7 @@ export function InboxPage() {
   const { data, loading, error, reload } = useWork();
   const invites = useAsync(loadInvitations, []);
   const { open } = useOpenTask(data);
-  if (loading && !data) return <Loading />;
+  if (loading && !data) return <PageSkeleton kind="stats" />;
   if (error) return <ErrorBox error={error} />;
   if (!data) return null;
   const today = data.today;
@@ -51,7 +51,7 @@ export function InboxPage() {
           <div className="mt-1 flex flex-wrap gap-2">
             {asked.map((t) => (
               <Button key={t.id} size="sm" variant="secondary" onClick={() => open(t, 'progress')}>
-                {t.code} · trả lời
+                Trả lời {t.code}
               </Button>
             ))}
           </div>
@@ -64,10 +64,10 @@ export function InboxPage() {
           <Group title="Quá hạn" tone="bad" tasks={overdue} today={today} onOpen={open} empty="Không có task quá hạn." />
           <Group title="Hôm nay" tasks={dueToday} today={today} onOpen={open} empty="Không có task đến hạn hôm nay." />
           <Group title="Cần sửa" tone="warn" tasks={changes} today={today} onOpen={open} empty="Không có task bị trả lại." />
-          <Group title="Sắp tới · 7 ngày" tasks={upcoming} today={today} onOpen={open} empty="Không có task đến hạn trong 7 ngày tới." />
+          <Group title="Sắp tới trong 7 ngày" tasks={upcoming} today={today} onOpen={open} empty="Không có task đến hạn trong 7 ngày tới." />
           {later.length > 0 && <Group title="Sau 7 ngày" tasks={later} today={today} onOpen={open} />}
-          {waiting.length > 0 && <Group title="Đã nộp · chờ PM duyệt" tasks={waiting} today={today} onOpen={open} />}
-          <Group title="Đã xong · 30 ngày" tasks={doneRecent} today={today} onOpen={open} empty="Chưa có task được duyệt trong 30 ngày qua." />
+          {waiting.length > 0 && <Group title="Đã nộp, chờ PM duyệt" tasks={waiting} today={today} onOpen={open} />}
+          <Group title="Đã xong trong 30 ngày" tasks={doneRecent} today={today} onOpen={open} empty="Chưa có task được duyệt trong 30 ngày qua." />
         </div>
       )}
       <TaskHost data={data} reload={reload} />
@@ -110,7 +110,7 @@ function Invitations({ list, onAnswered }: { list: InvitationRow[]; onAnswered: 
                 <b className="text-ink">{inv.name}</b>
               </div>
               <div className="mt-0.5 text-[13px] text-ink-3">
-                {[inv.client, `PM ${inv.pm_name ?? '—'}`, `${fmtDueDate(inv.start_date)} → ${fmtDueDate(inv.due_date)}`, inv.invited_at ? `mời ngày ${fmtDueDate(inv.invited_at.slice(0, 10))}` : null].filter(Boolean).join(' · ')}
+                {[inv.client, `PM ${inv.pm_name ?? '—'}`, `${fmtDueDate(inv.start_date)} → ${fmtDueDate(inv.due_date)}`, inv.invited_at ? `mời ngày ${fmtDueDate(inv.invited_at.slice(0, 10))}` : null].filter(Boolean).join(', ')}
               </div>
             </div>
             <div className="flex gap-2">
@@ -169,10 +169,10 @@ function Group({ title, tasks, today, onOpen, empty, tone }: { title: string; ta
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-3">
                   <span className="inline-flex items-center gap-1.5">
-                    <ProjectSwatch color={t.project.color} /> {t.project.code} · {t.project.name}
+                    <ProjectSwatch color={t.project.color} /> {t.project.code} {t.project.name}
                   </span>
                   {t.state === 'done' && t.approved_at ? <span>Duyệt {fmtDueDate(t.approved_at.slice(0, 10))}</span> : <DueText task={t} today={today} />}
-                  {t.progress && (t.state === 'doing' || t.state === 'changes') && <span>· {PROGRESS_LABEL[t.progress]}</span>}
+                  {t.progress && (t.state === 'doing' || t.state === 'changes') && <span>{PROGRESS_LABEL[t.progress]}</span>}
                 </div>
               </button>
               <StageBadge state={t.state} />

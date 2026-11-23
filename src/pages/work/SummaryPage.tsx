@@ -1,13 +1,12 @@
-import { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { fmtDueDate, localDateKey, PROGRESS_LABEL, sortSummary, summarizeProject, SummaryProject, SummaryTask } from '@/domain';
-import { Badge, Button, cx, EmptyState, ErrorBox, Loading, PageHeader, Stat, useAsync } from '@/components/ui';
+import { Badge, Button, cx, EmptyState, ErrorBox, Icon, IconName, PageHeader, Stat, useAsync, PageSkeleton } from '@/components/ui';
 import { timeAgo } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { loadWonQuotes, Task, WorkData } from './data';
 import { TaskHost, useOpenTask, useWork } from './hooks';
-import { ProjectStatusBadge, ProjectSwatch } from './parts';
+import { ProgressBar, ProjectStatusBadge, ProjectSwatch } from './parts';
 
 export function toSummaryTask(t: Task, tz: string): SummaryTask {
   const day = (s: string | null) => (s ? localDateKey(Date.parse(s), tz) : null);
@@ -40,7 +39,7 @@ export function SummaryPage() {
   const { calendar, tz, settings } = useSettings();
   const { data, loading, error, reload } = useWork();
   const { open } = useOpenTask(data);
-  if (loading && !data) return <Loading />;
+  if (loading && !data) return <PageSkeleton kind="stats" />;
   if (error) return <ErrorBox error={error} />;
   if (!data) return null;
   const list = buildSummary(data, tz, calendar, me.role === 'pm' ? me.id : undefined);
@@ -54,7 +53,7 @@ export function SummaryPage() {
     <div>
       <PageHeader
         title="Tóm tắt hôm nay"
-        subtitle={`${fmtDueDate(data.today)} · bot gửi bản tin lúc ${settings?.summary_morning_time ?? '08:30'}${settings?.summary_evening_on === false ? '' : ` và ${settings?.summary_evening_time ?? '17:30'}`}`}
+        subtitle={`${weekdayLabel(data.today)}, ${fmtDueDate(data.today)}. Bot gửi bản tin lúc ${settings?.summary_morning_time ?? '08:30'}${settings?.summary_evening_on === false ? '' : ` và ${settings?.summary_evening_time ?? '17:30'}`}`}
       />
       <div className="mb-7 grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="Quá hạn" value={sum((s) => s.overdue.length)} tone={sum((s) => s.overdue.length) ? 'bad' : null} />
@@ -68,37 +67,7 @@ export function SummaryPage() {
       {!list.length ? (
         <EmptyState title="Không có dự án nào đang chạy">{me.role === 'pm' ? <Link className="underline" to="/du-an">Tạo dự án</Link> : null}</EmptyState>
       ) : (
-        <div className="flex flex-col gap-6">
-          {list.map((s) => {
-            const p = data.projects.find((x) => x.code === s.code)!;
-            const quiet = !s.overdue.length && !s.dueToday.length && !s.review.length && !s.blocked.length && !s.behind.length && !s.noUpdate.length;
-            return (
-              <section key={s.code} className="border-t border-ink pt-3">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <ProjectSwatch color={p.color} />
-                  <Link to={`/du-an/${encodeURIComponent(s.code)}`} className="font-mono text-[14px] font-semibold text-brand underline-offset-2 hover:underline">
-                    {s.code}
-                  </Link>
-                  <b className="text-[16px] text-ink">{s.name}</b>
-                  <ProjectStatusBadge status={s.status} />
-                  <span className="text-[13px] text-ink-3">{s.reason}</span>
-                </div>
-                {quiet ? (
-                  <p className="text-[14px] text-ink-3">Không có việc cần xử lý. {p.rollup.done}/{p.rollup.total} task đã duyệt.</p>
-                ) : (
-                  <div className="grid gap-x-8 gap-y-3 md:grid-cols-2 xl:grid-cols-3">
-                    <Bucket title="Quá hạn" tone="bad" items={s.overdue} onOpen={openTask} render={(t) => `quá ${Math.max(1, Math.round((Date.parse(data.today) - Date.parse(t.dueDate)) / 86400000))} ngày`} />
-                    <Bucket title="Đến hạn hôm nay" items={s.dueToday} onOpen={openTask} />
-                    <Bucket title="Chờ duyệt" tone="brand" items={s.review} onOpen={openTask} render={(t) => `chờ ${(t as SummaryTask & { waitDays: number }).waitDays} ngày làm việc`} />
-                    <Bucket title="Bị chặn" tone="bad" items={s.blocked} onOpen={openTask} render={(t) => t.reason.replace(/^Bị chặn:?\s*/, '')} />
-                    <Bucket title="Báo chậm" tone="warn" items={s.behind} onOpen={openTask} render={() => PROGRESS_LABEL.behind} />
-                    <Bucket title="Chưa cập nhật" tone="warn" items={s.noUpdate} onOpen={openTask} render={() => 'chưa trả lời câu hỏi tiến độ'} />
-                  </div>
-                )}
-              </section>
-            );
-          })}
-        </div>
+        <ProjectBoard list={list} data={data} onOpen={openTask} />
       )}
       <p className="mt-8 text-[13px] text-ink-3">
         Lần chạy nhắc việc gần nhất: {settings?.lark_status && (settings.lark_status as { at?: string }).at ? timeAgo((settings.lark_status as { at: string }).at) : 'chưa có'}. Lịch sử các bản tóm tắt đã gửi xem ở <Link className="underline" to="/dashboard">Báo cáo</Link>.
@@ -118,30 +87,34 @@ function InvitationNotes({ data, pmId }: { data: WorkData; pmId?: string }) {
   return (
     <section className="mb-7 grid gap-4 md:grid-cols-2">
       {declined.length > 0 && (
-        <div className="rounded-xl border border-bad/30 bg-white p-4 shadow-sheet">
+        <div className="rounded-2xl border border-bad-line bg-paper p-5">
           <div className="mb-2 flex items-center gap-2 text-[15px] font-semibold text-ink">
-            Lời mời bị từ chối · 7 ngày <Badge tone="bad">{declined.length}</Badge>
+            <Icon name="userX" size={17} className="text-bad" /> Lời mời bị từ chối trong 7 ngày <Badge tone="bad">{declined.length}</Badge>
           </div>
-          <ul className="flex flex-col gap-2 text-[14px]">
+          <ul className="flex flex-col divide-y divide-line text-[14px]">
             {declined.map(({ p, m }) => (
-              <li key={m.id}>
-                <b>{m.name}</b> · <Link className="font-mono text-[13px] text-brand hover:underline" to={`/du-an/${encodeURIComponent(p.code)}`}>{p.code}</Link>
-                <div className="text-[13.5px] text-ink-2">Lý do: {m.decline_reason || 'không ghi'}</div>
+              <li key={m.id} className="py-2.5 first:pt-0 last:pb-0">
+                <div className="flex flex-wrap items-center gap-x-2.5">
+                  <b>{m.name}</b>
+                  <Link className="font-mono text-[13px] text-brand hover:underline" to={`/du-an/${encodeURIComponent(p.code)}`}>{p.code}</Link>
+                </div>
+                <div className="mt-0.5 text-[13.5px] text-ink-2">Lý do: {m.decline_reason || 'không ghi'}</div>
               </li>
             ))}
           </ul>
         </div>
       )}
       {waiting.length > 0 && (
-        <div className="rounded-xl border border-line bg-white p-4 shadow-sheet">
+        <div className="rounded-2xl border border-line bg-paper p-5">
           <div className="mb-2 flex items-center gap-2 text-[15px] font-semibold text-ink">
-            Lời mời chưa trả lời <Badge tone="brand">{waiting.length}</Badge>
+            <Icon name="userPlus" size={17} className="text-ink-2" /> Lời mời chưa trả lời <Badge tone="brand">{waiting.length}</Badge>
           </div>
-          <ul className="flex flex-col gap-1.5 text-[14px]">
+          <ul className="flex flex-col divide-y divide-line text-[14px]">
             {waiting.map(({ p, m }) => (
-              <li key={m.id}>
-                {m.name} · <Link className="font-mono text-[13px] text-brand hover:underline" to={`/du-an/${encodeURIComponent(p.code)}`}>{p.code}</Link>
-                {m.invited_at && <span className="text-[12.5px] text-ink-3"> · mời {fmtDueDate(m.invited_at.slice(0, 10)).slice(0, 5)}</span>}
+              <li key={m.id} className="flex items-center gap-2.5 py-2 first:pt-0 last:pb-0">
+                <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                <Link className="font-mono text-[13px] text-brand hover:underline" to={`/du-an/${encodeURIComponent(p.code)}`}>{p.code}</Link>
+                {m.invited_at && <span className="w-20 text-right text-[12.5px] text-ink-3">mời {fmtDueDate(m.invited_at.slice(0, 10)).slice(0, 5)}</span>}
               </li>
             ))}
           </ul>
@@ -151,26 +124,159 @@ function InvitationNotes({ data, pmId }: { data: WorkData; pmId?: string }) {
   );
 }
 
-function Bucket({ title, items, onOpen, render, tone }: { title: string; items: SummaryTask[]; onOpen: (code: string) => void; render?: (t: SummaryTask) => ReactNode; tone?: 'bad' | 'warn' | 'brand' }) {
-  if (!items.length) return null;
+function weekdayLabel(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`).getUTCDay();
+  return ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][d];
+}
+
+type Need = 'overdue' | 'blocked' | 'dueToday' | 'review' | 'behind' | 'noUpdate';
+/** What the PM has to do about a task, most urgent first. */
+const NEED: Record<Need, { label: string; icon: IconName; chip: string }> = {
+  overdue: { label: 'Quá hạn', icon: 'alert', chip: 'bg-bad-soft text-bad' },
+  blocked: { label: 'Bị chặn', icon: 'ban', chip: 'bg-bad-soft text-bad' },
+  dueToday: { label: 'Đến hạn hôm nay', icon: 'clock', chip: 'bg-warn-soft text-warn' },
+  review: { label: 'Chờ bạn duyệt', icon: 'listChecks', chip: 'bg-brand-soft text-brand' },
+  behind: { label: 'Báo chậm', icon: 'trendingDown', chip: 'bg-warn-soft text-warn' },
+  noUpdate: { label: 'Chưa cập nhật', icon: 'ask', chip: 'bg-line-soft text-ink-2' },
+};
+const NEED_ORDER: Need[] = ['overdue', 'blocked', 'dueToday', 'review', 'behind', 'noUpdate'];
+
+function needRows(s: SummaryProject, today: string) {
+  const seen = new Set<string>();
+  const rows: { need: Need; t: SummaryTask; detail: string }[] = [];
+  const detail = (need: Need, t: SummaryTask): string => {
+    if (need === 'overdue') return `Trễ ${Math.max(1, Math.round((Date.parse(today) - Date.parse(t.dueDate)) / 86400000))} ngày, hạn ${fmtDueDate(t.dueDate).slice(0, 5)}`;
+    if (need === 'blocked') return t.reason.replace(/^Bị chặn:?\s*/, '') || 'Người làm báo bị chặn';
+    if (need === 'dueToday') return 'Hạn hôm nay';
+    if (need === 'review') {
+      const d = (t as SummaryTask & { waitDays: number }).waitDays;
+      return d ? `Đã chờ ${d} ngày làm việc` : 'Nộp hôm nay';
+    }
+    if (need === 'behind') return `${PROGRESS_LABEL.behind}, hạn ${fmtDueDate(t.dueDate).slice(0, 5)}`;
+    return 'Chưa trả lời câu hỏi tiến độ';
+  };
+  for (const need of NEED_ORDER) {
+    for (const t of s[need]) {
+      if (seen.has(t.code)) continue;
+      seen.add(t.code);
+      rows.push({ need, t, detail: detail(need, t) });
+    }
+  }
+  return rows;
+}
+
+/** PM view: projects that need action as cards with one row per task to act on; quiet projects as a compact grid. */
+function ProjectBoard({ list, data, onOpen }: { list: SummaryProject[]; data: WorkData; onOpen: (code: string) => void }) {
+  const project = (code: string) => data.projects.find((x) => x.code === code)!;
+  const byCode = new Map(data.tasks.map((t) => [t.code, t]));
+  const busy = list.map((s) => ({ s, rows: needRows(s, data.today) })).filter((x) => x.rows.length);
+  const quiet = list.filter((s) => !busy.some((b) => b.s.code === s.code));
   return (
-    <div>
-      <div className="mb-1 flex items-center gap-2 text-[13px] font-semibold text-ink-2">
-        {title} <Badge tone={tone ?? 'neutral'}>{items.length}</Badge>
-      </div>
-      <ul className="flex flex-col gap-1">
-        {items.map((t) => (
-          <li key={t.code}>
-            <button type="button" className={cx('text-left text-[14px] hover:text-brand')} onClick={() => onOpen(t.code)}>
-              <span className="mr-1.5 font-mono text-[12.5px] text-brand">{t.code}</span>
-              {t.name}
-              {render && <span className="ml-1.5 text-[12.5px] text-ink-3">· {render(t)}</span>}
-            </button>
-          </li>
-        ))}
-      </ul>
+    <div className="flex flex-col gap-8">
+      {busy.length > 0 && (
+        <section aria-label="Dự án cần xử lý">
+          <h2 className="mb-3 flex items-center gap-2 text-[17px] font-semibold text-ink">
+            Cần xử lý <span className="text-[15px] font-medium text-ink-3">{busy.length} dự án</span>
+          </h2>
+          <div className="flex flex-col gap-4">
+            {busy.map(({ s, rows }) => {
+              const p = project(s.code);
+              return (
+                <article key={s.code} className="overflow-hidden rounded-2xl border border-line bg-paper">
+                  <header className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-line px-5 py-4">
+                    <div className="flex min-w-0 flex-1 basis-80 flex-col gap-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ProjectSwatch color={p.color} />
+                        <Link to={`/du-an/${encodeURIComponent(s.code)}`} className="font-mono text-[14px] font-semibold text-brand underline-offset-2 hover:underline">
+                          {s.code}
+                        </Link>
+                        <Link to={`/du-an/${encodeURIComponent(s.code)}`} className="text-[17px] font-semibold text-ink hover:underline">
+                          {s.name}
+                        </Link>
+                        <ProjectStatusBadge status={s.status} />
+                      </div>
+                      <div className="text-[13px] text-ink-3">
+                        Deadline {fmtDueDate(p.due_date)}, đã đi {p.rollup.timePct}% thời gian
+                      </div>
+                    </div>
+                    <ProgressBar r={p.rollup} compact className="w-full sm:w-72" />
+                  </header>
+                  <ul className="divide-y divide-line">
+                    {rows.map(({ need, t, detail }) => {
+                      const k = NEED[need];
+                      const who = byCode.get(t.code)?.assignee_name;
+                      return (
+                        <li key={t.code}>
+                          <button type="button" onClick={() => onOpen(t.code)} className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 px-5 py-3 text-left transition-colors hover:bg-canvas/60 md:grid-cols-[164px_minmax(0,1fr)_160px_minmax(0,220px)_20px]">
+                            <span className={cx('inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-semibold', k.chip)}>
+                              <Icon name={k.icon} size={14} />
+                              {k.label}
+                            </span>
+                            <span className="col-span-2 min-w-0 md:col-span-1">
+                              <span className="mr-2 font-mono text-[12.5px] text-brand">{t.code}</span>
+                              <span className="text-[15px] font-medium text-ink group-hover:text-brand">{t.name}</span>
+                            </span>
+                            <span className="flex min-w-0 items-center gap-2 text-[13.5px] text-ink-2">
+                              {who ? (
+                                <>
+                                  <span aria-hidden className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-line-soft text-[10.5px] font-semibold text-ink">
+                                    {initialsOf(who)}
+                                  </span>
+                                  <span className="truncate">{who}</span>
+                                </>
+                              ) : (
+                                <span className="text-ink-3">Chưa giao</span>
+                              )}
+                            </span>
+                            <span className={cx('text-[13.5px] md:text-right', need === 'overdue' || need === 'blocked' ? 'text-bad' : 'text-ink-2')}>{detail}</span>
+                            <Icon name="chevronRight" size={16} className="hidden text-ink-3 group-hover:text-brand md:block" />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+      {quiet.length > 0 && (
+        <section aria-label="Dự án đang ổn">
+          <h2 className="mb-3 flex items-center gap-2 text-[17px] font-semibold text-ink">
+            Không có việc cần xử lý <span className="text-[15px] font-medium text-ink-3">{quiet.length} dự án</span>
+          </h2>
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {quiet.map((s) => {
+              const p = project(s.code);
+              return (
+                <li key={s.code}>
+                  <Link to={`/du-an/${encodeURIComponent(s.code)}`} className="flex h-full flex-col gap-3 rounded-2xl border border-line bg-paper px-4 py-3.5 transition-colors hover:border-line-control">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <ProjectSwatch color={p.color} />
+                          <span className="font-mono text-[13px] font-semibold text-brand">{s.code}</span>
+                        </div>
+                        <div className="mt-0.5 truncate text-[15px] font-semibold text-ink">{s.name}</div>
+                      </div>
+                      <ProjectStatusBadge status={s.status} />
+                    </div>
+                    {p.rollup.total ? <ProgressBar r={p.rollup} compact /> : <div className="text-[13px] text-ink-3">Chưa có task</div>}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </div>
   );
+}
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : name.slice(0, 2)).toUpperCase();
 }
 
 /** 1.7 · Quotes the client accepted that are waiting for a project (the PM they were handed to). */
@@ -182,8 +288,10 @@ function WonQuotesNote() {
   if (!list.length) return null;
   const days = (at: string | null) => (at ? Math.max(0, Math.floor((Date.now() - Date.parse(at)) / 86400000)) : 0);
   return (
-    <section className="mb-6 rounded-xl border border-ok-line bg-ok-soft/50 p-4">
-      <h2 className="mb-2 text-[16px] font-semibold text-ink">Báo giá đã chốt, chưa có dự án · {list.length}</h2>
+    <section className="mb-7 rounded-2xl border border-ok-line bg-paper p-5">
+      <h2 className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-ink">
+        <Icon name="handshake" size={17} className="text-ok" /> Báo giá đã chốt, chưa có dự án <Badge tone="ok">{list.length}</Badge>
+      </h2>
       <ul className="flex flex-col gap-1.5">
         {list.map((q) => (
           <li key={q.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px]">
