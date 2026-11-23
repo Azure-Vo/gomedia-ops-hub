@@ -1,6 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
+  fmtDueDate,
+  KPI_STATUS_LABEL,
+  KpiStatus,
   kpiTracked,
+  personMonthStats,
+  PersonMonthStats,
+  TASK_STAGE_LABEL,
   TaskStage,
   DEFAULT_GOSTAR_RULES,
   employeeOfMonth,
@@ -17,7 +23,8 @@ import {
   monthLabel,
   rankGoStar,
 } from '@/domain';
-import { Badge, Banner, Button, Card, EmptyState, ErrorBox, Field, Input, Loading, Modal, PageHeader, Select, Stat, Textarea, cx, useAsync, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Card, EmptyState, ErrorBox, Field, Input, Loading, Modal, PageHeader, Select, Textarea, cx, useAsync, useToast } from '@/components/ui';
+import { Link } from 'react-router-dom';
 import { fmtVnDateTime } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
@@ -437,7 +444,7 @@ function ScoreModal({
   const [busy, setBusy] = useState(false);
   const kpiNum = kpi.trim() === '' ? null : Number(kpi.replace(',', '.'));
   const kpiErr = kpiNum !== null && (!Number.isFinite(kpiNum) || kpiNum < 0 || kpiNum > 300) ? 'Nhập % từ 0 đến 300.' : null;
-  const t = row.tally;
+  const facts = useAsync(() => loadPersonMonth(row.openId, month, tz), [row.openId, month]);
 
   async function save() {
     setBusy(true);
@@ -481,6 +488,7 @@ function ScoreModal({
     <Modal
       open
       onClose={onClose}
+      wide
       title={`Chấm điểm ${monthLabel(month)} · ${row.name}`}
       footer={
         <>
@@ -493,12 +501,7 @@ function ScoreModal({
         </>
       }
     >
-      <div className="mb-4 grid grid-cols-3 gap-2">
-        <Stat label="Task con đã xong" value={`${t.done}/${t.judged}`} sub={t.notYetDue ? `+${t.notYetDue} chưa đến hạn` : undefined} />
-        <Stat label="Đúng hạn" value={t.onTime} />
-        <Stat label="Tỷ lệ trễ" value={t.latePct === null ? '—' : `${t.latePct}%`} tone={t.latePct === null ? null : t.latePct < 20 ? 'ok' : 'bad'} />
-      </div>
-      <p className="mb-4 text-[13px] text-ink-3">Hai sao Task Completion và Deadline tự tính từ task đã duyệt, không chấm tay. Tham khảo thêm số task phải sửa ở trang Báo cáo khi chấm Work Quality.</p>
+      <PersonFacts state={facts} name={row.name} month={month} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="KPI cá nhân của tháng" hint="Vd: 4 video đăng đúng lịch, doanh số shop…">
           {(id) => <Input id={id} value={kpiName} onChange={(e) => setKpiName(e.target.value)} maxLength={120} />}
@@ -506,7 +509,7 @@ function ScoreModal({
         <Field label="% KPI đạt được" hint="Đạt từ 100% được 1 sao" error={kpiErr}>
           {(id) => <Input id={id} inputMode="decimal" value={kpi} onChange={(e) => setKpi(e.target.value)} placeholder="vd 105" />}
         </Field>
-        <Field label="Work Quality (chất lượng đầu ra)" hint="Từ 4/5 được 1 sao">
+        <Field label="Work Quality (chất lượng đầu ra)" hint={facts.data && facts.data.onTime + facts.data.late > 0 ? `Từ 4/5 được 1 sao · ${facts.data.firstPass}/${facts.data.onTime + facts.data.late} task duyệt ngay lần đầu, ${facts.data.sentBack} lần trả về sửa` : 'Từ 4/5 được 1 sao'}>
           {(id) => (
             <Select id={id} value={quality} onChange={(e) => setQuality(e.target.value)}>
               {scale}
@@ -531,4 +534,123 @@ function ScoreModal({
       )}
     </Modal>
   );
+}
+
+/** The month's tasks of one person, with rounds, extensions and check-ins (for the scoring modal). */
+async function loadPersonMonth(openId: string, month: string, tz: string): Promise<PersonMonthStats> {
+  const rows = check(
+    await supabase
+      .from('lark_tasks')
+      .select('id, code, name, state, due_date, kpi_due_date, accepted_at')
+      .eq('kind', 'child')
+      .eq('assignee_open_id', openId)
+      .is('deleted_at', null)
+      // Window wide enough for any KPI deadline in the month; personMonthStats picks the month exactly.
+      .gte('due_date', `${shiftMonthKey(month, -3)}-01`),
+  ) as { id: string; code: string | null; name: string; state: TaskStage; due_date: string; kpi_due_date: string | null; accepted_at: string | null }[];
+  const ids = rows.filter((r) => (r.kpi_due_date ?? r.due_date).slice(0, 7) === month).map((r) => r.id);
+  const [subs, exts, checkins] = ids.length
+    ? await Promise.all([
+        supabase.from('task_submissions').select('task_id, round, decision, submitted_at').in('task_id', ids),
+        supabase.from('task_extensions').select('task_id, reason').in('task_id', ids),
+        supabase.from('task_checkins').select('task_id, sent_at, answer').in('task_id', ids),
+      ]).then(([a, b, c]) => [check(a), check(b), check(c)] as const)
+    : ([[], [], []] as const);
+  const subRows = subs as { task_id: string; round: number; decision: 'approved' | 'changes' | null; submitted_at: string }[];
+  const pendingAt = (id: string) => {
+    const open = subRows.filter((x) => x.task_id === id && x.decision === null).sort((a, b) => b.round - a.round)[0];
+    return open ? Date.parse(open.submitted_at) : null;
+  };
+  return personMonthStats(
+    month,
+    rows.map((r) => ({ id: r.id, code: r.code ?? '—', name: r.name, state: r.state, kpiDueDate: r.kpi_due_date ?? r.due_date, acceptedAt: r.accepted_at ? Date.parse(r.accepted_at) : null, pendingAt: pendingAt(r.id) })),
+    subRows,
+    exts as { task_id: string; reason: 'scope' | 'quality' }[],
+    checkins as { task_id: string; sent_at: string | null; answer: 'on_plan' | 'behind' | 'blocked' | null }[],
+    Date.now(),
+    tz,
+  );
+}
+
+const STATUS_TONE: Record<KpiStatus, 'ok' | 'bad' | 'warn' | 'neutral' | 'brand'> = { on_time: 'ok', late: 'bad', overdue: 'bad', pending: 'brand', open: 'neutral', excluded: 'neutral' };
+
+function Tile({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: 'ok' | 'bad' | 'warn' }) {
+  return (
+    <div className="rounded-lg border border-line-soft bg-canvas/50 px-3 py-2">
+      <div className="text-[12.5px] font-medium text-ink-3">{label}</div>
+      <div className={cx('text-[20px] font-semibold leading-tight tracking-[-0.01em]', tone === 'ok' ? 'text-ok-ink' : tone === 'bad' ? 'text-bad' : tone === 'warn' ? 'text-warn' : 'text-ink')}>{value}</div>
+      {sub && <div className="text-[12px] leading-snug text-ink-3">{sub}</div>}
+    </div>
+  );
+}
+
+function PersonFacts({ state, name, month }: { state: { data: PersonMonthStats | null; error: unknown; loading: boolean }; name: string; month: string }) {
+  if (state.error) return <ErrorBox error={state.error} />;
+  if (!state.data) return <div className="mb-4 h-[120px] animate-pulse rounded-lg bg-canvas" aria-label="Đang tải số liệu" />;
+  const s = state.data;
+  const judged = s.onTime + s.late + s.overdue;
+  const latePct = judged ? Math.round(((s.late + s.overdue) / judged) * 100) : null;
+  const approved = s.onTime + s.late;
+  return (
+    <section className="mb-5" aria-label={`Số liệu ${monthLabel(month)} của ${name}`}>
+      <h3 className="mb-2 text-[14px] font-semibold text-ink">Số liệu {monthLabel(month).toLowerCase()} (theo deadline tính KPI)</h3>
+      {!s.total ? (
+        <p className="rounded-lg bg-canvas px-3 py-3 text-[14px] text-ink-3">{name} không có task nào có deadline trong tháng này.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Tile label="Task trong tháng" value={s.total} sub={`${approved} đã duyệt${s.pending ? ` · ${s.pending} chờ duyệt` : ''}${s.open ? ` · ${s.open} chưa đến hạn` : ''}`} />
+            <Tile label="Đúng hạn" value={`${s.onTime}/${judged || 0}`} sub="Tính theo lúc nộp bản được duyệt" tone={judged && s.onTime === judged ? 'ok' : undefined} />
+            <Tile label="Trễ / quá hạn" value={latePct === null ? '—' : `${latePct}%`} sub={`${s.late} nộp trễ · ${s.overdue} chưa nộp`} tone={latePct === null ? undefined : latePct < 20 ? 'ok' : 'bad'} />
+            <Tile label="Duyệt ngay lần đầu" value={approved ? `${s.firstPass}/${approved}` : '—'} sub={`${s.sentBack} lần bị trả về sửa`} tone={approved && s.firstPass / approved >= 0.8 ? 'ok' : s.sentBack ? 'warn' : undefined} />
+            <Tile label="Gia hạn" value={s.extScope + s.extQuality} sub={`${s.extScope} do đổi yêu cầu · ${s.extQuality} do người làm`} tone={s.extQuality ? 'warn' : undefined} />
+            <Tile label="Trả lời hỏi tiến độ" value={s.asked ? `${s.answered}/${s.asked}` : '—'} sub={s.blocked || s.behind ? `${s.blocked} lần bị chặn · ${s.behind} lần chậm` : 'Không báo chậm, bị chặn'} tone={s.asked && s.answered < s.asked ? 'warn' : undefined} />
+          </div>
+          <details className="mt-3 rounded-lg border border-line-soft">
+            <summary className="cursor-pointer select-none px-3 py-2 text-[13.5px] font-semibold text-ink-2 hover:text-ink">Xem {s.total} task</summary>
+            <div className="max-h-56 overflow-y-auto border-t border-line-soft">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="text-left text-[12px] text-ink-3">
+                    <th className="px-3 py-1.5 font-medium">Task</th>
+                    <th className="px-2 py-1.5 font-medium">Deadline KPI</th>
+                    <th className="px-2 py-1.5 font-medium">Kết quả</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Lần nộp</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Gia hạn</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {s.tasks.map((t) => (
+                    <tr key={t.id} className="border-t border-line-soft">
+                      <td className="max-w-[260px] px-3 py-1.5">
+                        <Link to={`/du-an/${encodeURIComponent(t.code.split('-')[0])}?task=${t.id}`} target="_blank" rel="noopener" className="block truncate hover:underline" title={`${t.code} · ${t.name} · ${TASK_STAGE_LABEL[t.state]} (mở ở tab mới)`}>
+                          <span className="font-mono text-[12px] text-brand">{t.code}</span> {t.name}
+                        </Link>
+                      </td>
+                      <td className="px-2 py-1.5 text-ink-2">{fmtDueDate(t.kpiDueDate).slice(0, 5)}</td>
+                      <td className="px-2 py-1.5">
+                        <Badge tone={STATUS_TONE[t.status]}>{KPI_STATUS_LABEL[t.status]}</Badge>
+                      </td>
+                      <td className="px-2 py-1.5 text-right text-ink-2">
+                        {t.rounds}
+                        {t.sentBack > 0 && <span className="text-warn"> ({t.sentBack} sửa)</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-right text-ink-2">{t.extensions || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </>
+      )}
+      <p className="mt-3 text-[12.5px] text-ink-3">Hai sao Task Completion và Deadline tự tính từ task đã duyệt, không chấm tay. Dùng số lần trả về sửa khi chấm Work Quality.</p>
+    </section>
+  );
+}
+
+function shiftMonthKey(month: string, n: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return d.toISOString().slice(0, 7);
 }

@@ -3,6 +3,7 @@ import {
   autoTier,
   checkProjectCode,
   daysBetween,
+  EXTEND_REASON_HINT,
   EXTEND_REASON_LABEL,
   ExtendReason,
   extensionErrors,
@@ -567,29 +568,64 @@ function ReviewForm({ task, onDone, onCancel }: { task: Task; onDone: (msg: stri
           <label className="flex items-center gap-2 text-[14px] text-ink-2">
             <input type="checkbox" className="h-4 w-4" checked={extend} onChange={(e) => setExtend(e.target.checked)} /> Gia hạn deadline (hiện tại {fmtDueDate(task.due_date)})
           </label>
-          {extend && <ExtendFields to={to} setTo={setTo} reason={reason} setReason={setReason} errors={to || reason ? extErr : []} max={task.project.due_date} />}
+          {extend && <ExtendFields to={to} setTo={setTo} reason={reason} setReason={setReason} errors={to || reason ? extErr : []} max={task.project.due_date} kpiDue={task.kpi_due_date ?? task.due_date} />}
         </>
       )}
     </FormBox>
   );
 }
 
-function ExtendFields({ to, setTo, reason, setReason, errors, max }: { to: string; setTo: (v: string) => void; reason: ExtendReason | ''; setReason: (v: ExtendReason) => void; errors: string[]; max: string }) {
+/**
+ * The two extension reasons as explicit choices, each showing what it does to the KPI deadline.
+ * scope: KPI deadline moves to the new date. quality: KPI deadline stays where it was.
+ */
+export function ExtendReasonPicker({ value, onChange, newDue, kpiDue, subject = 'task' }: { value: ExtendReason | ''; onChange: (v: ExtendReason) => void; newDue: string; kpiDue: string; subject?: 'task' | 'project' }) {
+  const opts: { k: ExtendReason; title: string; effect: string; tone: 'ok' | 'warn' }[] = [
+    { k: 'scope', title: 'Yêu cầu thay đổi', effect: `Deadline tính KPI dời theo: ${newDue ? fmtDueDate(newDue) : 'deadline mới'}. Không tính trễ.`, tone: 'ok' },
+    {
+      k: 'quality',
+      title: 'Người làm cần thêm thời gian',
+      effect: `Deadline tính KPI giữ: ${fmtDueDate(kpiDue)}. Nộp sau ngày này vẫn tính trễ${subject === 'task' ? ' trong Go Star' : ''}.`,
+      tone: 'warn',
+    },
+  ];
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div role="radiogroup" aria-label="Lý do gia hạn" className="grid gap-2 sm:grid-cols-2">
+      {opts.map((o) => {
+        const on = value === o.k;
+        return (
+          <button
+            key={o.k}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o.k)}
+            className={cx('flex flex-col gap-1 rounded-xl border p-3 text-left transition-colors', on ? 'border-brand bg-brand-soft ring-1 ring-brand' : 'border-line bg-white hover:border-ink-3')}
+          >
+            <span className="flex items-center gap-2 text-[14.5px] font-semibold text-ink">
+              <span className={cx('grid h-4 w-4 shrink-0 place-items-center rounded-full border', on ? 'border-brand' : 'border-ink-3')}>{on && <span className="h-2 w-2 rounded-full bg-brand" />}</span>
+              {o.title}
+            </span>
+            <span className="text-[13px] leading-snug text-ink-2">{EXTEND_REASON_HINT[o.k]}</span>
+            <span className={cx('mt-1 rounded-md px-2 py-1 text-[12.5px] font-medium', o.tone === 'ok' ? 'bg-ok-soft text-ok-ink' : 'bg-warn-soft text-warn')}>{o.effect}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ExtendFields({ to, setTo, reason, setReason, errors, max, kpiDue, overdue }: { to: string; setTo: (v: string) => void; reason: ExtendReason | ''; setReason: (v: ExtendReason) => void; errors: string[]; max: string; kpiDue: string; overdue?: boolean }) {
+  return (
+    <div className="flex flex-col gap-3">
+      {overdue && <Banner tone="warn">Task đã quá hạn từ {fmtDueDate(kpiDue)}. Gia hạn chỉ dời ngày làm việc; nếu chọn "Người làm cần thêm thời gian", task vẫn bị tính trễ.</Banner>}
       <Field label="Deadline mới" hint={`Không sau deadline dự án ${fmtDueDate(max)}`}>
-        {(id) => <Input id={id} type="date" value={to} max={max} onChange={(e) => setTo(e.target.value)} />}
+        {(id) => <Input id={id} type="date" value={to} max={max} onChange={(e) => setTo(e.target.value)} className="sm:max-w-[220px]" />}
       </Field>
-      <Field label="Lý do">
-        {(id) => (
-          <Select id={id} value={reason} onChange={(e) => setReason(e.target.value as ExtendReason)}>
-            <option value="">Chọn lý do…</option>
-            <option value="scope">{EXTEND_REASON_LABEL.scope} — tính KPI theo deadline mới</option>
-            <option value="quality">{EXTEND_REASON_LABEL.quality} — vẫn tính KPI theo deadline gốc</option>
-          </Select>
-        )}
+      <Field label="Vì sao phải gia hạn?" hint="Quyết định task có bị tính trễ khi chấm KPI hay không.">
+        {() => <ExtendReasonPicker value={reason} onChange={setReason} newDue={to} kpiDue={kpiDue} />}
       </Field>
-      {errors.length > 0 && <p className="text-[13px] text-bad sm:col-span-2">{errors.join(' ')}</p>}
+      {errors.length > 0 && <p className="text-[13px] text-bad">{errors.join(' ')}</p>}
     </div>
   );
 }
@@ -626,7 +662,7 @@ function ExtendForm({ task, onDone, onCancel }: { task: Task; onDone: () => void
         </>
       }
     >
-      <ExtendFields to={to} setTo={setTo} reason={reason} setReason={setReason} errors={to || reason ? errs : []} max={task.project.due_date} />
+      <ExtendFields to={to} setTo={setTo} reason={reason} setReason={setReason} errors={to || reason ? errs : []} max={task.project.due_date} kpiDue={task.kpi_due_date ?? task.due_date} overdue={task.due_date < today} />
       <Field label="Ghi chú (không bắt buộc)">{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
     </FormBox>
   );
@@ -903,14 +939,8 @@ export function ProjectForm({ project, people, existingCodes, onDone, onCancel }
           <Field label="Deadline dự án">{(id) => <Input id={id} type="date" value={f.due_date} onChange={(e) => setF({ ...f, due_date: e.target.value })} />}</Field>
         </div>
         {dueChanged && (
-          <Field label="Lý do đổi deadline dự án">
-            {(id) => (
-              <Select id={id} value={reason} onChange={(e) => setReason(e.target.value as ExtendReason)}>
-                <option value="">Chọn lý do…</option>
-                <option value="scope">{EXTEND_REASON_LABEL.scope}</option>
-                <option value="quality">{EXTEND_REASON_LABEL.quality}</option>
-              </Select>
-            )}
+          <Field label="Vì sao đổi deadline dự án?" hint="Deadline từng task không tự đổi; gia hạn task riêng nếu cần.">
+            {() => <ExtendReasonPicker value={reason} onChange={setReason} newDue={f.due_date} kpiDue={project!.kpi_due_date ?? project!.due_date} subject="project" />}
           </Field>
         )}
         {errs.length > 0 && <p className="text-[13px] text-bad">{errs.join(' ')}</p>}

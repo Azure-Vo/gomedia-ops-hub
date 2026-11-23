@@ -237,30 +237,38 @@ export function ErrorBox({ error }: { error: unknown }) {
 // ------------------------------------------------------------------- modal -----
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // Callers often pass an inline onClose; keep it in a ref so typing (a re-render) never re-runs the focus effect.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
-    const first = ref.current?.querySelector<HTMLElement>('input, select, textarea, button');
+    // Focus the first field in the body, never the header close button.
+    const first =
+      bodyRef.current?.querySelector<HTMLElement>('input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])') ??
+      ref.current?.querySelector<HTMLElement>('[data-modal-footer] button:not([disabled])') ??
+      ref.current;
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
       prev?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-rail/40 p-4 pt-[8vh] backdrop-blur-[1px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" className={cx('w-full rounded-2xl border border-line bg-white shadow-lift', wide ? 'max-w-3xl' : 'max-w-lg')}>
+      <div ref={ref} role="dialog" aria-modal="true" tabIndex={-1} className={cx('w-full outline-none rounded-2xl border border-line bg-white shadow-lift', wide ? 'max-w-3xl' : 'max-w-lg')}>
         <div className="flex items-center justify-between gap-3 border-b border-line-soft px-5 py-4">
           <h2 className="text-[17px] font-semibold text-ink">{title}</h2>
           <IconButton icon="x" label="Đóng" onClick={onClose} />
         </div>
-        <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="flex flex-wrap justify-end gap-2 border-t border-line-soft px-5 py-3">{footer}</div>}
+        <div ref={bodyRef} className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
+        {footer && <div data-modal-footer className="flex flex-wrap justify-end gap-2 border-t border-line-soft px-5 py-3">{footer}</div>}
       </div>
     </div>
   );

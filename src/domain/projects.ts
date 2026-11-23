@@ -269,8 +269,13 @@ export const MAX_EVIDENCE_BYTES = 20 * 1024 * 1024;
 
 export type ExtendReason = 'scope' | 'quality';
 export const EXTEND_REASON_LABEL: Record<ExtendReason, string> = {
-  scope: 'Do yêu cầu thay đổi',
-  quality: 'Do kết quả chưa đạt',
+  scope: 'Yêu cầu thay đổi — không tính trễ',
+  quality: 'Người làm cần thêm thời gian — vẫn tính trễ',
+};
+/** When to pick each reason, in plain words (shown under the choice). */
+export const EXTEND_REASON_HINT: Record<ExtendReason, string> = {
+  scope: 'Khách hoặc PM đổi brief, thêm việc, chờ khách gửi tài liệu/duyệt. Lỗi không nằm ở người làm.',
+  quality: 'Người làm chưa kịp, hoặc kết quả chưa đạt phải làm lại. Gia hạn để có thời gian làm tiếp, không xoá việc trễ.',
 };
 
 /** PRD 6.4: "scope" moves the KPI deadline with the new date, "quality" keeps the original one. */
@@ -422,6 +427,87 @@ export function kpiTracked(t: KpiFacts, now: number, timeZone: string): { dueDat
   if (s === 'excluded' || s === 'pending') return null;
   return { dueDate: t.kpiDueDate, completedAt: s === 'on_time' || s === 'late' ? t.acceptedAt : null };
 }
+
+/** One person's month as the PM sees it when scoring Go Star: the facts behind the stars. */
+export interface StatTask {
+  id: string;
+  code: string;
+  name: string;
+  state: TaskStage;
+  kpiDueDate: string;
+  acceptedAt: number | null;
+  pendingAt: number | null;
+}
+export interface PersonMonthTask {
+  id: string;
+  code: string;
+  name: string;
+  kpiDueDate: string;
+  state: TaskStage;
+  status: KpiStatus;
+  rounds: number;
+  sentBack: number;
+  extensions: number;
+}
+export interface PersonMonthStats {
+  tasks: PersonMonthTask[];
+  total: number;
+  onTime: number;
+  late: number;
+  overdue: number;
+  open: number;
+  pending: number;
+  /** Approved without ever being sent back. */
+  firstPass: number;
+  /** "Yêu cầu sửa" decisions across the month's tasks. */
+  sentBack: number;
+  extScope: number;
+  extQuality: number;
+  /** Progress check-ins sent, answered, and answered "behind" / "blocked". */
+  asked: number;
+  answered: number;
+  behind: number;
+  blocked: number;
+}
+
+export function personMonthStats(
+  month: string,
+  tasks: StatTask[],
+  subs: { task_id: string; decision: 'approved' | 'changes' | null }[],
+  exts: { task_id: string; reason: ExtendReason }[],
+  checkins: { task_id: string; sent_at: string | null; answer: Progress | null }[],
+  now: number,
+  timeZone: string,
+): PersonMonthStats {
+  const inMonth = tasks.filter((t) => t.state !== 'cancelled' && t.kpiDueDate.slice(0, 7) === month).sort((a, b) => a.kpiDueDate.localeCompare(b.kpiDueDate) || a.code.localeCompare(b.code));
+  const ids = new Set(inMonth.map((t) => t.id));
+  const out: PersonMonthStats = { tasks: [], total: inMonth.length, onTime: 0, late: 0, overdue: 0, open: 0, pending: 0, firstPass: 0, sentBack: 0, extScope: 0, extQuality: 0, asked: 0, answered: 0, behind: 0, blocked: 0 };
+  for (const t of inMonth) {
+    const status = kpiStatus(t, now, timeZone);
+    const mine = subs.filter((s) => s.task_id === t.id);
+    const back = mine.filter((s) => s.decision === 'changes').length;
+    const ext = exts.filter((e) => e.task_id === t.id).length;
+    if (status === 'on_time') out.onTime++;
+    else if (status === 'late') out.late++;
+    else if (status === 'overdue') out.overdue++;
+    else if (status === 'pending') out.pending++;
+    else if (status === 'open') out.open++;
+    if (t.state === 'done' && back === 0) out.firstPass++;
+    out.sentBack += back;
+    out.tasks.push({ id: t.id, code: t.code, name: t.name, kpiDueDate: t.kpiDueDate, state: t.state, status, rounds: mine.length, sentBack: back, extensions: ext });
+  }
+  for (const e of exts) if (ids.has(e.task_id)) e.reason === 'scope' ? out.extScope++ : out.extQuality++;
+  for (const c of checkins) {
+    if (!ids.has(c.task_id) || !c.sent_at) continue;
+    out.asked++;
+    if (c.answer) out.answered++;
+    if (c.answer === 'behind') out.behind++;
+    if (c.answer === 'blocked') out.blocked++;
+  }
+  return out;
+}
+
+export const KPI_STATUS_LABEL: Record<KpiStatus, string> = { on_time: 'Đúng hạn', late: 'Trễ', overdue: 'Quá hạn, chưa nộp', open: 'Chưa đến hạn', pending: 'Đã nộp, chờ duyệt', excluded: 'Không tính' };
 
 // ----------------------------------------------------------------------------- bot messages --------
 

@@ -1,5 +1,5 @@
 // PRD 8 · Calendar. Layout taken from the Agendal prototype (Figma "07 Prototype", Web · 05 Calendar):
-// big month title, ‹ › Hôm nay, a segmented view switch, a month grid with filled chips for milestones and
+// ‹ period title ›, then Hôm nay beside a segmented view switch, a month grid with filled chips for milestones and
 // outlined chips for tasks, a right-hand panel, and drag-to-another-day. No hour grid: Go Media tasks only
 // have a deadline date. Staff see their own tasks (no drag); the PM sees the projects they run and can
 // drag a task to another day, which opens the extension dialog (a reason is required).
@@ -8,7 +8,6 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   checkinDates,
   daysBetween,
-  EXTEND_REASON_LABEL,
   ExtendReason,
   extensionErrors,
   fmtDueDate,
@@ -21,13 +20,13 @@ import {
   tierOf,
   weekOf,
 } from '@/domain';
-import { Button, cx, ErrorBox, Field, Icon, IconButton, Input, Loading, Modal, Select, useToast } from '@/components/ui';
+import { Banner, Button, cx, ErrorBox, Field, Icon, IconButton, Input, Loading, Modal, Select, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { isMine, isProjectPm, Project, Task } from './data';
 import { TaskHost, useOpenTask, useWork } from './hooks';
-import { HealthDot, ProjectSwatch } from './parts';
+import { ExtendReasonPicker, HealthDot, ProjectSwatch } from './parts';
 
 type View = 'week' | 'month' | 'people';
 const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
@@ -42,6 +41,7 @@ interface Drag {
 
 export function CalendarPage() {
   const me = useProfile();
+  const toast = useToast();
   const { calendar } = useSettings();
   const { data, loading, error, reload } = useWork();
   const { open } = useOpenTask(data);
@@ -56,6 +56,7 @@ export function CalendarPage() {
   const [hideDone, setHideDone] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [over, setOver] = useState<string | null>(null);
   const [dropTask, setDropTask] = useState<{ task: Task; to: string } | null>(null);
   const [dropProject, setDropProject] = useState<{ project: Project; to: string } | null>(null);
 
@@ -97,30 +98,90 @@ export function CalendarPage() {
   const checkinsOn = (d: string) => checkins.filter((c) => c.date === d);
 
   const draggableTask = (t: Task) => canDrag && isProjectPm(t.project, me) && (t.state === 'doing' || t.state === 'changes' || t.state === 'review');
+  const draggedTask = drag?.kind === 'task' ? data.tasks.find((x) => x.id === drag.id) ?? null : null;
+  const draggedProject = drag?.kind === 'project' ? data.projects.find((x) => x.id === drag.id) ?? null : null;
+  const fromDate = draggedTask?.due_date ?? draggedProject?.due_date ?? null;
+  /** Why the dragged item cannot land on day d (null = it can). */
+  const dropBlock = (d: string): string | null => {
+    if (d < today) return 'Ngày đã qua';
+    if (draggedTask && d > draggedTask.project.due_date) return `Sau deadline dự án ${fmtDueDate(draggedTask.project.due_date).slice(0, 5)}`;
+    if (draggedProject) {
+      if (d <= draggedProject.start_date) return 'Trước ngày bắt đầu dự án';
+      const late = data.tasks.filter((t) => t.parent_id === draggedProject.id && (t.state === 'doing' || t.state === 'review' || t.state === 'changes') && t.due_date > d).length;
+      if (late) return `${late} task có deadline sau ngày này`;
+    }
+    return null;
+  };
+  const startDrag = (next: Drag) => (e: DragEvent) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', next.id);
+    // Change the DOM a tick later: Chrome cancels a drag whose source re-renders inside dragstart.
+    window.setTimeout(() => setDrag(next), 0);
+  };
+  const endDrag = () => {
+    setDrag(null);
+    setOver(null);
+  };
   const onDrop = (d: string) => (e: DragEvent) => {
     e.preventDefault();
-    if (!drag) return;
-    if (drag.kind === 'task') {
-      const t = data.tasks.find((x) => x.id === drag.id);
-      if (t && t.due_date !== d) setDropTask({ task: t, to: d });
-    } else {
-      const p = data.projects.find((x) => x.id === drag.id);
-      if (p && p.due_date !== d) setDropProject({ project: p, to: d });
-    }
-    setDrag(null);
+    const block = dropBlock(d);
+    if (block) toast(block, 'bad');
+    else if (draggedTask && draggedTask.due_date !== d) setDropTask({ task: draggedTask, to: d });
+    else if (draggedProject && draggedProject.due_date !== d) setDropProject({ project: draggedProject, to: d });
+    endDrag();
   };
-  const dropProps = (d: string) => (canDrag ? { onDragOver: (e: DragEvent) => e.preventDefault(), onDrop: onDrop(d) } : {});
+  /** key = the cell being hovered (a day, or person|day in the people view). */
+  const dropProps = (key: string, d: string, accept = true) =>
+    canDrag && drag && accept
+      ? {
+          onDragOver: (e: DragEvent) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = dropBlock(d) ? 'none' : 'move';
+            if (over !== key) setOver(key);
+          },
+          onDrop: onDrop(d),
+        }
+      : {};
+  const isTarget = (key: string, d: string) => !!drag && over === key && d !== fromDate;
+  const targetCls = (key: string, d: string) => (isTarget(key, d) ? (dropBlock(d) ? 'bg-bad-soft/60 ring-2 ring-inset ring-bad' : 'bg-brand-soft/70 ring-2 ring-inset ring-brand') : drag ? 'transition-colors' : '');
+  const preview = (d: string): ReactNode => {
+    const block = dropBlock(d);
+    const label = draggedTask ? (
+      <>
+        <span className="font-mono text-[11.5px] opacity-70">{draggedTask.code.split('-').pop()}</span> {draggedTask.name}
+      </>
+    ) : draggedProject ? (
+      <>Deadline {draggedProject.code}</>
+    ) : null;
+    if (!label) return null;
+    return (
+      <div className="cal-preview pointer-events-none" aria-hidden>
+        <div>
+          <div
+            className={cx(
+              'flex min-w-0 items-center gap-1.5 rounded-[5px] border border-dashed px-1.5 py-[3px] text-[12.5px] leading-tight shadow-lift',
+              block ? 'border-bad bg-white text-bad' : draggedProject ? 'border-white/60 font-semibold text-white' : 'border-brand bg-white text-ink',
+            )}
+            style={!block && draggedProject ? { background: draggedProject.color ?? '#2F5BD3' } : undefined}
+          >
+            <Icon name={block ? 'x' : 'calendar'} size={11} className="shrink-0" />
+            <span className="truncate">{block ?? label}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const chipTask = (t: Task, compact = false) => (
     <button
       key={t.id}
       type="button"
       draggable={draggableTask(t)}
-      onDragStart={() => setDrag({ kind: 'task', id: t.id })}
-      onDragEnd={() => setDrag(null)}
+      onDragStart={startDrag({ kind: 'task', id: t.id })}
+      onDragEnd={endDrag}
       onClick={() => open(t)}
       title={`${t.code} · ${t.name} · ${t.assignee_name ?? ''} · ${HEALTH_LABEL[t.health]}: ${t.reason}`}
-      className={cx('flex w-full min-w-0 items-center gap-1.5 rounded-[5px] border border-l-[3px] border-line bg-white px-1.5 py-[3px] text-left text-[12.5px] leading-tight text-ink hover:border-ink-3', HEALTH_EDGE[t.health], t.state === 'done' && 'opacity-60', draggableTask(t) && 'cursor-grab active:cursor-grabbing')}
+      className={cx('flex w-full min-w-0 items-center gap-1.5 rounded-[5px] border border-l-[3px] border-line bg-white px-1.5 py-[3px] text-left text-[12.5px] leading-tight text-ink hover:border-ink-3', HEALTH_EDGE[t.health], t.state === 'done' && 'opacity-60', draggableTask(t) && 'cursor-grab active:cursor-grabbing', drag?.id === t.id && 'border-dashed opacity-40')}
     >
       <ProjectSwatch color={t.project.color} className="h-2 w-2" />
       <span className="truncate">
@@ -134,10 +195,10 @@ export function CalendarPage() {
       key={p.id}
       to={`/du-an/${encodeURIComponent(p.code)}`}
       draggable={canDrag && isProjectPm(p, me)}
-      onDragStart={() => setDrag({ kind: 'project', id: p.id })}
-      onDragEnd={() => setDrag(null)}
+      onDragStart={startDrag({ kind: 'project', id: p.id })}
+      onDragEnd={endDrag}
       title={`Deadline dự án ${p.code} · ${p.name}`}
-      className="flex min-w-0 items-center gap-1.5 rounded-[5px] px-1.5 py-[3px] text-[12.5px] font-semibold leading-tight text-white"
+      className={cx('flex min-w-0 items-center gap-1.5 rounded-[5px] px-1.5 py-[3px] text-[12.5px] font-semibold leading-tight text-white', canDrag && isProjectPm(p, me) && 'cursor-grab active:cursor-grabbing', drag?.id === p.id && 'opacity-40')}
       style={{ background: p.color ?? '#2F5BD3' }}
     >
       <Icon name="star" size={11} className="shrink-0" />
@@ -150,13 +211,25 @@ export function CalendarPage() {
     </button>
   );
 
-  const cellItems = (d: string, limit: number) => {
-    const items: ReactNode[] = [...projectsOn(d).map(chipProject), ...checkinsOn(d).map(chipCheckin), ...tasksOn(d).map((t) => chipTask(t))];
+  const cellItems = (d: string, limit: number, key = d) => {
+    const head = [...projectsOn(d).map((p) => ({ k: `p${p.id}`, node: chipProject(p) })), ...checkinsOn(d).map((c) => ({ k: `c${c.task.id}-${c.pct}`, node: chipCheckin(c) }))];
+    const body = tasksOn(d).map((t) => ({ k: `t${t.id}`, node: chipTask(t) }));
+    const showPreview = isTarget(key, d);
+    // The preview lands where the item will sit: a project deadline on top, a task first among the tasks.
+    const at = draggedProject ? 0 : head.length;
+    const items: { k: string; node: ReactNode; pushed?: boolean }[] = [...head, ...body];
+    if (showPreview) {
+      items.splice(at, 0, { k: '__preview', node: preview(d) });
+      for (let i = at + 1; i < items.length; i++) items[i] = { ...items[i], pushed: true };
+    }
     const open_ = expanded === d;
+    const shown = open_ ? items : items.slice(0, limit);
     return (
       <>
-        {(open_ ? items : items.slice(0, limit)).map((x, i) => (
-          <div key={i}>{x}</div>
+        {shown.map((x) => (
+          <div key={x.k} className={x.pushed ? 'cal-pushed' : undefined}>
+            {x.node}
+          </div>
         ))}
         {items.length > limit && (
           <button type="button" className="text-left text-[12px] font-semibold text-ink-3 hover:text-ink" onClick={() => setExpanded(open_ ? null : d)}>
@@ -172,7 +245,8 @@ export function CalendarPage() {
     : [];
   const allPeople = manager ? [...new Map(data.tasks.map((t) => [t.assignee_id ?? t.assignee_open_id ?? '—', t.assignee_name ?? '—'])).entries()] : [];
 
-  const title = view === 'month' ? `${MONTHS[mm - 1]} ${yy}` : `${fmtDueDate(week[0]).slice(0, 5)} – ${fmtDueDate(week[6])}`;
+  const title = view === 'month' ? `${MONTHS[mm - 1]}, ${yy}` : weekLabel(week);
+  const showsToday = view === 'month' ? today.slice(0, 7) === month : today >= week[0] && today <= week[6];
   const views: [View, string][] = manager
     ? [
         ['month', 'Tháng'],
@@ -185,16 +259,20 @@ export function CalendarPage() {
 
   return (
     <div>
-      {/* header, as in Agendal: title left, ‹ › Hôm nay and the view switch right */}
+      {/* header: ‹ period › on the left; Hôm nay sits with the view switch, away from the arrows */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[30px] font-bold leading-none tracking-[-0.02em] text-ink">{title}</h1>
+        <div className="flex items-center gap-1">
+          <IconButton icon="chevronRight" label={view === 'month' ? 'Tháng trước' : 'Tuần trước'} className="rotate-180 rounded-full bg-white shadow-sheet" onClick={() => step(-1)} />
+          <h1 aria-live="polite" className="min-w-[200px] px-2 text-center text-[26px] font-bold leading-none tracking-[-0.02em] text-ink sm:min-w-[240px] sm:text-[30px]">
+            {title}
+          </h1>
+          <IconButton icon="chevronRight" label={view === 'month' ? 'Tháng sau' : 'Tuần sau'} className="rounded-full bg-white shadow-sheet" onClick={() => step(1)} />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <IconButton icon="chevronRight" label="Trước" className="rotate-180 rounded-full bg-white shadow-sheet" onClick={() => step(-1)} />
-          <Button variant="secondary" size="sm" className="rounded-full" onClick={() => setAnchor(null)}>
+          <Button variant="secondary" size="sm" icon="calendar" disabled={showsToday} onClick={() => setAnchor(null)} title={`Về ${view === 'month' ? 'tháng' : 'tuần'} có hôm nay (${fmtDueDate(today)})`}>
             Hôm nay
           </Button>
-          <IconButton icon="chevronRight" label="Sau" className="rounded-full bg-white shadow-sheet" onClick={() => step(1)} />
-          <div role="tablist" aria-label="Chế độ xem" className="ml-1 flex rounded-lg bg-ink/[0.06] p-1">
+          <div role="tablist" aria-label="Chế độ xem" className="flex rounded-lg bg-ink/[0.06] p-1">
             {views.map(([k, label]) => (
               <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)} className={cx('min-h-[32px] rounded-md px-3 text-[13.5px] font-medium', view === k ? 'bg-white text-ink shadow-sheet' : 'text-ink-2 hover:text-ink')}>
                 {label}
@@ -253,7 +331,12 @@ export function CalendarPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0">
           {/* desktop grids */}
-          <div className="hidden overflow-hidden rounded-xl border border-line bg-white shadow-sheet md:block">
+          <div
+            className="hidden overflow-hidden rounded-xl border border-line bg-white shadow-sheet md:block"
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(null);
+            }}
+          >
             {view === 'month' && (
               <>
                 <div className="grid grid-cols-7 border-b border-line text-[12.5px] font-medium text-ink-3">
@@ -266,7 +349,7 @@ export function CalendarPage() {
                 {monthGrid(month).map((wk) => (
                   <div key={wk[0]} className="grid grid-cols-7 border-b border-line-soft last:border-b-0">
                     {wk.map((d) => (
-                      <div key={d} {...dropProps(d)} className={cx('min-h-[118px] border-r border-line-soft p-1.5 last:border-r-0', d.slice(0, 7) !== month && 'bg-canvas/60', drag && 'outline-dashed outline-1 -outline-offset-2 outline-transparent hover:outline-brand')}>
+                      <div key={d} {...dropProps(d, d)} className={cx('min-h-[118px] border-r border-line-soft p-1.5 last:border-r-0', d.slice(0, 7) !== month && 'bg-canvas/60', targetCls(d, d))}>
                         <DayNumber d={d} today={today} dim={d.slice(0, 7) !== month} />
                         <div className="mt-1 flex flex-col gap-1">{cellItems(d, 3)}</div>
                       </div>
@@ -278,7 +361,7 @@ export function CalendarPage() {
             {view === 'week' && (
               <div className="grid grid-cols-7">
                 {week.map((d) => (
-                  <div key={d} {...dropProps(d)} className="min-h-[420px] border-r border-line-soft last:border-r-0">
+                  <div key={d} {...dropProps(d, d)} className={cx('min-h-[420px] border-r border-line-soft last:border-r-0', targetCls(d, d))}>
                     <div className={cx('border-b border-line px-2.5 py-2 text-[12.5px] font-semibold', d === today ? 'text-brand' : 'text-ink-3')}>
                       {WEEKDAYS[week.indexOf(d)]} {d.slice(8)}
                     </div>
@@ -306,9 +389,20 @@ export function CalendarPage() {
                         <td className="px-2.5 py-2 font-medium text-ink">{name}</td>
                         {week.map((d) => {
                           const items = scope.tasks.filter((t) => (t.assignee_id ?? t.assignee_open_id ?? '—') === pid && t.due_date === d);
+                          const key = `${pid}|${d}`;
+                          // Dragging only moves the date, never the person: accept drops on the assignee's own row.
+                          const own = !!draggedTask && (draggedTask.assignee_id ?? draggedTask.assignee_open_id ?? '—') === pid;
+                          const target = own && isTarget(key, d);
                           return (
-                            <td key={d} {...dropProps(d)} className={cx('border-l border-line-soft p-1', LOAD_BG[loadLevel(items.filter((t) => t.state !== 'done').length)])}>
-                              <div className="flex flex-col gap-1">{items.map((t) => chipTask(t, true))}</div>
+                            <td key={d} {...dropProps(key, d, own)} className={cx('border-l border-line-soft p-1', LOAD_BG[loadLevel(items.filter((t) => t.state !== 'done').length)], own ? targetCls(key, d) : drag && 'opacity-50')}>
+                              <div className="flex flex-col gap-1">
+                                {target && preview(d)}
+                                {items.map((t) => (
+                                  <div key={t.id} className={target ? 'cal-pushed' : undefined}>
+                                    {chipTask(t, true)}
+                                  </div>
+                                ))}
+                              </div>
                             </td>
                           );
                         })}
@@ -520,14 +614,9 @@ function ExtendDialog({ task, to, today, onClose, onDone }: { task: Task; to: st
         {task.name}: <b>{fmtDueDate(task.due_date)}</b> → <b>{fmtDueDate(to)}</b>
       </p>
       <div className="flex flex-col gap-3">
-        <Field label="Lý do">
-          {(id) => (
-            <Select id={id} value={reason} onChange={(e) => setReason(e.target.value as ExtendReason)}>
-              <option value="">Chọn lý do…</option>
-              <option value="scope">{EXTEND_REASON_LABEL.scope} — tính KPI theo deadline mới</option>
-              <option value="quality">{EXTEND_REASON_LABEL.quality} — vẫn tính KPI theo deadline gốc</option>
-            </Select>
-          )}
+        {task.due_date < today && <Banner tone="warn">Task đã quá hạn từ {fmtDueDate(task.kpi_due_date ?? task.due_date)}. Kéo sang ngày mới chỉ dời ngày làm việc; nếu chọn "Người làm cần thêm thời gian", task vẫn bị tính trễ.</Banner>}
+        <Field label="Vì sao phải gia hạn?" hint="Quyết định task có bị tính trễ khi chấm KPI hay không.">
+          {() => <ExtendReasonPicker value={reason} onChange={setReason} newDue={to} kpiDue={task.kpi_due_date ?? task.due_date} />}
         </Field>
         <Field label="Ghi chú (không bắt buộc)">{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
         {reason && errs.length > 0 && <p className="text-[13px] text-bad">{errs.join(' ')}</p>}
@@ -569,15 +658,18 @@ function ProjectDueDialog({ project, to, onClose, onDone }: { project: Project; 
       <p className="mb-3 text-[14.5px]">
         <b>{fmtDueDate(project.due_date)}</b> → <b>{fmtDueDate(to)}</b>
       </p>
-      <Field label="Lý do">
-        {(id) => (
-          <Select id={id} value={reason} onChange={(e) => setReason(e.target.value as ExtendReason)}>
-            <option value="">Chọn lý do…</option>
-            <option value="scope">{EXTEND_REASON_LABEL.scope}</option>
-            <option value="quality">{EXTEND_REASON_LABEL.quality}</option>
-          </Select>
-        )}
+      <Field label="Vì sao đổi deadline dự án?" hint="Deadline từng task không tự đổi; gia hạn task riêng nếu cần.">
+        {() => <ExtendReasonPicker value={reason} onChange={setReason} newDue={to} kpiDue={project.kpi_due_date ?? project.due_date} subject="project" />}
       </Field>
     </Modal>
   );
+}
+
+/** "16 – 22/11/2026", "30/11 – 06/12/2026", "29/12/2026 – 04/01/2027". */
+function weekLabel(week: string[]): string {
+  const [a, b] = [week[0], week[6]];
+  const dm = (k: string) => `${k.slice(8)}/${k.slice(5, 7)}`;
+  if (a.slice(0, 4) !== b.slice(0, 4)) return `${dm(a)}/${a.slice(0, 4)} – ${dm(b)}/${b.slice(0, 4)}`;
+  if (a.slice(0, 7) !== b.slice(0, 7)) return `${dm(a)} – ${dm(b)}/${b.slice(0, 4)}`;
+  return `${a.slice(8)} – ${dm(b)}/${b.slice(0, 4)}`;
 }

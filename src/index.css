@@ -120,3 +120,45 @@ dd {
   .quote-lines td[data-cell='total'] { grid-area: total; }
   .quote-lines td[data-cell='del'] { grid-area: del; }
 }
+
+/* Calendar drag preview: the ghost chip grows from 0 height, so the chips under it slide down. */
+.cal-preview {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: cal-grow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.cal-preview > * {
+  min-height: 0;
+  overflow: hidden;
+}
+@keyframes cal-grow {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Chips pushed down by the preview overshoot slightly, so the push reads as movement. */
+.cal-pushed {
+  animation: cal-nudge 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes cal-nudge {
+  0%,
+  100% {
+    transform: none;
+  }
+  70% {
+    transform: translateY(3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-preview,
+  .cal-pushed {
+    animation: none;
+  }
+}

@@ -30,6 +30,7 @@ import {
   invitationErrors,
   inviteAnsweredMessage,
   taskDateErrors,
+  personMonthStats,
   type SummaryTask,
 } from './projects';
 
@@ -280,5 +281,44 @@ describe('task dates and invitations (23/11)', () => {
     expect(invitationErrors(true, '')).toEqual([]);
     expect(invitationErrors(false, '  ')[0]).toMatch(/lý do/);
     expect(inviteAnsweredMessage({ code: 'MT35', name: 'Tết' }, 'Ngọc', false, 'Đang kín lịch').lines[1]).toMatchObject({ label: 'Lý do', text: 'Đang kín lịch' });
+  });
+});
+
+describe('Go Star scoring facts (1.6.2)', () => {
+  it('counts a person month by KPI deadline, rounds, extensions and check-ins', () => {
+    const now = at('2026-11-23T10:00:00');
+    const tasks = [
+      { id: 'a', code: 'MT35-01', name: 'Brief', state: 'done' as const, kpiDueDate: '2026-11-05', acceptedAt: at('2026-11-04T09:00:00'), pendingAt: null },
+      { id: 'b', code: 'MT35-02', name: 'Video', state: 'done' as const, kpiDueDate: '2026-11-10', acceptedAt: at('2026-11-12T09:00:00'), pendingAt: null },
+      { id: 'c', code: 'MT35-03', name: 'Ads', state: 'doing' as const, kpiDueDate: '2026-11-20', acceptedAt: null, pendingAt: null },
+      { id: 'd', code: 'MT35-04', name: 'Report', state: 'review' as const, kpiDueDate: '2026-11-28', acceptedAt: null, pendingAt: at('2026-11-22T09:00:00') },
+      { id: 'e', code: 'MT35-05', name: 'Huỷ', state: 'cancelled' as const, kpiDueDate: '2026-11-15', acceptedAt: null, pendingAt: null },
+      { id: 'f', code: 'MT35-06', name: 'Tháng sau', state: 'doing' as const, kpiDueDate: '2026-12-02', acceptedAt: null, pendingAt: null },
+    ];
+    const subs = [
+      { task_id: 'a', decision: 'approved' as const },
+      { task_id: 'b', decision: 'changes' as const },
+      { task_id: 'b', decision: 'approved' as const },
+      { task_id: 'd', decision: null },
+    ];
+    const exts = [
+      { task_id: 'b', reason: 'quality' as const },
+      { task_id: 'c', reason: 'scope' as const },
+      { task_id: 'f', reason: 'scope' as const },
+    ];
+    const checkins = [
+      { task_id: 'c', sent_at: '2026-11-15T02:00:00Z', answer: 'blocked' as const },
+      { task_id: 'c', sent_at: '2026-11-18T02:00:00Z', answer: null },
+      { task_id: 'd', sent_at: null, answer: null },
+    ];
+    const s = personMonthStats('2026-11', tasks, subs, exts, checkins, now, TZ);
+    expect(s.total).toBe(4);
+    expect([s.onTime, s.late, s.overdue, s.pending, s.open]).toEqual([1, 1, 1, 1, 0]);
+    expect(s.firstPass).toBe(1);
+    expect(s.sentBack).toBe(1);
+    expect([s.extScope, s.extQuality]).toEqual([1, 1]);
+    expect([s.asked, s.answered, s.blocked]).toEqual([2, 1, 1]);
+    expect(s.tasks.map((t) => t.code)).toEqual(['MT35-01', 'MT35-02', 'MT35-03', 'MT35-04']);
+    expect(s.tasks[1]).toMatchObject({ rounds: 2, sentBack: 1, extensions: 1, status: 'late' });
   });
 });

@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Phiên bản | 1.6 · bản nháp chờ duyệt |
+| Phiên bản | 1.6.2 · đang chạy trên Pilot (bổ sung ở mục 15, 16) |
 | Ngày | 22/11/2026 |
 | Người quyết định | Nguyễn Hoàng Long (Migi) |
 | Phạm vi | Giải pháp S1 (task trễ) trên Ops Hub + Lark. Phần Báo giá (S2) chỉ đổi vị trí trên menu |
-| Trạng thái | **Chưa code.** Code bắt đầu sau khi Long duyệt tài liệu này |
+| Trạng thái | Long đã duyệt 22/11; đã code và chạy trên Pilot. Bổ sung 1.6.1 (mục 15) và 1.6.2 (mục 16) ngày 23/11 |
 
 **Nhãn bằng chứng** (theo quy ước BC26):
 - **V** · đã kiểm chứng (có trong code hoặc dữ liệu)
@@ -628,3 +628,41 @@ Database thiết kế dần theo từng phần, chỉ thêm, không xoá (quyế
 30. Bấm Từ chối mà không có lý do: bị chặn. Có lý do: PM nhận tin riêng kèm lý do, tab Thành viên hiện "Từ chối · Lý do: …".
 31. Ô Người thực hiện khi tạo task chỉ liệt kê thành viên đã tham gia.
 32. Dự án bắt đầu 01/12: chọn ngày bắt đầu task 30/11 thì bị chặn với thông báo nêu ngày 01/12/2026.
+
+## 16. Bổ sung 1.6.2 (23/11/2026, Long)
+
+### 16.1 Calendar
+- Thanh điều hướng: **‹ [kỳ đang xem] ›**. Ở giữa hai mũi tên là tháng/năm (xem Tháng) hoặc khoảng ngày (xem Tuần, VD "23 – 29/11/2026"). Nút **Hôm nay** chuyển sang cạnh nút chọn chế độ xem; nút mờ khi đang xem kỳ có hôm nay.
+- Kéo thả (chỉ PM của dự án): khi kéo qua một ô ngày, ô đó được tô viền và hiện **bản xem trước** của task (hoặc deadline dự án) ở đúng vị trí nó sẽ nằm. Các task sẵn có trong ô bị **đẩy xuống** có hiệu ứng trượt; task bị đẩy quá số dòng hiển thị chuyển vào "+N mục". Task gốc mờ đi trong lúc kéo.
+- Ô không thả được hiện đỏ kèm lý do ngay trong bản xem trước: ngày đã qua; sau deadline dự án (với task); trước ngày bắt đầu dự án, hoặc còn task có deadline sau ngày đó (với deadline dự án). Thả vào ô này không mở hộp gia hạn.
+- Xem "Tuần theo người": chỉ thả được trong hàng của người đang làm task (kéo chỉ đổi ngày, không đổi người).
+
+### 16.2 Lý do gia hạn (thay mục 6.4 về cách hiển thị, giữ nguyên quy tắc)
+Hai lựa chọn hiện dạng thẻ, mỗi thẻ ghi rõ hệ quả lên **deadline tính KPI**:
+
+| Lựa chọn | Khi nào chọn | Deadline tính KPI |
+|---|---|---|
+| **Yêu cầu thay đổi** | Khách/PM đổi brief, thêm việc, chờ khách gửi tài liệu hoặc duyệt. Lỗi không nằm ở người làm. | Dời theo deadline mới. Không tính trễ. |
+| **Người làm cần thêm thời gian** | Người làm chưa kịp, hoặc kết quả chưa đạt phải làm lại. | Giữ ngày cũ. Nộp sau ngày này vẫn tính trễ trong Go Star. |
+
+- Task đã quá hạn khi gia hạn: hiện cảnh báo "Gia hạn chỉ dời ngày làm việc; nếu chọn Người làm cần thêm thời gian, task vẫn bị tính trễ".
+- Đổi deadline dự án dùng cùng hai lựa chọn; deadline từng task không tự đổi theo.
+
+### 16.3 Trang Dự án (PM)
+- Thêm bộ lọc **Của tôi / PM khác / Tất cả** (kèm số lượng), độc lập với bộ lọc trạng thái (Đang chạy, Trễ/có nguy cơ, Đã xong, Mọi trạng thái).
+- "Tất cả" chia hai phần: **Dự án của tôi** (thao tác được) và **Dự án của PM khác** (nhãn "Chỉ xem"), phần sau nhóm theo từng PM.
+- CEO/Admin xem mọi dự án, nhóm theo PM.
+
+### 16.4 Go Star: số liệu khi chấm điểm
+Hộp chấm điểm một nhân sự hiện số liệu tháng đó (tính theo deadline tính KPI, giống bảng xếp hạng): số task trong tháng; đúng hạn/đã chấm; % trễ (nộp trễ + quá hạn chưa nộp); duyệt ngay lần đầu và số lần bị trả về sửa; số lần gia hạn theo từng lý do; số lần trả lời hỏi tiến độ và số lần báo chậm/bị chặn. Có danh sách task (mã, deadline KPI, kết quả, số lần nộp, số lần gia hạn), bấm mở task ở tab mới. Ô Work Quality ghi sẵn "x/y task duyệt ngay lần đầu, z lần trả về sửa" để tham khảo.
+
+### 16.5 Sửa lỗi
+- Hộp từ chối lời mời (và mọi hộp thoại): gõ một ký tự làm con trỏ nhảy lên nút X. Nguyên nhân: hộp thoại đặt lại tiêu điểm mỗi lần màn hình vẽ lại. Đã sửa: chỉ đặt tiêu điểm một lần khi mở, vào ô nhập đầu tiên.
+
+### 16.6 Tiêu chí chấp nhận bổ sung
+33. Kéo MT35-03 qua ô 25/11 đang có 3 task: ô 25/11 tô viền xanh, bản xem trước MT35-03 nằm đầu nhóm task, các task kia trượt xuống, task thứ ba vào "+1 mục".
+34. Kéo task qua ngày đã qua hoặc sau deadline dự án: ô đỏ, bản xem trước ghi lý do; thả ra không mở hộp gia hạn.
+35. Trong hộp gia hạn, chọn "Người làm cần thêm thời gian" hiện "Deadline tính KPI giữ: <ngày cũ>"; chọn "Yêu cầu thay đổi" hiện "dời theo: <ngày mới>".
+36. Hộp từ chối lời mời: gõ liên tục một câu, toàn bộ chữ vào ô Lý do.
+37. PM vào Dự án → Tất cả: thấy hai phần tách biệt; dự án của PM khác có nhãn "Chỉ xem" và nhóm theo tên PM.
+38. Go Star → Chấm điểm một nhân sự: thấy 6 ô số liệu và danh sách task của tháng trước khi nhập điểm.
