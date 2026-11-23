@@ -726,11 +726,15 @@ async function notifyApproval(ctx, quoteId) {
   const s = await loadSettings(ctx.db);
   if (!isWorkingTime(ctx.now(), calendarOf(s))) return false;
   const claimed = must(
-    await ctx.db.from("quotes").update({ approval_notified_at: new Date(ctx.now()).toISOString() }).eq("id", quoteId).eq("status", "pending").is("approval_notified_at", null).select(QUOTE_COLS),
+    await ctx.db.from("quotes").update({ approval_notified_at: new Date(ctx.now()).toISOString() }).eq("id", quoteId).in("status", ["pending", "signing"]).is("approval_notified_at", null).select(QUOTE_COLS),
     "claim approval notice"
   );
   const q = claimed[0];
   if (!q || !q.approver) return false;
+  if (q.status === "signing") {
+    await ctx.notifier.sendToRoles(["ceo"], signRequestText({ code: q.code, client: q.client }), linkButton("M\u1EDF b\xE1o gi\xE1 \u0111\u1EC3 k\xFD", appLink(s, `/quotes/${q.id}`)));
+    return true;
+  }
   const account = (await ctx.db.from("profiles").select("full_name, email").eq("id", q.created_by).maybeSingle()).data;
   const text = approvalRequestText({
     code: q.code,
@@ -801,10 +805,13 @@ async function decideQuote(ctx, user, body) {
     event_action: decision === "approve" ? "quote.approved" : "quote.changes_requested",
     event_payload: { comment, open_comments: open }
   });
+  if (decision === "approve") {
+    must(await ctx.db.from("quotes").update({ approval_notified_at: null }).eq("id", q.id).eq("status", "signing"), "reset notice");
+    await notifyApproval(ctx, q.id);
+  }
   const s = await loadSettings(ctx.db);
   if (isWorkingTime(ctx.now(), calendarOf(s))) {
     await ctx.notifier.send(q.created_by, decisionText({ code: q.code, decision, approverRole: user.role, comment: comment || null }), linkButton("M\u1EDF b\xE1o gi\xE1", appLink(s, `/quotes/${q.id}`)));
-    if (decision === "approve") await ctx.notifier.sendToRoles(["ceo"], signRequestText({ code: q.code, client: q.client }), linkButton("M\u1EDF b\xE1o gi\xE1 \u0111\u1EC3 k\xFD", appLink(s, `/quotes/${q.id}`)));
   }
   return { quote };
 }
@@ -1278,7 +1285,9 @@ Deno.serve(async (req) => {
     send: async (to, text) => void sent.push({ to, text }),
     sendToRoles: async (roles, text) => (sent.push({ to: roles.join(","), text }), 1)
   };
-  const ctx = { env, db, tg: null, notifier, now: () => Date.now() };
+  const nowVn = new Date(Date.now() + 7 * 36e5);
+  const clock = Date.UTC(nowVn.getUTCFullYear(), nowVn.getUTCMonth(), nowVn.getUTCDate(), 8, 0);
+  const ctx = { env, db, tg: null, notifier, now: () => Math.max(clock, Date.now()) };
   const log = [];
   const ok = (step, cond, detail) => log.push({ step, ok: !!cond, detail });
   const fails = async (step, fn, re) => {
@@ -1370,7 +1379,9 @@ Deno.serve(async (req) => {
     const approver = s.approver === "pm" ? pm : ceo;
     await decideQuote(ctx, approver, { quote_id: off.id, decision: "approve" });
     ok("approved \u2192 Ch\u1EDD CEO k\xFD", (await status(off.id)).status === "signing");
-    ok("CEO asked to sign", sent.some((m) => m.to === "ceo" && /chờ CEO ký/i.test(m.text)));
+    ok("CEO asked to sign", sent.some((m) => m.to === "ceo" && /chờ CEO ký/i.test(m.text)), sent.map((m) => m.to));
+    const queued = (await db.from("quotes").select("approval_notified_at").eq("id", off.id).single()).data.approval_notified_at;
+    ok("signing notice marked as sent", !!queued);
     await signQuote(ctx, ceo, off.id);
     await sendQuote(ctx, account, off.id);
     ok("signed quick quote sent", (await status(off.id)).status === "sent");
