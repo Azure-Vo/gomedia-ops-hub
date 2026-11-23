@@ -153,11 +153,11 @@ export function ProjectDetailPage() {
       <div role="tablist" aria-label="Dự án" className="mb-5 flex gap-1 overflow-x-auto border-b border-line">
         {(
           [
-            ['tasks', 'Task', 'tasks', String(project.rollup.total)],
-            ['members', 'Thành viên', 'users', `${project.members.filter((m) => m.status === 'accepted').length}${project.members.some((m) => m.status === 'invited') ? ` +${project.members.filter((m) => m.status === 'invited').length} mời` : ''}`],
-            ['history', 'Lịch sử nhắc việc', 'bell', ''],
-          ] as [Tab, string, IconName, string][]
-        ).map(([k, label, icon, count]) => (
+            ['tasks', 'Task', 'tasks'],
+            ['members', 'Thành viên', 'users'],
+            ['history', 'Lịch sử nhắc việc', 'bell'],
+          ] as [Tab, string, IconName][]
+        ).map(([k, label, icon]) => (
           <button
             key={k}
             type="button"
@@ -168,7 +168,6 @@ export function ProjectDetailPage() {
           >
             <Icon name={icon} size={16} />
             {label}
-            {count && <span className={cx('rounded-full px-2 text-[12px] font-semibold leading-5', tab === k ? 'bg-ink text-white' : 'bg-line-soft text-ink-2')}>{count}</span>}
           </button>
         ))}
       </div>
