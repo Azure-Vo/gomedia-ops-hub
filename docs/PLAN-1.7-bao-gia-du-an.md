@@ -2,10 +2,46 @@
 
 | | |
 |---|---|
-| Trạng thái | **Plan chờ Long duyệt.** Chưa code |
+| Trạng thái | Long trả lời mục 8 ngày 23/11. **Chờ CEO trả lời mục 0.4.** Làm sau khi merge 1.6 (PR #2) |
 | Ngày | 23/11/2026 |
 | Nguồn | PRD 1.6 mục 12 (backlog, bàn ngày 21/11) |
 | Nhãn bằng chứng | V đã kiểm trong code · P lời người dùng/CEO · A giả định của nhóm · U chưa biết |
+
+## 0. Luồng báo giá trước 1.7 (Long mô tả 23/11, P)
+
+### 0.1 Luồng thực tế (AS-IS)
+1. Khách gửi brief → Account nhận, tách thành bản nháp báo giá.
+2. Bản nháp gửi **toàn bộ PM và CEO**; hai bên comment.
+3. Account sửa theo comment, chốt bản cuối → **CEO ký**.
+4. Account gửi khách → khách trả lời đồng ý hay không.
+
+Công ty có **2 loại báo giá** (P):
+- **Báo giá nhanh:** giá trị thấp, các đầu mục thường dưới 10 triệu.
+- **Báo giá dự án dài:** giá trị cao; PM, CEO và team họp để chốt đầu mục và công việc; **báo giá theo giai đoạn** (CEO nói, nhóm chưa kiểm sâu: U).
+
+### 0.2 So với app hiện tại (V: đã đối chiếu code)
+
+| Bước AS-IS | App (bản 1.5) | Khớp? |
+|---|---|---|
+| Account tách brief thành nháp | Tạo báo giá từ Thư viện giá; ô "Khách gửi yêu cầu lúc" là mốc bắt đầu tính giờ | Khớp |
+| Nháp gửi **mọi** PM + CEO để comment | Chỉ báo giá **ngoài khung giá** vào hàng chờ, và chỉ đúng **một cấp** (PM hoặc CEO). Báo giá trong khung: "Gửi ngay". PM/CEO vẫn mở và comment được mọi báo giá | **Lệch có chủ đích**: khung giá là cách giải pháp S2 cắt thời gian chờ duyệt |
+| Comment trên báo giá | Comment theo dòng qua link (1.3) | Khớp |
+| **CEO ký** bản cuối | **Không có bước này.** PDF in sẵn tên người ký trong Cài đặt | **Thiếu** |
+| Gửi khách | "Đã gửi" (mốc kết thúc thời gian báo giá) | Khớp |
+| Khách trả lời | Không có | Thiếu → mục 4.1 của plan này |
+| Phân loại nhanh / dự án | Không phân loại | **Thiếu** |
+| Họp chốt báo giá dự án | Không có (ngoài app) | Để ngoài app; chỉ ghi kết quả |
+
+### 0.3 Hệ quả và đề xuất
+- **Bước CEO ký nằm trong thời gian báo giá** (từ lúc khách yêu cầu tới lúc gửi) nhưng app không đo riêng. Nếu CEO ký mọi báo giá, làn "Gửi ngay" của khung giá vẫn bị chặn ở bước ký, và mục tiêu giảm thời gian báo giá khó đạt. Đề xuất thêm trạng thái **Chờ CEO ký** và mốc `signed_at` để đo đoạn chờ này.
+- Thêm **Loại báo giá**: *Nhanh* (giữ luồng khung giá) và *Dự án* (luôn qua PM + CEO, có nhãn giai đoạn "GĐ1, GĐ2…", gắn vào cùng một dự án). Điều này khớp với quyết định "một dự án nhiều báo giá".
+- Báo giá dự án được họp chốt nên **không** cần comment theo dòng như báo giá nhanh; app chỉ cần ghi lại bản chốt.
+
+### 0.4 Cần hỏi CEO trước khi viết PRD 1.7.0
+1. CEO có ký **mọi** báo giá không, kể cả báo giá nhanh? Ký tay trên PDF hay chỉ duyệt?
+2. Có thể cho báo giá nhanh **trong khung giá** dùng chữ ký in sẵn (không chờ ký) không?
+3. Phân loại nhanh/dự án theo **từng đầu mục dưới 10 triệu** hay theo **tổng giá trị**? Ai quyết loại?
+4. Dự án dài: mỗi giai đoạn một báo giá riêng? Báo giá giai đoạn sau gửi khi nào (trước hay sau khi giai đoạn trước xong)?
 
 ## 1. Vấn đề
 
@@ -22,7 +58,7 @@ Hệ quả cho capstone: không đo được tỷ lệ chốt báo giá, và lý
 1. Biết báo giá nào **khách đã chốt**, nào **không chốt** và vì sao.
 2. Từ báo giá đã chốt, PM **tạo dự án trong 1 bước**, không gõ lại.
 3. Từ các dòng báo giá, PM **tạo task hàng loạt**; task nào không thuộc dòng nào được đánh dấu **ngoài báo giá**.
-4. Nhân sự **không thấy tiền**. Chỉ Account, PM, CEO, Admin thấy giá trị.
+4. Trên trang dự án, chỉ Account của báo giá và CEO thấy tiền; PM và nhân sự không thấy.
 
 Ngoài phạm vi 1.7: hợp đồng, xuất hoá đơn, công nợ; doanh thu theo dự án (để sau khi có số thật).
 
@@ -60,14 +96,14 @@ Account gửi báo giá ──► Khách trả lời
 - Báo giá đã chốt hiện link sang dự án (khi có).
 
 ### 4.2 Tóm tắt hôm nay + Inbox (PM)
-- Khối mới **"Báo giá đã chốt, chưa có dự án (n)"**, mỗi dòng: mã báo giá, khách, giá trị, Account, số ngày chờ. Nút **Tạo dự án**.
+- Khối mới **"Báo giá đã chốt, chưa có dự án (n)"**, mỗi dòng: mã báo giá, loại, khách, Account, số ngày chờ. Nút **Tạo dự án**.
 
 ### 4.3 Tạo dự án
 - Form Dự án mới có ô **"Từ báo giá"** (chỉ liệt kê báo giá đã chốt giao cho mình, chưa có dự án). Chọn xong thì điền sẵn: Khách hàng, Tên dự án (ô "Dự án" của báo giá), mô tả (Địa điểm, Người liên hệ). PM vẫn nhập mã dự án và deadline như 1.6.
 - Trên trang dự án: nút **Gắn thêm báo giá** (phụ lục, bán thêm).
 
 ### 4.4 Tab "Phạm vi" trong dự án (PM, CEO, Account của báo giá)
-- Liệt kê các báo giá của dự án (mã, tổng tiền, ngày chốt) và các dòng theo phần I, II…
+- Liệt kê các báo giá của dự án (mã, loại, giai đoạn, ngày chốt; tổng tiền chỉ Account của báo giá và CEO thấy) và các dòng theo phần I, II…
 - Mỗi dòng: tên hạng mục, số lượng, đơn vị, **đã giao bao nhiêu task**, trạng thái: Chưa giao · Đang làm · Xong.
 - Chọn nhiều dòng → **Tạo task**: bảng sửa nhanh từng task (tên, người làm, ngày bắt đầu, deadline, kết quả cần nộp). Mặc định 1 task/dòng; dòng có đơn vị đếm được (video, bài, buổi) cho phép **tách theo số lượng**, tối đa 20 task/dòng.
 - Dòng "Chi hộ" (ngân sách quảng cáo) không tạo task mặc định.
@@ -99,7 +135,7 @@ Luật nghiệp vụ mới đặt trong `src/domain/` (dùng chung web và funct
 
 | Đợt | Nội dung | Kiểm chứng |
 |---|---|---|
-| **1.7.0** | Kết quả báo giá (4.1), khối chờ tạo dự án (4.2), tạo/gắn dự án từ báo giá (4.3) | Unit + RLS + selftest trên Pilot; seed 3 báo giá đã chốt, 1 không chốt |
+| **1.7.0** | Loại báo giá + giai đoạn, bước CEO ký (theo trả lời mục 0.4), kết quả báo giá (4.1), khối chờ tạo dự án (4.2), tạo/gắn dự án từ báo giá (4.3) | Unit + RLS + selftest trên Pilot; seed 3 báo giá đã chốt, 1 không chốt |
 | **1.7.1** | Tab Phạm vi, tạo task hàng loạt, nhãn Ngoài báo giá (4.4, 4.5) | Như trên + kiểm giao diện bằng trình duyệt |
 | **1.7.2** | Chỉ số Dashboard (4.6), tin Lark cho Account khi dự án tạo/xong | So số liệu Dashboard với tính tay trên seed |
 
@@ -112,11 +148,11 @@ Mỗi đợt: PRD bổ sung → Long duyệt → code → Pilot, như quy trình
 - **Báo giá lịch sử (nhập CSV)** không có dòng chuẩn → không tạo dự án từ báo giá nhập (V: `source = 'import'`).
 - **Mẫu nhỏ**: khoảng 6 báo giá/tháng (A, theo giả định trên Dashboard) nên tỷ lệ chốt dao động mạnh, chỉ dùng làm chỉ báo.
 
-## 8. Cần Long quyết
+## 8. Quyết định của Long (23/11)
 
-1. Ai đánh dấu "Khách đã chốt"? Đề xuất: **Account chủ báo giá**; PM/CEO sửa được.
-2. Một báo giá chỉ thuộc **một** dự án, một dự án **nhiều** báo giá: đồng ý?
-3. Account có xem được tiến độ dự án từ báo giá của mình (chỉ xem) để báo khách không? Đề xuất: **có**.
-4. PM có cần thấy **tổng tiền** báo giá trên trang dự án không? Đề xuất: có (PM, CEO, Account); nhân sự không.
-5. Danh sách lý do không chốt ở 4.1 đã đủ chưa, hay cần hỏi CEO?
-6. Làm đợt 1.7.0 trước khi merge PR #2, hay merge 1.6 xong mới làm?
+1. **Account chủ báo giá** đánh dấu "Khách đã chốt"; PM/CEO sửa được. ✔
+2. Một báo giá thuộc một dự án; một dự án nhiều báo giá. ✔ cho dự án dài (báo giá theo giai đoạn). Báo giá nhanh thường 1 báo giá/dự án. Chi tiết chờ CEO (mục 0.4).
+3. Account **xem được** tiến độ dự án từ báo giá của mình (chỉ xem). ✔
+4. PM **không cần** thấy tổng tiền trên trang dự án → tab Phạm vi chỉ hiện tên dòng, số lượng, đơn vị; số tiền chỉ Account (của báo giá đó) và CEO thấy.
+5. Lý do không chốt: Giá cao · Chọn bên khác · Khách hoãn · Khác. ✔
+6. **Merge 1.6 (PR #2) xong mới làm 1.7.**

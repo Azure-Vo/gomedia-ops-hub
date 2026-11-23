@@ -3,6 +3,7 @@
 // is only finished once the PM has checked the evidence and approved it. Pure rules only: the Edge
 // Function and the web app both use these functions.
 import type { WorkCalendar } from './calendar';
+import type { GoStarCriterion, GoStarRules } from './gostar';
 import type { BotMessage } from './lark';
 import { fmtDueDate, normalizeCode, parseDueDate } from './lark';
 import { addDays, dateKey, isoWeekday, localDateKey, pad2, toLocalParts } from './time';
@@ -505,6 +506,55 @@ export function personMonthStats(
     if (c.answer === 'blocked') out.blocked++;
   }
   return out;
+}
+
+/**
+ * Go Star 1.6.4: a suggested Work Quality score from the month's facts, so the PM can score quickly
+ * (or look closer when the suggestion and their own view differ). Share of approved tasks that passed
+ * review the first time: ≥ 90% → 5, ≥ 75% → 4, ≥ 50% → 3, ≥ 25% → 2, else 1 (thresholds: A).
+ * Fewer than 3 approved tasks is flagged as thin evidence.
+ */
+export function suggestQuality(s: PersonMonthStats): { score: 1 | 2 | 3 | 4 | 5; firstPass: number; approved: number; thin: boolean } | null {
+  const approved = s.onTime + s.late;
+  if (!approved) return null;
+  const rate = s.firstPass / approved;
+  const score = rate >= 0.9 ? 5 : rate >= 0.75 ? 4 : rate >= 0.5 ? 3 : rate >= 0.25 ? 2 : 1;
+  return { score, firstPass: s.firstPass, approved, thin: approved < 3 };
+}
+
+export type StarSlotState = 'on' | 'off' | 'likely' | 'unlikely' | 'open';
+export interface StarSlot {
+  key: GoStarCriterion;
+  state: StarSlotState;
+  note: string;
+  /** Only for quality when the PM has not scored yet. */
+  suggest?: number;
+}
+/** Where each of the 5 stars stands: earned, missed, likely from the data, or waiting for the PM. */
+export function starOutlook(
+  row: { stars: Record<GoStarCriterion, boolean>; score: { quality: number | null; kpiPct: number | null; teamwork: number | null } },
+  stats: PersonMonthStats | null,
+  rules: Pick<GoStarRules, 'qualityMinScore'>,
+): { slots: StarSlot[]; sure: number; likely: number; max: number } {
+  const slots: StarSlot[] = [];
+  const done = (key: GoStarCriterion, note: string) => slots.push({ key, state: row.stars[key] ? 'on' : 'off', note });
+  // The two automatic stars carry no note here: the screen shows their own detail (x/y task, % late).
+  done('completion', '');
+  done('deadline', '');
+  if (row.score.quality !== null) done('quality', `Đã chấm ${row.score.quality}/5`);
+  else {
+    const q = stats ? suggestQuality(stats) : null;
+    if (!q) slots.push({ key: 'quality', state: 'open', note: 'Chưa có task được duyệt' });
+    else slots.push({ key: 'quality', state: q.score >= rules.qualityMinScore ? 'likely' : 'unlikely', note: `Gợi ý ${q.score}/5${q.thin ? ' · ít dữ liệu' : ''}`, suggest: q.score });
+  }
+  if (row.score.kpiPct !== null) done('kpi', `${row.score.kpiPct}%`);
+  else slots.push({ key: 'kpi', state: 'open', note: 'Chờ nhập % KPI' });
+  if (row.score.teamwork !== null) done('teamwork', `Đã chấm ${row.score.teamwork}/5`);
+  else slots.push({ key: 'teamwork', state: 'open', note: 'PM đánh giá' });
+  const sure = slots.filter((x) => x.state === 'on').length;
+  const likely = sure + slots.filter((x) => x.state === 'likely').length;
+  const max = sure + slots.filter((x) => x.state === 'likely' || x.state === 'unlikely' || x.state === 'open').length;
+  return { slots, sure, likely, max };
 }
 
 export const KPI_STATUS_LABEL: Record<KpiStatus, string> = { on_time: 'Đúng hạn', late: 'Trễ', overdue: 'Quá hạn, chưa nộp', open: 'Chưa đến hạn', pending: 'Đã nộp, chờ duyệt', excluded: 'Không tính' };

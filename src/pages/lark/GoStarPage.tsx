@@ -6,6 +6,9 @@ import {
   kpiTracked,
   personMonthStats,
   PersonMonthStats,
+  StarSlot,
+  starOutlook,
+  suggestQuality,
   TASK_STAGE_LABEL,
   TaskStage,
   DEFAULT_GOSTAR_RULES,
@@ -32,6 +35,7 @@ import { check, supabase } from '@/lib/supabase';
 import { BotCard } from './BotCard';
 
 const SCORERS = ['pm', 'ecom_exec', 'ceo'];
+const SUGGEST_ROLES = ['pm', 'ceo', 'admin'];
 
 interface ScoreRow {
   month: string;
@@ -79,7 +83,62 @@ function Stars({ n, px = 15 }: { n: number; px?: number }) {
   );
 }
 
+/** A star the data suggests but nobody has scored yet: outlined, dashed when unlikely. */
+function StarHint({ likely, px = 16 }: { likely: boolean; px?: number }) {
+  return (
+    <svg width={px} height={px} viewBox="0 0 24 24" aria-hidden="true" className={likely ? 'text-[#E39A12]' : 'text-ink/30'}>
+      <path d={STAR_PATH} fill={likely ? 'rgba(227,154,18,0.18)' : 'none'} stroke="currentColor" strokeWidth={1.6} strokeDasharray={likely ? undefined : '2.5 2'} />
+    </svg>
+  );
+}
+
+const SLOT_STYLE: Record<StarSlot['state'], { box: string; label: string }> = {
+  on: { box: 'border-[#E9C37A] bg-[#FFF6E3]', label: 'Đạt' },
+  off: { box: 'border-line bg-canvas/60', label: 'Chưa đạt' },
+  likely: { box: 'border-dashed border-[#E39A12] bg-white', label: 'Có thể đạt' },
+  unlikely: { box: 'border-dashed border-line bg-white', label: 'Khó đạt' },
+  open: { box: 'border-dashed border-line bg-white', label: 'Chờ chấm' },
+};
+
+function StarOutlook({ outlook, onUseSuggestion, details }: { outlook: ReturnType<typeof starOutlook>; onUseSuggestion?: () => void; details: Partial<Record<GoStarCriterion, string>> }) {
+  return (
+    <section aria-label="Gợi ý số sao" className="mb-5 rounded-xl border border-line-soft bg-canvas/40 p-3">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-[14px] font-semibold text-ink">Gợi ý số sao</h3>
+        <div className="flex items-center gap-2 text-[13px] text-ink-2">
+          <Stars n={outlook.likely} px={16} />
+          <span>
+            Dự kiến <b className="text-ink">{outlook.likely}/5</b> · chắc chắn {outlook.sure} · tối đa {outlook.max}
+          </span>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {outlook.slots.map((x) => {
+          const c = GOSTAR_CRITERIA.find((k) => k.key === x.key)!;
+          return (
+            <div key={x.key} className={cx('flex flex-col gap-1 rounded-lg border px-2.5 py-2', SLOT_STYLE[x.state].box)} title={c.label}>
+              <div className="flex items-center gap-1.5">
+                {x.state === 'on' || x.state === 'off' ? <StarMark on={x.state === 'on'} px={16} /> : <StarHint likely={x.state === 'likely'} px={16} />}
+                <span className="truncate text-[12.5px] font-semibold text-ink">{c.name}</span>
+              </div>
+              <span className="text-[12px] text-ink-3">
+                {[SLOT_STYLE[x.state].label, x.note || details[x.key]].filter(Boolean).join(' · ')}
+              </span>
+              {x.suggest !== undefined && onUseSuggestion && (
+                <button type="button" onClick={onUseSuggestion} className="self-start text-[12px] font-semibold text-brand hover:underline">
+                  Dùng gợi ý {x.suggest}/5
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 interface FactRow {
+  id: string;
   assignee_open_id: string | null;
   kpi_due_date: string | null;
   due_date: string;
@@ -102,12 +161,20 @@ export function GoStarPage() {
     const [people, tasks, scores, months, profiles] = await Promise.all([
       supabase.from('lark_people').select('open_id, name, profile_id'),
       // 1.6: one row per task with the KPI deadline and the approved submission (view task_kpi_facts).
-      supabase.from('task_kpi_facts').select('assignee_open_id, kpi_due_date, due_date, state, accepted_at, pending_at'),
+      supabase.from('task_kpi_facts').select('id, assignee_open_id, kpi_due_date, due_date, state, accepted_at, pending_at'),
       supabase.from('gostar_scores').select('month, open_id, kpi_name, kpi_pct, quality, teamwork, note, updated_by, updated_at'),
       supabase.from('gostar_months').select('month, result, finalized_by, finalized_at'),
       supabase.from('profiles').select('id, full_name, email, role'),
     ]);
+    const facts = check(tasks) as FactRow[];
+    // Suggested Work Quality needs review rounds; only roles that can read every project get them.
+    const subs =
+      SUGGEST_ROLES.includes(me.role) && facts.length
+        ? (check(await supabase.from('task_submissions').select('task_id, decision').in('task_id', facts.map((f) => f.id))) as { task_id: string; decision: 'approved' | 'changes' | null }[])
+        : null;
     return {
+      facts,
+      subs,
       people: check(people) as { open_id: string; name: string; profile_id: string | null }[],
       tasks: (check(tasks) as FactRow[])
         .map((t) => {
@@ -156,6 +223,27 @@ export function GoStarPage() {
   }, [data, month, tz]);
 
   const rows = closed ? closed.result.rows : live;
+  const statsByPerson = useMemo(() => {
+    const out = new Map<string, PersonMonthStats>();
+    if (!data?.subs) return out;
+    const byPerson = new Map<string, FactRow[]>();
+    for (const f of data.facts) if (f.assignee_open_id) byPerson.set(f.assignee_open_id, [...(byPerson.get(f.assignee_open_id) ?? []), f]);
+    for (const [openId, list] of byPerson)
+      out.set(
+        openId,
+        personMonthStats(
+          month,
+          list.map((f) => ({ id: f.id, code: '', name: '', state: f.state, kpiDueDate: f.kpi_due_date ?? f.due_date, acceptedAt: f.accepted_at ? Date.parse(f.accepted_at) : null, pendingAt: f.pending_at ? Date.parse(f.pending_at) : null })),
+          data.subs,
+          [],
+          [],
+          now,
+          tz,
+        ),
+      );
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, month, tz]);
   const rules = closed?.result.rules ?? DEFAULT_GOSTAR_RULES;
   const scoreOf = (openId: string) => data?.scores.find((s) => s.month === month && s.open_id === openId) ?? null;
   const canScore = SCORERS.includes(me.role) && !closed;
@@ -165,6 +253,10 @@ export function GoStarPage() {
   const missing = rows.filter((r) => r.score.kpiPct === null || r.score.quality === null || r.score.teamwork === null).length;
   const notYetDue = rows.reduce((s, r) => s + r.tally.notYetDue, 0);
   const myOpenId = `sim:${me.id}`;
+  const suggestOf = (r: GoStarRow) => {
+    const st = statsByPerson.get(r.openId);
+    return st ? suggestQuality(st) : null;
+  };
 
   async function closeMonth() {
     if (!window.confirm(`Chốt Go Star ${monthLabel(month)}? Sau khi chốt không sửa điểm được nữa.`)) return;
@@ -324,7 +416,7 @@ export function GoStarPage() {
                         const detail: Record<GoStarCriterion, string> = {
                           completion: t.judged ? `${t.done}/${t.judged} task đã được duyệt` : 'Không có task đến hạn',
                           deadline: t.judged ? `Trễ ${t.late + t.openLate}/${t.judged} (${t.latePct}%)` : 'Không có task đến hạn',
-                          quality: r.score.quality !== null ? `${r.score.quality}/5` : 'Chưa chấm',
+                          quality: r.score.quality !== null ? `${r.score.quality}/5` : suggestOf(r) ? `Chưa chấm · gợi ý ${suggestOf(r)!.score}/5` : 'Chưa chấm',
                           kpi: r.score.kpiPct !== null ? `${r.score.kpiPct}%` : 'Chưa nhập',
                           teamwork: r.score.teamwork !== null ? `${r.score.teamwork}/5` : 'Chưa chấm',
                         };
@@ -343,7 +435,7 @@ export function GoStarPage() {
                             {GOSTAR_CRITERIA.map((c) => (
                               <td key={c.key} className="py-2.5 pr-2 text-center" title={`${c.name}: ${detail[c.key]}`}>
                                 <div className="flex justify-center">
-                                  <StarMark on={r.stars[c.key]} px={17} />
+                                  {c.key === 'quality' && r.score.quality === null && !closed && suggestOf(r) ? <StarHint likely={suggestOf(r)!.score >= rules.qualityMinScore} px={17} /> : <StarMark on={r.stars[c.key]} px={17} />}
                                 </div>
                                 <div className={cx('mt-1 text-[12px]', r.stars[c.key] ? 'text-ink-2' : 'text-ink-3')}>{detail[c.key]}</div>
                               </td>
@@ -410,6 +502,8 @@ export function GoStarPage() {
           month={month}
           existing={scoreOf(editing.openId)}
           meId={me.id}
+          rules={rules}
+          canSuggest={SUGGEST_ROLES.includes(me.role)}
           updatedByName={(id) => profileName(id)}
           tz={tz}
           onClose={() => setEditing(null)}
@@ -428,6 +522,8 @@ function ScoreModal({
   month,
   existing,
   meId,
+  rules,
+  canSuggest,
   updatedByName,
   tz,
   onClose,
@@ -437,6 +533,8 @@ function ScoreModal({
   month: string;
   existing: ScoreRow | null;
   meId: string;
+  rules: GoStarRules;
+  canSuggest: boolean;
   updatedByName: (id: string) => string;
   tz: string;
   onClose: () => void;
@@ -452,6 +550,19 @@ function ScoreModal({
   const kpiNum = kpi.trim() === '' ? null : Number(kpi.replace(',', '.'));
   const kpiErr = kpiNum !== null && (!Number.isFinite(kpiNum) || kpiNum < 0 || kpiNum > 300) ? 'Nhập % từ 0 đến 300.' : null;
   const facts = useAsync(() => loadPersonMonth(row.openId, month, tz), [row.openId, month]);
+  // The outlook follows what the PM is typing, so the effect of each score is visible before saving.
+  const qNum = quality ? Number(quality) : null;
+  const tNum = teamwork ? Number(teamwork) : null;
+  const kNum = kpiErr ? null : kpiNum;
+  const outlook = starOutlook(
+    {
+      stars: { ...row.stars, quality: qNum !== null && qNum >= rules.qualityMinScore, kpi: kNum !== null && kNum >= rules.kpiMinPct, teamwork: tNum !== null && tNum >= rules.teamworkMinScore },
+      score: { quality: qNum, kpiPct: kNum, teamwork: tNum },
+    },
+    canSuggest ? facts.data : null,
+    rules,
+  );
+  const qSuggest = outlook.slots.find((x) => x.key === 'quality')?.suggest;
 
   async function save() {
     setBusy(true);
@@ -509,6 +620,14 @@ function ScoreModal({
         </>
       }
     >
+      <StarOutlook
+        outlook={outlook}
+        onUseSuggestion={qSuggest ? () => setQuality(String(qSuggest)) : undefined}
+        details={{
+          completion: row.tally.judged ? `${row.tally.done}/${row.tally.judged} task đã duyệt` : 'Không có task đến hạn',
+          deadline: row.tally.judged ? `trễ ${row.tally.latePct}%` : 'Không có task đến hạn',
+        }}
+      />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         {/* left: what the PM decides */}
         <div className="flex flex-col gap-3 lg:order-1">

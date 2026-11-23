@@ -672,3 +672,9 @@ Hộp chấm điểm một nhân sự hiện số liệu tháng đó (tính theo
 - **Chữ gợi ý theo HCI:** mỗi tiêu đề trang/khối chỉ giữ một câu ngắn nói việc chính. Quy tắc, ngưỡng, lý do chuyển vào nút (i) cạnh tiêu đề, bấm mới hiện. Bỏ câu lặp lại điều màn hình đã thể hiện. Thông báo lỗi nêu việc cần làm.
 - **Go Star:** hộp chấm điểm chia hai cột: trái là ô chấm, phải là số liệu và danh sách task của nhân sự trong tháng, kèm 2 sao tự tính.
 - **Nhân sự (PM):** mỗi người một thẻ, gắn nhãn Cần hỗ trợ (có task quá hạn hoặc bị chặn) · Đang kín việc (≥ 5 task đang làm, hoặc ≥ 3 task đến hạn trong 7 ngày) · Vừa sức · Đang rảnh (0 task). Thẻ có thanh khối lượng theo màu sức khoẻ, 7 ô ngày tới, việc cần xem trước, nút Xem lịch (mở Calendar lọc đúng người). Ô đếm trên cùng dùng làm bộ lọc. Nhân sự chưa có task vẫn hiện để PM thấy ai còn rảnh.
+
+## 18. Bổ sung 1.6.4 (23/11/2026, Long)
+
+- **Go Star · Gợi ý số sao:** đầu hộp chấm điểm có dải 5 ô, mỗi ô một tiêu chí: Đạt · Chưa đạt · Có thể đạt · Khó đạt · Chờ chấm, kèm "Dự kiến x/5 · chắc chắn y · tối đa z". Dải đổi ngay khi PM nhập điểm.
+- **Gợi ý Work Quality** từ tỷ lệ task được duyệt ngay lần đầu trong tháng: ≥ 90% → 5, ≥ 75% → 4, ≥ 50% → 3, ≥ 25% → 2, còn lại 1 (ngưỡng: A). Dưới 3 task đã duyệt thì ghi "ít dữ liệu". Nút "Dùng gợi ý" điền sẵn ô Work Quality; PM vẫn quyết. KPI và Teamwork không có dữ liệu trong app nên không gợi ý.
+- Bảng xếp hạng: ô Chất lượng chưa chấm hiện sao viền và "gợi ý x/5". Chỉ PM, CEO, Admin thấy gợi ý (vai trò đọc được mọi dự án).

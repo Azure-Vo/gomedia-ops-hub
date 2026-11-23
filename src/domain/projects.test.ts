@@ -32,6 +32,8 @@ import {
   taskDateErrors,
   personMonthStats,
   loadState,
+  starOutlook,
+  suggestQuality,
   type SummaryTask,
 } from './projects';
 
@@ -332,5 +334,25 @@ describe('Trang Nhân sự (1.6.3)', () => {
     expect(loadState({ open: 3, overdue: 0, blocked: 0, next7: 3 })).toBe('busy');
     expect(loadState({ open: 2, overdue: 0, blocked: 0, next7: 1 })).toBe('ok');
     expect(loadState({ open: 0, overdue: 0, blocked: 0, next7: 0 })).toBe('free');
+  });
+});
+
+describe('Go Star gợi ý sao (1.6.4)', () => {
+  const base = { tasks: [], total: 0, onTime: 0, late: 0, overdue: 0, open: 0, pending: 0, firstPass: 0, sentBack: 0, extScope: 0, extQuality: 0, asked: 0, answered: 0, behind: 0, blocked: 0 };
+  it('suggests Work Quality from first-pass approvals', () => {
+    expect(suggestQuality(base)).toBeNull();
+    expect(suggestQuality({ ...base, onTime: 9, late: 1, firstPass: 9 })).toMatchObject({ score: 5, thin: false });
+    expect(suggestQuality({ ...base, onTime: 4, firstPass: 3 })).toMatchObject({ score: 4 });
+    expect(suggestQuality({ ...base, onTime: 2, firstPass: 1 })).toMatchObject({ score: 3, thin: true });
+    expect(suggestQuality({ ...base, onTime: 4, firstPass: 0 })).toMatchObject({ score: 1 });
+  });
+  it('counts sure, likely and maximum stars', () => {
+    const row = { stars: { completion: true, deadline: false, quality: false, kpi: false, teamwork: false }, score: { quality: null, kpiPct: null, teamwork: null } };
+    const o = starOutlook(row, { ...base, onTime: 4, firstPass: 4 }, { qualityMinScore: 4 });
+    expect(o.slots.map((x) => x.state)).toEqual(['on', 'off', 'likely', 'open', 'open']);
+    expect([o.sure, o.likely, o.max]).toEqual([1, 2, 4]);
+    const scored = starOutlook({ ...row, stars: { ...row.stars, teamwork: true }, score: { quality: null, kpiPct: 80, teamwork: 4 } }, null, { qualityMinScore: 4 });
+    expect(scored.slots.map((x) => x.state)).toEqual(['on', 'off', 'open', 'off', 'on']);
+    expect([scored.sure, scored.likely, scored.max]).toEqual([2, 2, 3]);
   });
 });
