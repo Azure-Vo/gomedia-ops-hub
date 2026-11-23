@@ -3010,6 +3010,32 @@ async function linkQuote(ctx, user, body) {
   await saveQuoteLink(ctx, project.id, q.id, user);
   return { ok: true, quote: q.code };
 }
+async function unlinkQuote(ctx, user, body) {
+  const project = await loadRow(ctx, String(body.project_id ?? ""));
+  if (!project || project.kind !== "parent") throw new ApiError(404, "not_found", "Kh\xF4ng t\xECm th\u1EA5y d\u1EF1 \xE1n.");
+  requireProjectPm(user, project);
+  if (project.state !== "active") throw new ApiError(409, "closed", "D\u1EF1 \xE1n \u0111\xE3 \u0111\xF3ng.");
+  const quoteId = String(body.quote_id ?? "");
+  const gone = must(await ctx.db.from("project_quotes").delete().eq("project_id", project.id).eq("quote_id", quoteId).select("quote_id"), "unlink quote");
+  if (!gone.length) throw new ApiError(404, "not_found", "B\xE1o gi\xE1 n\xE0y kh\xF4ng g\u1EAFn v\u1EDBi d\u1EF1 \xE1n.");
+  must(await ctx.db.from("events").insert({ actor: user.id, entity: "quotes", entity_id: quoteId, action: "quote.unlinked", payload: { project_id: project.id, project_code: project.code } }), "log unlink");
+  return { ok: true };
+}
+async function setSummarySchedule(ctx, user, body) {
+  if (user.role !== "ceo" && user.role !== "admin") throw new ApiError(403, "forbidden", "Ch\u1EC9 CEO ho\u1EB7c Admin \u0111\u1ED5i gi\u1EDD g\u1EEDi t\xF3m t\u1EAFt.");
+  const hm = (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v ?? ""));
+  const morning = String(body.summary_morning_time ?? "");
+  const evening = String(body.summary_evening_time ?? "");
+  const on = body.summary_evening_on !== false;
+  const errs = [];
+  if (!hm(morning)) errs.push("Gi\u1EDD t\xF3m t\u1EAFt s\xE1ng kh\xF4ng h\u1EE3p l\u1EC7.");
+  if (!hm(evening)) errs.push("Gi\u1EDD t\u1ED5ng k\u1EBFt cu\u1ED1i ng\xE0y kh\xF4ng h\u1EE3p l\u1EC7.");
+  if (!errs.length && on && evening <= morning) errs.push("Gi\u1EDD t\u1ED5ng k\u1EBFt cu\u1ED1i ng\xE0y ph\u1EA3i sau gi\u1EDD t\xF3m t\u1EAFt s\xE1ng.");
+  if (errs.length) throw new ApiError(400, "invalid", errs.join(" "));
+  must(await ctx.db.from("settings").update({ summary_morning_time: morning, summary_evening_time: evening, summary_evening_on: on }).eq("id", 1), "save schedule");
+  must(await ctx.db.from("events").insert({ actor: user.id, entity: "settings", entity_id: "1", action: "summary.schedule", payload: { morning, evening, on } }), "log schedule");
+  return { ok: true };
+}
 async function updateProject(ctx, user, body) {
   const w = await workEnv(ctx);
   const project = await loadRow(ctx, String(body.project_id ?? ""));
@@ -4784,6 +4810,10 @@ async function handleApi(ctx, req) {
       return createProject(ctx, user, body);
     case "work.link_quote":
       return linkQuote(ctx, user, body);
+    case "work.unlink_quote":
+      return unlinkQuote(ctx, user, body);
+    case "work.summary_schedule":
+      return setSummarySchedule(ctx, user, body);
     case "work.project_update":
       return updateProject(ctx, user, body);
     case "work.project_cancel":
