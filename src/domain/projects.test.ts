@@ -27,6 +27,9 @@ import {
   whyNot,
   workDaysAfter,
   eveningSummaryMessage,
+  invitationErrors,
+  inviteAnsweredMessage,
+  taskDateErrors,
   type SummaryTask,
 } from './projects';
 
@@ -261,5 +264,21 @@ describe('calendar helpers', () => {
     expect(g[g.length - 1][6] >= '2026-12-31').toBe(true);
     expect(weekOf('2026-12-12')).toEqual(['2026-12-07', '2026-12-08', '2026-12-09', '2026-12-10', '2026-12-11', '2026-12-12', '2026-12-13']);
     expect([0, 1, 2, 5].map(loadLevel)).toEqual([0, 1, 2, 3]);
+  });
+});
+
+describe('task dates and invitations (23/11)', () => {
+  const p = { startDate: '2026-12-01', dueDate: '2026-12-31' };
+  it('a task cannot start before the project, nor end after it', () => {
+    expect(taskDateErrors({ startDate: '2026-12-01', dueDate: '2026-12-10' }, p, '2026-11-25')).toEqual([]);
+    expect(taskDateErrors({ startDate: '2026-11-30', dueDate: '2026-12-10' }, p, '2026-11-25')[0]).toMatch(/trước ngày bắt đầu dự án \(01\/12\/2026\)/);
+    expect(taskDateErrors({ startDate: '2026-12-05', dueDate: '2027-01-02' }, p, '2026-11-25')[0]).toMatch(/sau deadline dự án/);
+    expect(taskDateErrors({ startDate: '2026-12-05', dueDate: '2026-12-05' }, p, '2026-11-25')[0]).toMatch(/sau ngày bắt đầu/);
+    expect(taskDateErrors({ startDate: '2026-12-05', dueDate: null }, p, '2026-11-25')).toEqual(['Thiếu deadline.']);
+  });
+  it('declining needs a reason that goes to the PM', () => {
+    expect(invitationErrors(true, '')).toEqual([]);
+    expect(invitationErrors(false, '  ')[0]).toMatch(/lý do/);
+    expect(inviteAnsweredMessage({ code: 'MT35', name: 'Tết' }, 'Ngọc', false, 'Đang kín lịch').lines[1]).toMatchObject({ label: 'Lý do', text: 'Đang kín lịch' });
   });
 });

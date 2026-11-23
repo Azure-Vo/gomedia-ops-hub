@@ -85,6 +85,30 @@ export interface MemberRow {
   open_id: string | null;
   name: string;
   source: 'group' | 'task' | 'manual';
+  status: 'invited' | 'accepted' | 'declined';
+  invited_at: string | null;
+  responded_at: string | null;
+  decline_reason: string | null;
+}
+export const MEMBER_COLS = 'id, project_id, profile_id, open_id, name, source, status, invited_at, responded_at, decline_reason';
+
+export interface InvitationRow {
+  id: string;
+  project_id: string;
+  status: 'invited' | 'accepted' | 'declined';
+  invited_at: string | null;
+  code: string;
+  name: string;
+  client: string | null;
+  start_date: string;
+  due_date: string;
+  pm_name: string | null;
+  color: string | null;
+}
+
+/** Invitations waiting for the signed-in person (view my_project_invitations). */
+export async function loadInvitations(): Promise<InvitationRow[]> {
+  return check(await supabase.from('my_project_invitations').select('id, project_id, status, invited_at, code, name, client, start_date, due_date, pm_name, color').eq('status', 'invited').order('invited_at', { ascending: false })) as InvitationRow[];
 }
 
 export interface SubmissionRow {
@@ -210,7 +234,7 @@ export async function loadWork(cal: WorkCalendar, opts: { projectCode?: string }
   const ids = projects.map((p) => p.id);
   const [tasks, members, people] = await Promise.all([
     ids.length ? supabase.from('lark_tasks').select(TASK_COLS).eq('kind', 'child').is('deleted_at', null).in('parent_id', ids).order('due_date') : Promise.resolve({ data: [], error: null }),
-    ids.length ? supabase.from('project_members').select('id, project_id, profile_id, open_id, name, source').in('project_id', ids) : Promise.resolve({ data: [], error: null }),
+    ids.length ? supabase.from('project_members').select(MEMBER_COLS).in('project_id', ids) : Promise.resolve({ data: [], error: null }),
     supabase.from('profiles').select('id, full_name, email, role, active').order('full_name'),
   ]).then((r) => r.map((x) => check(x as { data: unknown; error: null })) as [TaskRow[], MemberRow[], PersonRow[]]);
   const openIds = tasks.filter((t) => t.state !== 'done' && t.state !== 'cancelled').map((t) => t.id);

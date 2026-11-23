@@ -607,3 +607,24 @@ Mỗi phần làm xong đều có test và deploy lên Pilot trước khi sang p
 8. **Dọn dẹp:** tạo lại dữ liệu showcase theo format mới (ghi vào `seed_registry`), unit test, RLS test, e2e đi trọn luồng: tạo dự án → giao task → hỏi tiến độ → nộp → yêu cầu sửa → nộp lại → duyệt → dự án tự đóng.
 
 Database thiết kế dần theo từng phần, chỉ thêm, không xoá (quyết định của Long ngày 22/11).
+
+---
+
+## 15. Bổ sung 1.6.1 (23/11/2026, Long)
+
+### 15.1 Lời mời tham gia dự án
+- PM **mời** nhân sự vào dự án (khi tạo dự án, hoặc ở tab Thành viên). Bot nhắn riêng cho người được mời; lời mời hiện ở đầu **Inbox** và được tính vào số đếm trên sidebar.
+- Người được mời chọn **Tham gia** hoặc **Từ chối**. Từ chối **bắt buộc ghi lý do**.
+- Cả hai câu trả lời đều được bot nhắn riêng cho PM. Lời mời bị từ chối (kèm lý do) và lời mời chưa trả lời hiện ở **Tóm tắt hôm nay** và tab **Thành viên**; PM có thể **Mời lại**.
+- **Chỉ giao task được cho người đã tham gia.** Người đang được mời chỉ thấy tên, khách hàng, thời gian và PM của dự án; chưa thấy task.
+- Người có trong group Lark của dự án (khi chạy Lark thật) và người được giao task qua lệnh bot tự là thành viên đã tham gia.
+
+### 15.2 Ngày của task
+- Ngày bắt đầu task **không được trước ngày bắt đầu dự án**. Deadline vẫn không được sau deadline dự án (mục 6.1).
+- Mặc định ngày bắt đầu task = ngày bắt đầu dự án hoặc hôm nay, lấy ngày muộn hơn.
+
+### 15.3 Tiêu chí chấp nhận bổ sung
+29. Nhân sự được mời vào KV20 thấy lời mời trong Inbox nhưng không mở được dự án KV20 cho tới khi bấm Tham gia.
+30. Bấm Từ chối mà không có lý do: bị chặn. Có lý do: PM nhận tin riêng kèm lý do, tab Thành viên hiện "Từ chối · Lý do: …".
+31. Ô Người thực hiện khi tạo task chỉ liệt kê thành viên đã tham gia.
+32. Dự án bắt đầu 01/12: chọn ngày bắt đầu task 30/11 thì bị chặn với thông báo nêu ngày 01/12/2026.

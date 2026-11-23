@@ -71,7 +71,8 @@ function useNavCounts(role: Role, userId: string, pathname: string) {
       if (STAFF.includes(role)) {
         const { data } = await supabase.from('lark_tasks').select('state, due_date').eq('kind', 'child').is('deleted_at', null).in('state', ['doing', 'changes']).or(`assignee_id.eq.${userId},assignee_open_id.eq.sim:${userId}`);
         const n = (data ?? []).filter((t: { state: string; due_date: string }) => t.state === 'changes' || t.due_date <= today).length;
-        if (alive) setCounts((c) => ({ ...c, inbox: n }));
+        const { count: invites } = await supabase.from('project_members').select('id', { count: 'exact', head: true }).eq('profile_id', userId).eq('status', 'invited');
+        if (alive) setCounts((c) => ({ ...c, inbox: n + (invites ?? 0) }));
       } else if (role === 'pm') {
         const { data: mine } = await supabase.from('lark_tasks').select('id').eq('kind', 'parent').is('deleted_at', null).eq('pm_id', userId);
         const ids = (mine ?? []).map((p: { id: string }) => p.id);

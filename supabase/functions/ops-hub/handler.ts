@@ -28,6 +28,7 @@ import {
   extendTask,
   listChats,
   reopenTask,
+  respondInvitation,
   reviewTask,
   setMembers,
   submitTask,
@@ -133,6 +134,8 @@ async function handleApi(ctx: Ctx, req: Request) {
       return cancelProject(ctx, user, body);
     case 'work.project_check_chat':
       return checkProjectChat(ctx, user, body);
+    case 'work.invitation_respond':
+      return respondInvitation(ctx, user, body);
     case 'work.members':
       return setMembers(ctx, user, body);
     case 'work.chats':

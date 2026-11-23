@@ -85,6 +85,30 @@ export function localHM(now: number, timeZone: string): string {
   return `${pad2(p.hour)}:${pad2(p.minute)}`;
 }
 
+/**
+ * Dates of a new task against its project: it cannot start before the project starts (22/11, Long),
+ * must end after it starts, and cannot end after the project deadline or in the past.
+ */
+export function taskDateErrors(t: { startDate: string; dueDate: string | null }, project: { startDate: string; dueDate: string }, today: string): string[] {
+  const out: string[] = [];
+  if (t.startDate < project.startDate) out.push(`Ngày bắt đầu task không được trước ngày bắt đầu dự án (${fmtDueDate(project.startDate)}).`);
+  if (!t.dueDate) return [...out, 'Thiếu deadline.'];
+  if (t.dueDate <= t.startDate) out.push('Deadline phải sau ngày bắt đầu.');
+  if (t.dueDate > project.dueDate) out.push(`Deadline sau deadline dự án (${fmtDueDate(project.dueDate)}). Gia hạn dự án trước.`);
+  if (t.dueDate < today) out.push(`Deadline ${fmtDueDate(t.dueDate)} đã qua.`);
+  return out;
+}
+
+// ------------------------------------------------------------------------ invitations --------
+
+/** PM invites a person; they accept, or decline with a reason that goes back to the PM (23/11, Long). */
+export type MemberStatus = 'invited' | 'accepted' | 'declined';
+export const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = { invited: 'Đang mời', accepted: 'Đã tham gia', declined: 'Từ chối' };
+
+export function invitationErrors(accept: boolean, reason: string): string[] {
+  return !accept && !reason.trim() ? ['Ghi lý do từ chối để PM biết.'] : [];
+}
+
 // ---------------------------------------------------------------------- reminder tiers (7.1) --------
 
 export type ReminderTier = 'short' | 'medium' | 'long';
@@ -531,6 +555,33 @@ export function botMissingMessage(p: ProjectRef, url?: string | null): BotMessag
     lines: [pLine(p), { icon: 'ℹ️', text: `Thêm bot Go Media vào group Lark của dự án (nên đặt tên group bắt đầu bằng "${p.code}"), rồi bấm "Kiểm tra lại" trên trang dự án.` }, ...linkLine(url, 'Mở dự án')],
     note: 'Trong lúc chưa gắn group, tin của dự án được gửi riêng cho bạn.',
   };
+}
+
+export function inviteMessage(p: ProjectRef & { dueDate: string; pmName: string; client?: string | null }, toOpenId: string | null, toName: string, url?: string | null): BotMessage {
+  return {
+    tone: 'blue',
+    title: `📨 Lời mời tham gia dự án ${p.code}`,
+    lines: [
+      { icon: '👤', label: 'Gửi', text: toName, mentionOpenId: toOpenId },
+      pLine(p),
+      ...(p.client ? [{ icon: '🏢', label: 'Khách hàng', text: p.client }] : []),
+      { icon: '🧑‍💼', label: 'PM', text: p.pmName },
+      { icon: '⏰', label: 'Deadline dự án', text: fmtDueDate(p.dueDate) },
+      ...linkLine(url, 'Xem và trả lời lời mời'),
+    ],
+    note: 'Vào Inbox trên Ops Hub để Tham gia hoặc Từ chối (từ chối cần ghi lý do).',
+  };
+}
+
+export function inviteAnsweredMessage(p: ProjectRef, who: string, accepted: boolean, reason: string | null, url?: string | null): BotMessage {
+  return accepted
+    ? { tone: 'green', title: `✅ ${who} đã tham gia ${p.code}`, lines: [pLine(p), ...linkLine(url, 'Mở dự án')], note: 'Giờ có thể giao task cho người này.' }
+    : {
+        tone: 'orange',
+        title: `🚫 ${who} từ chối tham gia ${p.code}`,
+        lines: [pLine(p), { icon: '❗', label: 'Lý do', text: reason || 'không ghi' }, ...linkLine(url, 'Mở dự án')],
+        note: 'Có thể trao đổi rồi mời lại ở tab Thành viên.',
+      };
 }
 
 export function reviewNudgeMessage(items: { code: string; name: string; days: number }[], url?: string | null): BotMessage {

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { fmtDueDate } from '@/domain';
+import { fmtDueDate, MEMBER_STATUS_LABEL } from '@/domain';
 import { Badge, Banner, Button, Card, cx, EmptyState, ErrorBox, Field, Loading, Modal, PageHeader, Select, Textarea, useAsync, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { useProfile } from '@/lib/session';
-import { isMine, isProjectPm, loadMessages } from './data';
+import { isMine, isProjectPm, loadMessages, MemberRow, PersonRow } from './data';
 import { TaskHost, useOpenTask, useWork } from './hooks';
 import { ChatPicker, MessageHistory, ProgressBar, ProjectForm, ProjectStatusBadge, ProjectSwatch, TaskForm, TaskTable } from './parts';
 
@@ -125,7 +125,7 @@ export function ProjectDetailPage() {
         {(
           [
             ['tasks', `Task (${project.rollup.total})`],
-            ['members', `Thành viên (${project.members.length})`],
+            ['members', `Thành viên (${project.members.filter((m) => m.status === 'accepted').length}${project.members.some((m) => m.status === 'invited') ? ` · ${project.members.filter((m) => m.status === 'invited').length} đang mời` : ''})`],
             ['history', 'Lịch sử nhắc việc'],
           ] as [Tab, string][]
         ).map(([k, label]) => (
@@ -194,38 +194,30 @@ export function ProjectDetailPage() {
   );
 }
 
-function Members({ projectId, members, people, canEdit, live, onChanged }: { projectId: string; members: { id: string; profile_id: string | null; name: string; source: string }[]; people: { id: string; full_name: string; email: string; role: string; active: boolean }[]; canEdit: boolean; live: boolean; onChanged: () => void }) {
+function Members({ projectId, members, people, canEdit, live, onChanged }: { projectId: string; members: MemberRow[]; people: PersonRow[]; canEdit: boolean; live: boolean; onChanged: () => void }) {
   const toast = useToast();
   const [add, setAdd] = useState('');
-  const has = new Set(members.map((m) => m.profile_id));
+  const has = new Set(members.filter((m) => m.status !== 'declined').map((m) => m.profile_id));
   const candidates = people.filter((p) => p.active && !has.has(p.id) && !['admin', 'ceo', 'pm'].includes(p.role));
-  const SOURCE: Record<string, string> = { group: 'Từ group Lark', task: 'Được giao task', manual: 'PM thêm' };
-  const call = (body: Record<string, unknown>) => callApi('work.members', { project_id: projectId, ...body }).then(onChanged, (e) => toast(e.message, 'bad'));
+  const SOURCE: Record<string, string> = { group: 'Từ group Lark', task: 'Được giao task', manual: 'PM mời' };
+  const TONE = { accepted: 'ok', invited: 'brand', declined: 'bad' } as const;
+  const call = (body: Record<string, unknown>, msg: string) =>
+    callApi('work.members', { project_id: projectId, ...body }).then(
+      () => (toast(msg), onChanged()),
+      (e) => toast(e.message, 'bad'),
+    );
+  const order = { invited: 0, declined: 1, accepted: 2 } as const;
+  const rows = [...members].sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
+  const fmtAt = (s: string | null) => (s ? new Date(s).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : '');
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-[14px] text-ink-3">{live ? 'Thành viên lấy từ group Lark của dự án (đồng bộ 15 phút/lần), cộng với người được giao task.' : 'Chế độ mô phỏng: PM thêm thành viên bằng tay. Khi chạy Lark thật, thành viên lấy từ group của dự án.'}</p>
-      <ul className="divide-y divide-line-soft border-y border-line">
-        {members.map((m) => (
-          <li key={m.id} className="flex items-center justify-between gap-3 py-2.5">
-            <div>
-              <div className="font-medium text-ink">{m.name || '—'}</div>
-              <div className="text-[12.5px] text-ink-3">
-                {SOURCE[m.source]}
-                {!m.profile_id && <Badge tone="warn" className="ml-2">Chưa có tài khoản Ops Hub</Badge>}
-              </div>
-            </div>
-            {canEdit && m.profile_id && m.source !== 'group' && (
-              <Button size="sm" variant="ghost" onClick={() => call({ remove_ids: [m.profile_id] })}>
-                Bỏ
-              </Button>
-            )}
-          </li>
-        ))}
-        {!members.length && <li className="py-3 text-ink-3">Chưa có thành viên.</li>}
-      </ul>
+      <p className="text-[14px] text-ink-3">
+        PM mời → người được mời trả lời trong Inbox (Tham gia, hoặc Từ chối kèm lý do). Chỉ giao task được cho người đã tham gia.
+        {live ? ' Người trong group Lark của dự án tự là thành viên.' : ''}
+      </p>
       {canEdit && (
         <div className="flex flex-wrap items-end gap-2">
-          <Field label="Thêm thành viên" className="min-w-[240px]">
+          <Field label="Mời thành viên" className="min-w-[240px]">
             {(id) => (
               <Select id={id} value={add} onChange={(e) => setAdd(e.target.value)}>
                 <option value="">Chọn người…</option>
@@ -237,11 +229,43 @@ function Members({ projectId, members, people, canEdit, live, onChanged }: { pro
               </Select>
             )}
           </Field>
-          <Button variant="secondary" disabled={!add} onClick={() => call({ add_ids: [add] }).then(() => setAdd(''))}>
-            Thêm
+          <Button icon="send" disabled={!add} onClick={() => call({ add_ids: [add] }, 'Đã gửi lời mời').then(() => setAdd(''))}>
+            Gửi lời mời
           </Button>
         </div>
       )}
+      <ul className="divide-y divide-line-soft border-y border-line">
+        {rows.map((m) => (
+          <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 font-medium text-ink">
+                {m.name || '—'}
+                <Badge tone={TONE[m.status]}>{MEMBER_STATUS_LABEL[m.status]}</Badge>
+                {!m.profile_id && <Badge tone="warn">Chưa có tài khoản Ops Hub</Badge>}
+              </div>
+              <div className="text-[12.5px] text-ink-3">
+                {SOURCE[m.source]}
+                {m.status === 'invited' && m.invited_at && ` · mời ngày ${fmtAt(m.invited_at)}`}
+                {m.status !== 'invited' && m.responded_at && m.source === 'manual' && ` · trả lời ngày ${fmtAt(m.responded_at)}`}
+              </div>
+              {m.status === 'declined' && <div className="mt-1 text-[13.5px] text-bad">Lý do: {m.decline_reason || 'không ghi'}</div>}
+            </div>
+            {canEdit && m.profile_id && m.source !== 'group' && (
+              <div className="flex gap-2">
+                {m.status === 'declined' && (
+                  <Button size="sm" variant="secondary" onClick={() => call({ add_ids: [m.profile_id] }, 'Đã mời lại')}>
+                    Mời lại
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => call({ remove_ids: [m.profile_id] }, m.status === 'accepted' ? 'Đã bỏ thành viên' : 'Đã huỷ lời mời')}>
+                  {m.status === 'accepted' ? 'Bỏ' : m.status === 'invited' ? 'Huỷ lời mời' : 'Xoá'}
+                </Button>
+              </div>
+            )}
+          </li>
+        ))}
+        {!rows.length && <li className="py-3 text-ink-3">Chưa có thành viên.</li>}
+      </ul>
     </div>
   );
 }

@@ -20,6 +20,7 @@ import {
   TASK_STAGE_LABEL,
   TaskStage,
   taskCode,
+  taskDateErrors,
   TIER_LABEL,
   tierHint,
   whyNot,
@@ -671,28 +672,24 @@ export function TaskForm({ project, members, task, onDone, onCancel }: { project
   const toast = useToast();
   const { tz } = useSettings();
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: tz });
-  const memberIds = 'members' in project ? new Set(project.members.map((m) => m.profile_id).filter(Boolean)) : null;
+  // Only members who accepted the invitation can be given a task (23/11).
+  const accepted = 'members' in project ? new Set(project.members.filter((m) => m.status === 'accepted').map((m) => m.profile_id).filter(Boolean)) : null;
+  const pending = 'members' in project ? project.members.filter((m) => m.status === 'invited').length : 0;
   const choices = members.filter((p) => p.active && !['admin', 'ceo', 'pm'].includes(p.role));
-  const inProject = memberIds ? choices.filter((p) => memberIds.has(p.id)) : choices;
+  const list = accepted ? choices.filter((p) => accepted.has(p.id)) : choices;
+  const firstDay = project.start_date > today ? project.start_date : today;
   const [f, setF] = useState({
     name: task?.name ?? '',
     expected_output: task?.expected_output ?? '',
     description: task?.description ?? '',
     assignee_id: task?.assignee_id ?? '',
-    start_date: task?.start_date ?? today,
+    start_date: task?.start_date ?? firstDay,
     due_date: task?.due_date ?? '',
     tier: task?.tier ?? '',
   });
-  const [showAll, setShowAll] = useState(false);
   const [busy, setBusy] = useState(false);
-  const list = showAll || !inProject.length ? choices : inProject;
   const autoT: ReminderTier | null = f.start_date && f.due_date && f.due_date > f.start_date ? autoTier(f.start_date, f.due_date) : null;
-  const errs: string[] = [];
-  if (!task) {
-    if (f.due_date && f.due_date <= f.start_date) errs.push('Deadline phải sau ngày bắt đầu.');
-    if (f.due_date && f.due_date > project.due_date) errs.push(`Deadline sau deadline dự án (${fmtDueDate(project.due_date)}).`);
-    if (f.due_date && f.due_date < today) errs.push('Deadline đã qua.');
-  }
+  const errs = !task && (f.due_date || f.start_date < project.start_date) ? taskDateErrors({ startDate: f.start_date, dueDate: f.due_date || null }, { startDate: project.start_date, dueDate: project.due_date }, today).filter((e) => f.due_date || !e.startsWith('Thiếu')) : [];
   const ready = f.name.trim() && f.expected_output.trim() && f.assignee_id && (task || (f.due_date && !errs.length));
   async function save() {
     setBusy(true);
@@ -725,16 +722,7 @@ export function TaskForm({ project, members, task, onDone, onCancel }: { project
         {(id) => <Textarea id={id} rows={2} value={f.expected_output} onChange={(e) => setF({ ...f, expected_output: e.target.value })} placeholder="VD: 50 video đã đăng + file tổng hợp link" />}
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field
-          label="Người thực hiện"
-          hint={
-            inProject.length && !showAll ? (
-              <button type="button" className="underline" onClick={() => setShowAll(true)}>
-                Chọn người ngoài dự án
-              </button>
-            ) : undefined
-          }
-        >
+        <Field label="Người thực hiện" hint={!list.length ? `Chưa có thành viên nào nhận lời mời${pending ? ` (${pending} đang chờ trả lời)` : ''}. Mời ở tab Thành viên.` : pending ? `${pending} người chưa trả lời lời mời nên chưa chọn được.` : undefined}>
           {(id) => (
             <Select id={id} value={f.assignee_id} onChange={(e) => setF({ ...f, assignee_id: e.target.value })}>
               <option value="">Chọn…</option>
@@ -758,9 +746,11 @@ export function TaskForm({ project, members, task, onDone, onCancel }: { project
         </Field>
         {!task && (
           <>
-            <Field label="Ngày bắt đầu">{(id) => <Input id={id} type="date" value={f.start_date} onChange={(e) => setF({ ...f, start_date: e.target.value })} />}</Field>
+            <Field label="Ngày bắt đầu" hint={`Không trước ngày bắt đầu dự án ${fmtDueDate(project.start_date)}`}>
+              {(id) => <Input id={id} type="date" value={f.start_date} min={project.start_date} max={project.due_date} onChange={(e) => setF({ ...f, start_date: e.target.value })} />}
+            </Field>
             <Field label="Deadline" hint={`Không sau deadline dự án ${fmtDueDate(project.due_date)}`}>
-              {(id) => <Input id={id} type="date" value={f.due_date} min={today} max={project.due_date} onChange={(e) => setF({ ...f, due_date: e.target.value })} />}
+              {(id) => <Input id={id} type="date" value={f.due_date} min={f.start_date > today ? f.start_date : today} max={project.due_date} onChange={(e) => setF({ ...f, due_date: e.target.value })} />}
             </Field>
           </>
         )}
@@ -926,7 +916,7 @@ export function ProjectForm({ project, people, existingCodes, onDone, onCancel }
         {errs.length > 0 && <p className="text-[13px] text-bad">{errs.join(' ')}</p>}
         <ChatPicker code={code} value={f.chat_id} onChange={(chat_id) => setF((x) => ({ ...x, chat_id }))} />
         {!project && (
-          <Field label="Thành viên (chế độ mô phỏng hoặc người ngoài group Lark)" hint="Khi chạy Lark thật, thành viên tự lấy từ group của dự án.">
+          <Field label="Mời thành viên" hint="Người được mời nhận lời mời trong Inbox và chọn Tham gia hoặc Từ chối. Khi chạy Lark thật, người trong group Lark của dự án tự là thành viên.">
             {() => (
               <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
                 {staff.map((p) => {

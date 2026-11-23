@@ -63,6 +63,7 @@ export function SummaryPage() {
         <Stat label="Bị chặn" value={sum((s) => s.blocked.length)} tone={sum((s) => s.blocked.length) ? 'bad' : null} />
         <Stat label="Chậm / chưa cập nhật" value={sum((s) => s.behind.length + s.noUpdate.length)} />
       </div>
+      <InvitationNotes data={data} pmId={me.role === 'pm' ? me.id : undefined} />
       {!list.length ? (
         <EmptyState title="Không có dự án nào đang chạy">{me.role === 'pm' ? <Link className="underline" to="/du-an">Tạo dự án</Link> : null}</EmptyState>
       ) : (
@@ -103,6 +104,49 @@ export function SummaryPage() {
       </p>
       <TaskHost data={data} reload={reload} />
     </div>
+  );
+}
+
+/** Answers to the PM's invitations: declines (with the reason) from the last 7 days, and invitations still open. */
+function InvitationNotes({ data, pmId }: { data: WorkData; pmId?: string }) {
+  const weekAgo = Date.now() - 7 * 86_400_000;
+  const mine = data.projects.filter((p) => p.state === 'active' && (!pmId || p.pm_id === pmId || !p.pm_id));
+  const declined = mine.flatMap((p) => p.members.filter((m) => m.status === 'declined' && m.responded_at && Date.parse(m.responded_at) >= weekAgo).map((m) => ({ p, m })));
+  const waiting = mine.flatMap((p) => p.members.filter((m) => m.status === 'invited').map((m) => ({ p, m })));
+  if (!declined.length && !waiting.length) return null;
+  return (
+    <section className="mb-7 grid gap-4 md:grid-cols-2">
+      {declined.length > 0 && (
+        <div className="rounded-xl border border-bad/30 bg-white p-4 shadow-sheet">
+          <div className="mb-2 flex items-center gap-2 text-[15px] font-semibold text-ink">
+            Lời mời bị từ chối · 7 ngày <Badge tone="bad">{declined.length}</Badge>
+          </div>
+          <ul className="flex flex-col gap-2 text-[14px]">
+            {declined.map(({ p, m }) => (
+              <li key={m.id}>
+                <b>{m.name}</b> · <Link className="font-mono text-[13px] text-brand hover:underline" to={`/du-an/${encodeURIComponent(p.code)}`}>{p.code}</Link>
+                <div className="text-[13.5px] text-ink-2">Lý do: {m.decline_reason || 'không ghi'}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {waiting.length > 0 && (
+        <div className="rounded-xl border border-line bg-white p-4 shadow-sheet">
+          <div className="mb-2 flex items-center gap-2 text-[15px] font-semibold text-ink">
+            Lời mời chưa trả lời <Badge tone="brand">{waiting.length}</Badge>
+          </div>
+          <ul className="flex flex-col gap-1.5 text-[14px]">
+            {waiting.map(({ p, m }) => (
+              <li key={m.id}>
+                {m.name} · <Link className="font-mono text-[13px] text-brand hover:underline" to={`/du-an/${encodeURIComponent(p.code)}`}>{p.code}</Link>
+                {m.invited_at && <span className="text-[12.5px] text-ink-3"> · mời {fmtDueDate(m.invited_at.slice(0, 10)).slice(0, 5)}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
 

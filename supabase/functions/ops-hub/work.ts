@@ -25,6 +25,10 @@ import {
   extensionErrors,
   ExtendReason,
   fmtDueDate,
+  invitationErrors,
+  inviteAnsweredMessage,
+  inviteMessage,
+  taskDateErrors,
   isNoUpdate,
   isWorkDay,
   kpiStatus,
@@ -205,10 +209,51 @@ async function pmOf(ctx: Ctx, w: WorkEnv, project: WorkRow): Promise<Person> {
   return { openId: project.assignee_open_id, name: project.assignee_name ?? 'PM' };
 }
 
+/** Members from the Lark group or from a task assignment count as accepted (they are already in). */
 async function addMember(ctx: Ctx, projectId: string, m: { profileId: string | null; openId: string | null; name: string }, source: 'group' | 'task' | 'manual') {
   if (!m.profileId && !m.openId) return;
-  const { error } = await ctx.db.from('project_members').insert({ project_id: projectId, profile_id: m.profileId, open_id: m.openId, name: m.name, source });
+  const { error } = await ctx.db.from('project_members').insert({ project_id: projectId, profile_id: m.profileId, open_id: m.openId, name: m.name, source, status: 'accepted', responded_at: new Date().toISOString() });
   if (error && error.code !== '23505' && !/duplicate key/.test(error.message)) throw new Error(`save member: ${error.message}`);
+  if (error && source === 'group') {
+    const q = ctx.db.from('project_members').update({ status: 'accepted', decline_reason: null }).eq('project_id', projectId).neq('status', 'accepted');
+    await (m.profileId ? q.eq('profile_id', m.profileId) : q.eq('open_id', m.openId!));
+  }
+}
+
+/** PRD 1.6.1: the PM invites someone; the bot tells them on Lark and the invitation waits in their Inbox. */
+async function inviteMember(ctx: Ctx, w: WorkEnv, project: WorkRow, profileId: string, by: Profile) {
+  const p = await personOf(ctx, w, profileId);
+  const stamp = new Date(ctx.now()).toISOString();
+  const cur = must(await ctx.db.from('project_members').select('id, status').eq('project_id', project.id).eq('profile_id', profileId).maybeSingle(), 'load member') as { id: string; status: string } | null;
+  if (cur?.status === 'accepted' || cur?.status === 'invited') return false;
+  if (cur) must(await ctx.db.from('project_members').update({ status: 'invited', invited_by: by.id, invited_at: stamp, responded_at: null, decline_reason: null, source: 'manual' }).eq('id', cur.id), 'invite again');
+  else must(await ctx.db.from('project_members').insert({ project_id: project.id, profile_id: profileId, open_id: p.openId, name: p.name, source: 'manual', status: 'invited', invited_by: by.id, invited_at: stamp }), 'invite');
+  await sendWork(ctx, w, {
+    kind: 'invite',
+    project,
+    to: p,
+    key: `invite|${project.id}|${profileId}|${stamp}`,
+    message: inviteMessage({ ...pRef(project), dueDate: project.due_date, pmName: by.full_name || by.email, client: project.client }, p.openId, p.name, link(w, '/inbox')),
+  });
+  return true;
+}
+
+/** The invited person accepts, or declines with a reason; the PM is told either way. */
+export async function respondInvitation(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
+  const w = await workEnv(ctx);
+  const project = await loadRow(ctx, String(body.project_id ?? ''));
+  if (!project || project.kind !== 'parent') throw new ApiError(404, 'not_found', 'Không tìm thấy dự án.');
+  const row = must(await ctx.db.from('project_members').select('id, status').eq('project_id', project.id).eq('profile_id', user.id).maybeSingle(), 'load invitation') as { id: string; status: string } | null;
+  if (!row || row.status !== 'invited') throw new ApiError(409, 'conflict', 'Không có lời mời nào đang chờ bạn trả lời ở dự án này.');
+  const accept = body.accept === true;
+  const reason = String(body.reason ?? '').trim();
+  const errs = invitationErrors(accept, reason);
+  if (errs.length) throw new ApiError(400, 'invalid', errs.join(' '));
+  const stamp = new Date(ctx.now()).toISOString();
+  must(await ctx.db.from('project_members').update({ status: accept ? 'accepted' : 'declined', responded_at: stamp, decline_reason: accept ? null : reason }).eq('id', row.id).eq('status', 'invited'), 'answer invitation');
+  const pm = await pmOf(ctx, w, project);
+  await sendWork(ctx, w, { kind: accept ? 'invite_accepted' : 'invite_declined', project, to: pm, key: `invite_answer|${row.id}|${stamp}`, message: inviteAnsweredMessage(pRef(project), user.full_name || user.email, accept, accept ? null : reason, projectLink(w, project)) });
+  return { ok: true, status: accept ? 'accepted' : 'declined' };
 }
 
 function actorOf(user: Profile, task: WorkRow, project: WorkRow) {
@@ -483,13 +528,10 @@ export async function createProject(ctx: Ctx, user: Profile, body: Record<string
       .single(),
     'save project',
   ) as WorkRow;
-  for (const id of Array.isArray(body.member_ids) ? body.member_ids.map(String) : []) {
-    const p = await personOf(ctx, w, id);
-    await addMember(ctx, row.id, { profileId: id, openId: p.openId, name: p.name }, 'manual');
-  }
   let out = row;
   if (body.chat_id) out = await bindChat(ctx, w, row, String(body.chat_id));
   else await warnBotMissing(ctx, w, row);
+  for (const id of Array.isArray(body.member_ids) ? body.member_ids.map(String) : []) await inviteMember(ctx, w, out, id, user);
   return { project: out };
 }
 
@@ -540,23 +582,21 @@ export async function cancelProject(ctx: Ctx, user: Profile, body: Record<string
   return { ok: true };
 }
 
-/** PM adds or removes members by hand (simulation, or people outside the Lark group). */
+/** PM invites people (they accept or decline in their Inbox) or removes members. */
 export async function setMembers(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
   const w = await workEnv(ctx);
   const project = await loadRow(ctx, String(body.project_id ?? ''));
   if (!project || project.kind !== 'parent') throw new ApiError(404, 'not_found', 'Không tìm thấy dự án.');
   requireProjectPm(user, project);
-  for (const id of Array.isArray(body.add_ids) ? body.add_ids.map(String) : []) {
-    const p = await personOf(ctx, w, id);
-    await addMember(ctx, project.id, { profileId: id, openId: p.openId, name: p.name }, 'manual');
-  }
+  let invited = 0;
+  for (const id of Array.isArray(body.add_ids) ? body.add_ids.map(String) : []) if (await inviteMember(ctx, w, project, id, user)) invited++;
   const remove = Array.isArray(body.remove_ids) ? body.remove_ids.map(String) : [];
   if (remove.length) {
     const busy = must(await ctx.db.from('lark_tasks').select('code, assignee_id').eq('parent_id', project.id).in('assignee_id', remove).in('state', ['doing', 'review', 'changes']), 'load tasks') as { code: string }[];
     if (busy.length) throw new ApiError(400, 'invalid', `Còn task đang mở (${busy.map((b) => b.code).join(', ')}): giao lại hoặc huỷ trước khi bỏ thành viên.`);
     must(await ctx.db.from('project_members').delete().eq('project_id', project.id).in('profile_id', remove).neq('source', 'group'), 'remove members');
   }
-  return { ok: true };
+  return { ok: true, invited };
 }
 
 async function reopenProjectIfDone(ctx: Ctx, project: WorkRow) {
@@ -594,7 +634,7 @@ export async function createTask(ctx: Ctx, user: Profile, body: Record<string, u
   if (project.state === 'cancelled') throw new ApiError(400, 'invalid', 'Dự án đã huỷ.');
   const name = String(body.name ?? '').trim();
   const output = String(body.expected_output ?? '').trim();
-  const startDate = String(body.start_date || w.today);
+  const startDate = String(body.start_date || (project.start_date > w.today ? project.start_date : w.today));
   const dueDate = String(body.due_date ?? '');
   const tier = ['short', 'medium', 'long'].includes(String(body.tier)) ? (String(body.tier) as ReminderTier) : null;
   let person: Person = { openId: null, name: '' };
@@ -608,11 +648,10 @@ export async function createTask(ctx: Ctx, user: Profile, body: Record<string, u
   if (!name) errors.push('Thiếu tên task.');
   if (!output) errors.push('Thiếu kết quả cần nộp.');
   if (!person.openId && !assigneeId) errors.push('Chọn người thực hiện.');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) errors.push('Thiếu deadline.');
-  else {
-    if (dueDate <= startDate) errors.push('Deadline phải sau ngày bắt đầu.');
-    if (dueDate < w.today) errors.push(`Deadline ${fmtDueDate(dueDate)} đã qua.`);
-    if (dueDate > project.due_date) errors.push(`Deadline sau deadline dự án (${fmtDueDate(project.due_date)}). Gia hạn dự án trước.`);
+  errors.push(...taskDateErrors({ startDate, dueDate: /^\d{4}-\d{2}-\d{2}$/.test(dueDate) ? dueDate : null }, { startDate: project.start_date, dueDate: project.due_date }, w.today));
+  if (assigneeId && body.assignee_id) {
+    const m = must(await ctx.db.from('project_members').select('status').eq('project_id', project.id).eq('profile_id', assigneeId).maybeSingle(), 'load member') as { status: string } | null;
+    if (m?.status !== 'accepted') errors.push(`${person.name || 'Người này'} ${m?.status === 'invited' ? 'chưa nhận lời mời vào dự án' : m?.status === 'declined' ? 'đã từ chối tham gia dự án' : 'chưa là thành viên dự án: mời vào dự án trước'}.`);
   }
   if (errors.length) throw new ApiError(400, 'invalid', errors.join(' '));
   if (body.dry_run) return { ok: true, code: taskCode(project.code, project.next_seq) };
@@ -688,6 +727,8 @@ export async function updateTask(ctx: Ctx, user: Profile, body: Record<string, u
   if (body.description !== undefined) patch.description = String(body.description).trim() || null;
   if (body.tier !== undefined) patch.tier = ['short', 'medium', 'long'].includes(String(body.tier)) ? body.tier : null;
   if (body.assignee_id && body.assignee_id !== task.assignee_id) {
+    const m = must(await ctx.db.from('project_members').select('status').eq('project_id', project.id).eq('profile_id', String(body.assignee_id)).maybeSingle(), 'load member') as { status: string } | null;
+    if (m?.status !== 'accepted') throw new ApiError(400, 'invalid', 'Chỉ giao được cho thành viên đã nhận lời mời vào dự án.');
     const p = await personOf(ctx, w, String(body.assignee_id));
     Object.assign(patch, { assignee_id: String(body.assignee_id), assignee_open_id: p.openId, assignee_name: p.name, progress: null, progress_note: null });
     await addMember(ctx, project.id, { profileId: String(body.assignee_id), openId: p.openId, name: p.name }, 'task');

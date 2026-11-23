@@ -1,8 +1,9 @@
-import { ReactNode } from 'react';
-import { daysBetween, fmtDueDate, PROGRESS_LABEL } from '@/domain';
-import { Badge, Banner, Button, EmptyState, ErrorBox, Loading, PageHeader, Stat } from '@/components/ui';
+import { ReactNode, useState } from 'react';
+import { daysBetween, fmtDueDate, invitationErrors, PROGRESS_LABEL } from '@/domain';
+import { Badge, Banner, Button, EmptyState, ErrorBox, Field, Loading, Modal, PageHeader, Stat, Textarea, useAsync, useToast } from '@/components/ui';
+import { callApi } from '@/lib/api';
 import { useProfile } from '@/lib/session';
-import { isMine, Task } from './data';
+import { InvitationRow, isMine, loadInvitations, Task } from './data';
 import { TaskHost, useOpenTask, useWork } from './hooks';
 import { DueText, HealthDot, ProjectSwatch, StageBadge } from './parts';
 
@@ -10,6 +11,7 @@ import { DueText, HealthDot, ProjectSwatch, StageBadge } from './parts';
 export function InboxPage() {
   const me = useProfile();
   const { data, loading, error, reload } = useWork();
+  const invites = useAsync(loadInvitations, []);
   const { open } = useOpenTask(data);
   if (loading && !data) return <Loading />;
   if (error) return <ErrorBox error={error} />;
@@ -35,6 +37,15 @@ export function InboxPage() {
         <Stat label="Cần sửa" value={changes.length + open_.filter((t) => t.state === 'changes' && t.due_date <= today).length} />
         <Stat label="Chờ PM duyệt" value={waiting.length} />
       </div>
+      {(invites.data ?? []).length > 0 && (
+        <Invitations
+          list={invites.data!}
+          onAnswered={() => {
+            invites.reload();
+            reload();
+          }}
+        />
+      )}
       {asked.length > 0 && (
         <Banner tone="info" title={`PM đang hỏi tiến độ ${asked.length} task`} className="mb-5">
           <div className="mt-1 flex flex-wrap gap-2">
@@ -46,7 +57,7 @@ export function InboxPage() {
           </div>
         </Banner>
       )}
-      {!mine.length ? (
+      {!mine.length && !(invites.data ?? []).length ? (
         <EmptyState title="Bạn chưa được giao task nào">Khi PM giao task, task sẽ hiện ở đây và bot nhắc trong group Lark của dự án.</EmptyState>
       ) : (
         <div className="flex flex-col gap-7">
@@ -61,6 +72,79 @@ export function InboxPage() {
       )}
       <TaskHost data={data} reload={reload} />
     </div>
+  );
+}
+
+/** PRD 1.6.1: invitations to projects, answered here. Declining needs a reason, which goes to the PM. */
+function Invitations({ list, onAnswered }: { list: InvitationRow[]; onAnswered: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [declining, setDeclining] = useState<InvitationRow | null>(null);
+  const [reason, setReason] = useState('');
+  const answer = async (inv: InvitationRow, accept: boolean, why = '') => {
+    setBusy(inv.id);
+    try {
+      await callApi('work.invitation_respond', { project_id: inv.project_id, accept, reason: why });
+      toast(accept ? `Đã tham gia ${inv.code}` : `Đã từ chối ${inv.code}, PM đã được báo`);
+      setDeclining(null);
+      setReason('');
+      onAnswered();
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section className="mb-7 rounded-xl border border-brand-line bg-brand-soft/40 p-4">
+      <h2 className="mb-3 flex items-center gap-2 text-[17px] font-semibold text-ink">
+        Lời mời tham gia dự án <Badge tone="brand">{list.length}</Badge>
+      </h2>
+      <ul className="flex flex-col gap-3">
+        {list.map((inv) => (
+          <li key={inv.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white px-4 py-3 shadow-sheet">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-[3px]" style={{ background: inv.color ?? '#2F5BD3' }} />
+                <span className="font-mono text-[14px] font-semibold text-brand">{inv.code}</span>
+                <b className="text-ink">{inv.name}</b>
+              </div>
+              <div className="mt-0.5 text-[13px] text-ink-3">
+                {[inv.client, `PM ${inv.pm_name ?? '—'}`, `${fmtDueDate(inv.start_date)} → ${fmtDueDate(inv.due_date)}`, inv.invited_at ? `mời ngày ${fmtDueDate(inv.invited_at.slice(0, 10))}` : null].filter(Boolean).join(' · ')}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" disabled={busy === inv.id} onClick={() => setDeclining(inv)}>
+                Từ chối
+              </Button>
+              <Button icon="check" busy={busy === inv.id} onClick={() => answer(inv, true)}>
+                Tham gia
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {declining && (
+        <Modal
+          open
+          onClose={() => setDeclining(null)}
+          title={`Từ chối tham gia ${declining.code}`}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeclining(null)}>
+                Thôi
+              </Button>
+              <Button variant="danger" busy={busy === declining.id} disabled={invitationErrors(false, reason).length > 0} onClick={() => answer(declining, false, reason)}>
+                Từ chối
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-3 text-[14px] text-ink-2">Lý do sẽ được gửi cho PM {declining.pm_name ?? ''} qua Lark và hiện ở trang dự án.</p>
+          <Field label="Lý do (bắt buộc)">{(id) => <Textarea id={id} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="VD: Tuần này đang kín lịch với dự án DA058" />}</Field>
+        </Modal>
+      )}
+    </section>
   );
 }
 

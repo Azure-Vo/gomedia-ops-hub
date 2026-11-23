@@ -24,6 +24,8 @@ delete from public.tasks where id::text in (select row_id from public.seed_regis
 -- S1 Lark tasks (reminders cascade)
 delete from public.lark_tasks where id::text in (select row_id from public.seed_registry where table_name = 'lark_tasks')
    or name like '%(mẫu)%';
+-- 1.6 simulated Lark groups of the showcase projects
+delete from public.lark_chats where chat_id in (select row_id from public.seed_registry where table_name = 'lark_chats');
 -- Go Star scores and closed months entered for the showcase
 delete from public.gostar_scores where month || '|' || open_id in (select row_id from public.seed_registry where table_name = 'gostar_scores');
 delete from public.gostar_months where month in (select row_id from public.seed_registry where table_name = 'gostar_months');
