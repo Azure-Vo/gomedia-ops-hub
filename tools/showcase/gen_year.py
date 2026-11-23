@@ -189,7 +189,7 @@ for i, start in enumerate([D(2026, 9, 3), D(2026, 9, 8), D(2026, 9, 21), D(2026,
     add(start, R.choice(list(SERVICES)), R.choice([0.4, 0.5]), n=5)
 
 # 26 Oct – 26 Nov 2026: Ops Hub pilot. Two projects run on into December (later tasks still open).
-for i, start in enumerate([D(2026, 10, 26), D(2026, 10, 27), D(2026, 10, 29), D(2026, 11, 2), D(2026, 11, 3), D(2026, 11, 5), D(2026, 11, 9), D(2026, 11, 10), D(2026, 11, 2)]):
+for i, start in enumerate([D(2026, 10, 26), D(2026, 10, 27), D(2026, 10, 29), D(2026, 11, 2), D(2026, 11, 3), D(2026, 11, 5), D(2026, 11, 9), D(2026, 11, 10), D(2026, 11, 2), D(2026, 10, 28), D(2026, 11, 4)]):
     add(start, R.choice(['ecom', 'live', 'video', 'tiktok', 'seo']), 0.0, pilot=True, open_after=D(2026, 11, 26) if i in (6, 7) else None, n=R.randint(8, 9))
 # exactly three late tasks in the pilot projects
 for p in R.sample([p for p in plan if p.pilot and not p.open_after], 3):
@@ -290,7 +290,7 @@ def project_sql(p: Project) -> str:
     for i, (nm, who, st, due, late) in enumerate(rows):
         code = f'{p.code}-{i + 1:02d}'
         out.append(f"  t := pg_temp.task(p, {q(nm)}, {q(output_for(nm))}, pg_temp.uid({q(who)}), '{st}', '{due}', {ts(add_work(st, -1), '15:00')});")
-        if p.open_after and due > LAST_STAMP:
+        if p.open_after and due > D(2026, 11, 26):
             if (due - LAST_STAMP).days <= 10:
                 out.append(f"  perform pg_temp.checkin(t, 50, '{add_work(st, 2) if add_work(st, 2) <= LAST_STAMP else LAST_STAMP}', 'on_plan');")
             continue
