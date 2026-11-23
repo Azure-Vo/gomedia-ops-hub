@@ -1,6 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  QUOTE_KIND_LABEL,
+  QuoteKind,
   ANCHOR_LABEL,
   approveGate,
   BAND_LABEL,
@@ -23,7 +25,7 @@ import {
   validateQuote,
   workingHoursBetween,
 } from '@/domain';
-import { Badge, Banner, Button, Card, cx, ErrorBox, Field, Icon, IconButton, Input, Loading, Modal, Select, Textarea, useToast } from '@/components/ui';
+import { Badge, Banner, Button, Card, cx, ErrorBox, Field, Icon, IconButton, InfoTip, Input, Loading, Modal, Select, Textarea, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { fmtVnd, fmtVnDate, fmtVnDateTime, fmtVnLong, fromLocalInput, toLocalInput } from '@/lib/format';
 import { useProfile } from '@/lib/session';
@@ -31,6 +33,7 @@ import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
 import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadPeople, loadTerms, normLine, normQuote, personName, QUOTE_COLS, QuoteRow, QuoteTerm } from './data';
 import { LibraryPicker } from './LibraryPicker';
+import { OutcomeBlock } from './outcome';
 import { BandReasons, BandRuler, companyFromSettings, downloadQuotePdf, QuotePdf, StatusBadge } from './parts';
 import { AnchorThreads, CommentTableRow, CommentToggle, copyText, quoteLink, ReviewCard, ReviewProvider } from './review';
 
@@ -49,6 +52,7 @@ interface EditLine {
 }
 
 interface Header {
+  kind: QuoteKind;
   client: string;
   contact: string;
   project: string;
@@ -154,6 +158,7 @@ export function QuoteBuilderPage() {
         kind: l.kind,
       }));
       const h: Header = {
+        kind: quoteRow.kind,
         client: quoteRow.client,
         contact: quoteRow.contact,
         project: quoteRow.project,
@@ -237,6 +242,7 @@ export function QuoteBuilderPage() {
           await supabase
             .from('quotes')
             .update({
+              kind: h.kind,
               client: h.client,
               contact: h.contact,
               project: h.project,
@@ -542,6 +548,13 @@ export function QuoteBuilderPage() {
       await load();
     });
 
+  const sign = () =>
+    run('sign', async () => {
+      await callApi('quote.sign', { quote_id: quote.id });
+      toast('Đã ghi nhận CEO ký. Account được báo để gửi khách.');
+      await load();
+    });
+
   const reopen = () =>
     run('reopen', async () => {
       await callApi('quote.reopen', { quote_id: quote.id });
@@ -673,6 +686,24 @@ export function QuoteBuilderPage() {
 
       <div className="flex flex-wrap items-start gap-4">
         <section aria-label="Báo giá" className="flex min-w-0 flex-[999_1_920px] flex-col gap-5 rounded-xl border border-line bg-white p-6 shadow-sheet">
+          <div role="radiogroup" aria-label="Loại báo giá" className="flex flex-wrap items-center gap-2">
+            {(['quick', 'project'] as QuoteKind[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={header.kind === k}
+                disabled={!editable}
+                onClick={() => setH({ kind: k })}
+                className={cx('min-h-[36px] rounded-full border px-3.5 text-[14px] font-medium disabled:cursor-default', header.kind === k ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink-2 hover:border-ink-3 disabled:opacity-60')}
+              >
+                {QUOTE_KIND_LABEL[k]}
+              </button>
+            ))}
+            <InfoTip label="Giải thích: loại báo giá">
+              Chọn theo gói dịch vụ khách chọn. <b>Nhanh</b>: gói ngắn; trong khung giá thì gửi ngay với chữ ký in sẵn. <b>Dự án</b>: gói dài, khách trả theo giai đoạn; luôn qua PM, CEO góp ý và CEO ký số.
+            </InfoTip>
+          </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <Field label="Kính gửi (khách hàng)">{(fid) => <Input id={fid} value={header.client} disabled={!editable} onChange={(e) => setH({ client: e.target.value })} placeholder="Tên khách / thương hiệu" />}</Field>
             <Field label="Người liên hệ">{(fid) => <Input id={fid} value={header.contact} disabled={!editable} onChange={(e) => setH({ contact: e.target.value })} placeholder="Họ tên, SĐT" />}</Field>
@@ -1064,6 +1095,18 @@ export function QuoteBuilderPage() {
               {bandError && <Banner tone="bad">{bandError}</Banner>}
               {!band || bandBusy ? (
                 <Banner tone="info" title="Đang kiểm tra khung giá…" />
+              ) : header.kind === 'project' ? (
+                <Banner
+                  tone="info"
+                  title="Báo giá dự án · PM, CEO góp ý rồi CEO ký"
+                  actions={
+                    <Button icon="send" busy={busy === 'submit'} disabled={!!problems.length || saveState === 'saving'} onClick={submit}>
+                      Gửi PM & CEO góp ý
+                    </Button>
+                  }
+                >
+                  {band.level === 'send_now' ? 'Trong khung giá.' : <BandReasons band={band} />}
+                </Banner>
               ) : band.level === 'send_now' ? (
                 <Banner
                   tone="ok"
@@ -1102,10 +1145,10 @@ export function QuoteBuilderPage() {
           {quote.status === 'pending' && (
             <Banner
               tone="info"
-              title={`Đang chờ ${quote.approver === 'ceo' ? 'CEO' : 'PM'} duyệt`}
+              title={quote.kind === 'project' ? 'Đang chờ PM, CEO góp ý · CEO duyệt' : `Đang chờ ${quote.approver === 'ceo' ? 'CEO' : 'PM'} duyệt`}
               actions={isOwner && <Button variant="secondary" icon="edit" onClick={() => setConfirmReopen(true)}>Sửa báo giá</Button>}
             >
-              Gửi duyệt lúc {quote.approval_requested_at ? fmtVnDateTime(quote.approval_requested_at, tz) : '–'}. Chỉ báo giá ngoài khung mới đến bước này.
+              Gửi duyệt lúc {quote.approval_requested_at ? fmtVnDateTime(quote.approval_requested_at, tz) : '–'}. Duyệt xong thì chờ CEO ký.
               {isOwner && ' Có thể gửi link cho người duyệt.'}
               <BandReasons band={quote.band_detail} />
             </Banner>
@@ -1129,10 +1172,40 @@ export function QuoteBuilderPage() {
               </div>
             </Card>
           )}
+          {quote.status === 'signing' && (
+            <Banner
+              tone="info"
+              title="Chờ CEO ký"
+              actions={
+                me.role === 'ceo' ? (
+                  <>
+                    <Button variant="secondary" icon="download" busy={busy === 'pdf'} onClick={() => run('pdf', async () => { if (pdfRef.current) await downloadQuotePdf(pdfRef.current, quote.code); })}>
+                      Tải PDF để ký
+                    </Button>
+                    <Button variant="secondary" icon="edit" onClick={() => setDecision({ kind: 'changes', comment: '' })}>
+                      Yêu cầu sửa
+                    </Button>
+                    <Button icon="check" busy={busy === 'sign'} disabled={openComments > 0} onClick={sign}>
+                      Đã ký
+                    </Button>
+                  </>
+                ) : (
+                  isOwner && (
+                    <Button variant="secondary" icon="edit" onClick={() => setConfirmReopen(true)}>
+                      Sửa báo giá
+                    </Button>
+                  )
+                )
+              }
+            >
+              {lastDecision && `Đã duyệt bởi ${personName(people, lastDecision.approver_id)}, ${fmtVnDateTime(lastDecision.decided_at, tz)}. `}
+              {me.role === 'ceo' ? 'Ký số trên PDF, rồi bấm "Đã ký".' : 'CEO ký số trên PDF rồi xác nhận trong app.'}
+            </Banner>
+          )}
           {quote.status === 'approved' && (
             <Banner
               tone="ok"
-              title={`Đã được ${lastDecision ? ROLE_LABEL[lastDecision.level] : ''} duyệt · sẵn sàng gửi`}
+              title={quote.signed_at ? `CEO đã ký · ${fmtVnDateTime(quote.signed_at, tz)} · sẵn sàng gửi` : `Đã được ${lastDecision ? ROLE_LABEL[lastDecision.level] : ''} duyệt · sẵn sàng gửi`}
               actions={
                 isOwner && (
                   <>
@@ -1170,6 +1243,7 @@ export function QuoteBuilderPage() {
                   )}
                 </div>
               </div>
+              {quote.source === 'app' && <OutcomeBlock quote={quote} people={people} canEdit={isOwner || me.role === 'pm' || me.role === 'ceo'} onSaved={load} />}
             </div>
           )}
           {editable && quote.status === 'draft' && (

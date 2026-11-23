@@ -1,4 +1,4 @@
-import type { BandLevel, LineKind, PublicBand, QuoteStatus } from '@/domain';
+import type { BandLevel, LineKind, LostReason, PublicBand, QuoteKind, QuoteOutcome, QuoteStatus } from '@/domain';
 import { check, supabase } from '@/lib/supabase';
 
 export interface LibraryItem {
@@ -52,6 +52,14 @@ export interface QuoteRow {
   created_by: string;
   created_at: string;
   updated_at: string;
+  kind: QuoteKind;
+  signed_at: string | null;
+  signed_by: string | null;
+  outcome: QuoteOutcome | null;
+  outcome_at: string | null;
+  lost_reason: LostReason | null;
+  lost_note: string | null;
+  handover_pm: string | null;
 }
 
 export interface LineRow {
@@ -80,7 +88,7 @@ export interface ApprovalRow {
 }
 
 export const QUOTE_COLS =
-  'id, code, client, service_group, requested_at, sent_at, status, discount_pct, subtotal, total, contact, project, venue, vat_pct, vat_amount, grand_total, terms, band_result, band_detail, approver, approval_requested_at, source, copied_from, created_by, created_at, updated_at';
+  'id, code, client, service_group, requested_at, sent_at, status, discount_pct, subtotal, total, contact, project, venue, vat_pct, vat_amount, grand_total, terms, band_result, band_detail, approver, approval_requested_at, source, copied_from, created_by, created_at, updated_at, kind, signed_at, signed_by, outcome, outcome_at, lost_reason, lost_note, handover_pm';
 export const LINE_COLS = 'id, quote_id, position, library_item_id, item_name, unit, qty, unit_price, library_price, override_reason, section, description, kind';
 export const LIB_COLS = 'id, code, name, unit, service_group, unit_price, band_low, band_high, last_reviewed_at, active, kind, description, updated_at';
 
@@ -93,6 +101,7 @@ export function normQuote(q: QuoteRow): QuoteRow {
     contact: q.contact ?? '',
     project: q.project ?? '',
     venue: q.venue ?? '',
+    kind: q.kind ?? 'quick',
     vat_pct: Number(q.vat_pct ?? 0),
     vat_amount: Number(q.vat_amount ?? 0),
     grand_total: Number(q.grand_total ?? 0),

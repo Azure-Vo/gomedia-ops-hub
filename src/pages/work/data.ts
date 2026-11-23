@@ -282,3 +282,55 @@ export const isProjectPm = (p: Pick<ProjectRow, 'pm_id'>, user: { id: string; ro
 
 export const MANAGER_ROLES = ['pm', 'ceo'];
 export const isManagerRole = (role: string) => MANAGER_ROLES.includes(role);
+
+// ------------------------------------------------------------------ 1.7 · quotes → projects -----
+
+export interface WonQuote {
+  id: string;
+  code: string;
+  client: string;
+  project: string;
+  contact: string;
+  venue: string;
+  kind: 'quick' | 'project';
+  created_by: string;
+  handover_pm: string | null;
+  outcome_at: string | null;
+}
+
+/** Won quotes with no project yet, for the PM they were handed to (all of them for CEO/Admin). Money is not loaded. */
+export async function loadWonQuotes(me: { id: string; role: string }): Promise<WonQuote[]> {
+  let q = supabase
+    .from('quotes')
+    .select('id, code, client, project, contact, venue, kind, created_by, handover_pm, outcome_at, project_quotes(project_id)')
+    .eq('outcome', 'won')
+    .eq('source', 'app')
+    .order('outcome_at');
+  if (me.role === 'pm') q = q.or(`handover_pm.eq.${me.id},handover_pm.is.null`);
+  const rows = check(await q) as (WonQuote & { project_quotes: { project_id: string }[] | { project_id: string } | null })[];
+  return rows.filter((r) => !(Array.isArray(r.project_quotes) ? r.project_quotes.length : r.project_quotes)).map(({ project_quotes: _x, ...r }) => r);
+}
+
+export interface ProjectQuote {
+  quote_id: string;
+  code: string;
+  client: string;
+  kind: 'quick' | 'project';
+  created_by: string;
+  linked_at: string;
+}
+
+/** Quotes attached to a project (no money). Staff get an empty list from RLS. */
+export async function loadProjectQuotes(projectId: string): Promise<ProjectQuote[]> {
+  const rows = check(await supabase.from('project_quotes').select('quote_id, linked_at, quotes(code, client, kind, created_by)').eq('project_id', projectId).order('linked_at')) as {
+    quote_id: string;
+    linked_at: string;
+    quotes: { code: string; client: string; kind: 'quick' | 'project'; created_by: string } | { code: string; client: string; kind: 'quick' | 'project'; created_by: string }[] | null;
+  }[];
+  return rows
+    .map((r) => {
+      const q = Array.isArray(r.quotes) ? r.quotes[0] : r.quotes;
+      return q ? { quote_id: r.quote_id, linked_at: r.linked_at, ...q } : null;
+    })
+    .filter((x): x is ProjectQuote => x !== null);
+}

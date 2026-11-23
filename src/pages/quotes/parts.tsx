@@ -6,7 +6,7 @@ import { fmtVnd, fmtVnDate } from '@/lib/format';
 import type { LineRow, QuoteRow } from './data';
 
 export function StatusBadge({ status }: { status: QuoteStatus }) {
-  const tone = status === 'sent' ? 'solidOk' : status === 'approved' ? 'ok' : status === 'pending' ? 'brand' : status === 'changes_requested' ? 'bad' : 'neutral';
+  const tone = status === 'sent' ? 'solidOk' : status === 'approved' ? 'ok' : status === 'pending' || status === 'signing' ? 'brand' : status === 'changes_requested' ? 'bad' : 'neutral';
   return <Badge tone={tone}>{QUOTE_STATUS_LABEL[status]}</Badge>;
 }
 

@@ -32,7 +32,8 @@ export function ProjectsPage() {
     n.set(k, v);
     setParams(n, { replace: true });
   };
-  const [creating, setCreating] = useState(false);
+  const fromQuote = params.get('tu-bao-gia') ?? undefined;
+  const [creating, setCreating] = useState(!!fromQuote && pm);
   if (loading && !data) return <Loading />;
   if (error) return <ErrorBox error={error} />;
   if (!data) return null;
@@ -149,9 +150,13 @@ export function ProjectsPage() {
       {body}
       {creating && (
         <ProjectForm
+          fromQuoteId={fromQuote}
           people={data.people}
           existingCodes={data.projects.map((p) => p.code)}
-          onCancel={() => setCreating(false)}
+          onCancel={() => {
+            setCreating(false);
+            if (fromQuote) setParam('tu-bao-gia', '');
+          }}
           onDone={(code) => {
             setCreating(false);
             reload();

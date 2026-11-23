@@ -5,6 +5,8 @@
 // second run never sends the same thing twice. Simulation mode runs the same flow without calling Lark.
 import {
   applyExtension,
+  quoteLinkErrors,
+  QuoteOutcome,
   approvedMessage,
   blockedMessage,
   botMissingMessage,
@@ -476,6 +478,8 @@ export async function createProject(ctx: Ctx, user: Profile, body: Record<string
     if (dueDate <= startDate) errors.push('Deadline dự án phải sau ngày bắt đầu.');
     if (dueDate < w.today) errors.push('Deadline dự án đã qua.');
   }
+  const fromQuote = body.quote_id ? await quoteForLink(ctx, String(body.quote_id), user) : null;
+  if (fromQuote?.errors.length) errors.push(...fromQuote.errors);
   if (errors.length) throw new ApiError(400, 'invalid', errors.join(' '));
   const pm = await personOf(ctx, w, user.id);
   let guid: string | null = null;
@@ -532,7 +536,36 @@ export async function createProject(ctx: Ctx, user: Profile, body: Record<string
   if (body.chat_id) out = await bindChat(ctx, w, row, String(body.chat_id));
   else await warnBotMissing(ctx, w, row);
   for (const id of Array.isArray(body.member_ids) ? body.member_ids.map(String) : []) await inviteMember(ctx, w, out, id, user);
+  if (fromQuote) await saveQuoteLink(ctx, out.id, fromQuote.id, user);
   return { project: out };
+}
+
+/** 1.7 · Load a quote a PM wants to turn into (or attach to) a project, with the reasons it cannot be. */
+async function quoteForLink(ctx: Ctx, quoteId: string, user: Profile): Promise<{ id: string; code: string; errors: string[] }> {
+  const q = must(await ctx.db.from('quotes').select('id, code, outcome, source, handover_pm').eq('id', quoteId).maybeSingle(), 'load quote') as
+    | { id: string; code: string; outcome: QuoteOutcome | null; source: 'app' | 'import'; handover_pm: string | null }
+    | null;
+  if (!q) throw new ApiError(404, 'quote_not_found', 'Không tìm thấy báo giá.');
+  const linked = must(await ctx.db.from('project_quotes').select('project_id').eq('quote_id', q.id).maybeSingle(), 'quote link') as { project_id: string } | null;
+  return { id: q.id, code: q.code, errors: quoteLinkErrors({ outcome: q.outcome, source: q.source, handoverPm: q.handover_pm, linked: !!linked }, user) };
+}
+
+async function saveQuoteLink(ctx: Ctx, projectId: string, quoteId: string, user: Profile) {
+  const res = await ctx.db.from('project_quotes').insert({ project_id: projectId, quote_id: quoteId, linked_by: user.id });
+  if (res.error && /duplicate|unique/i.test(res.error.message)) throw new ApiError(409, 'linked', 'Báo giá này đã thuộc một dự án.');
+  must(res, 'link quote');
+}
+
+/** 1.7 · Attach a won quote to an existing project (a second quote, an add-on). */
+export async function linkQuote(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
+  const project = await loadRow(ctx, String(body.project_id ?? ''));
+  if (!project || project.kind !== 'parent') throw new ApiError(404, 'not_found', 'Không tìm thấy dự án.');
+  requireProjectPm(user, project);
+  if (project.state !== 'active') throw new ApiError(409, 'closed', 'Dự án đã đóng.');
+  const q = await quoteForLink(ctx, String(body.quote_id ?? ''), user);
+  if (q.errors.length) throw new ApiError(400, 'invalid', q.errors.join(' '));
+  await saveQuoteLink(ctx, project.id, q.id, user);
+  return { ok: true, quote: q.code };
 }
 
 export async function updateProject(ctx: Ctx, user: Profile, body: Record<string, unknown>) {

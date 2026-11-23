@@ -27,7 +27,15 @@ export function ApprovalsPage() {
       loadLibrary(true),
       loadOpenCounts(ids),
     ]);
-    return { qs, lines: (check(lines) as LineRow[]).map(normLine), people, lib: new Map(lib.map((i) => [i.id, i])), open };
+    // 1.7: the CEO's signing queue; for PMs, project quotes waiting for comments (the CEO decides those).
+    const extra = (
+      check(
+        level === 'ceo'
+          ? await supabase.from('quotes').select(QUOTE_COLS).eq('status', 'signing').order('updated_at')
+          : await supabase.from('quotes').select(QUOTE_COLS).eq('status', 'pending').eq('kind', 'project').order('approval_requested_at'),
+      ) as QuoteRow[]
+    ).map(normQuote);
+    return { qs, extra, lines: (check(lines) as LineRow[]).map(normLine), people, lib: new Map(lib.map((i) => [i.id, i])), open };
   }, [level]);
 
   async function decide() {
@@ -49,8 +57,26 @@ export function ApprovalsPage() {
     <div>
       <PageHeader
         title="Duyệt báo giá"
-        subtitle={`Báo giá ngoài khung giá cần ${ROLE_LABEL[level]} duyệt.`}
+        subtitle={level === 'ceo' ? 'Báo giá chờ bạn duyệt hoặc ký.' : `Báo giá ngoài khung giá cần ${ROLE_LABEL[level]} duyệt.`}
       />
+      {data && data.extra.length > 0 && (
+        <Card className="mb-6" title={level === 'ceo' ? `Chờ bạn ký · ${data.extra.length}` : `Báo giá dự án cần góp ý · ${data.extra.length}`} subtitle={level === 'ceo' ? 'Ký số trên PDF, rồi bấm "Đã ký" trong báo giá.' : 'CEO duyệt; PM góp ý ngay trên báo giá.'}>
+          <ul className="flex flex-col">
+            {data.extra.map((q) => (
+              <li key={q.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-soft py-2.5 last:border-b-0">
+                <Link to={`/quotes/${q.id}`} className="font-semibold text-brand hover:underline">
+                  {q.code}
+                </Link>
+                <span className="text-ink">{q.client || '(chưa nhập)'}</span>
+                {q.kind === 'project' && <Badge tone="accent">Dự án</Badge>}
+                <span className="text-[13px] text-ink-3">
+                  {personName(data.people, q.created_by)} · chờ {fmtNum(workingHoursBetween(level === 'ceo' ? q.updated_at : q.approval_requested_at ?? q.updated_at, Date.now(), calendar), 1)} giờ làm việc
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {loading ? (
         <Loading />
       ) : error ? (

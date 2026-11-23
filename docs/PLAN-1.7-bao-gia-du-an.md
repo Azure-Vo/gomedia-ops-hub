@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | Long trả lời mục 8 ngày 23/11. **Chờ CEO trả lời mục 0.4.** Làm sau khi merge 1.6 (PR #2) |
+| Trạng thái | Đã chốt 23/11 (mục 0.5, 8). **1.7.0 đã code** (nhánh `feat/1.7-bao-gia-du-an`). 1.7.1, 1.7.2 chưa làm |
 | Ngày | 23/11/2026 |
 | Nguồn | PRD 1.6 mục 12 (backlog, bàn ngày 21/11) |
 | Nhãn bằng chứng | V đã kiểm trong code · P lời người dùng/CEO · A giả định của nhóm · U chưa biết |
@@ -42,6 +42,19 @@ Công ty có **2 loại báo giá** (P):
 2. Có thể cho báo giá nhanh **trong khung giá** dùng chữ ký in sẵn (không chờ ký) không?
 3. Phân loại nhanh/dự án theo **từng đầu mục dưới 10 triệu** hay theo **tổng giá trị**? Ai quyết loại?
 4. Dự án dài: mỗi giai đoạn một báo giá riêng? Báo giá giai đoạn sau gửi khi nào (trước hay sau khi giai đoạn trước xong)?
+
+### 0.5 Trả lời của CEO (qua Long, 23/11) và điều chỉnh plan
+1. CEO **ký mọi báo giá** bằng **chữ ký số trên PDF**.
+2. Báo giá nhanh **trong khung giá** dùng **chữ ký in sẵn**, không chờ ký.
+3. Loại báo giá theo **gói dịch vụ khách chọn** (gói phủ thời gian ngắn hay dài), không theo tiền. Account chọn loại khi lập báo giá.
+4. Báo giá dự án vẫn là **một báo giá gồm toàn bộ đầu mục**; khác ở chỗ **khách trả tiền theo giai đoạn** theo hợp đồng.
+   → **Bỏ** ý "mỗi giai đoạn một báo giá, nhãn GĐ1/GĐ2". Giai đoạn là mốc thanh toán trong hợp đồng; để sau, cùng phần hợp đồng/thanh toán (ngoài phạm vi 1.7). Một dự án nhiều báo giá vẫn giữ cho phụ lục, bán thêm.
+
+**Luồng 1.7.0 đã code:**
+- Nhanh, trong khung: Nháp → **Gửi** (chữ ký in sẵn).
+- Nhanh ngoài khung: Nháp → Chờ PM/CEO duyệt → **Chờ CEO ký** → Đã ký → Gửi.
+- Dự án: Nháp → Chờ PM, CEO góp ý (CEO duyệt) → **Chờ CEO ký** → Đã ký → Gửi.
+- CEO ở bước ký: tải PDF, ký số ngoài app, bấm **Đã ký** (ghi `signed_at`); hoặc **Yêu cầu sửa**. App **không** tự áp chữ ký số (cần thiết bị/nhà cung cấp CA: U).
 
 ## 1. Vấn đề
 
@@ -135,7 +148,7 @@ Luật nghiệp vụ mới đặt trong `src/domain/` (dùng chung web và funct
 
 | Đợt | Nội dung | Kiểm chứng |
 |---|---|---|
-| **1.7.0** | Loại báo giá + giai đoạn, bước CEO ký (theo trả lời mục 0.4), kết quả báo giá (4.1), khối chờ tạo dự án (4.2), tạo/gắn dự án từ báo giá (4.3) | Unit + RLS + selftest trên Pilot; seed 3 báo giá đã chốt, 1 không chốt |
+| **1.7.0** ✔ | Loại báo giá, bước Chờ CEO ký, kết quả khách (4.1), khối chờ tạo dự án (4.2), tạo/gắn dự án từ báo giá (4.3), Account xem dự án | Unit + RLS + selftest trên Pilot; seed 3 báo giá đã chốt, 1 không chốt |
 | **1.7.1** | Tab Phạm vi, tạo task hàng loạt, nhãn Ngoài báo giá (4.4, 4.5) | Như trên + kiểm giao diện bằng trình duyệt |
 | **1.7.2** | Chỉ số Dashboard (4.6), tin Lark cho Account khi dự án tạo/xong | So số liệu Dashboard với tính tay trên seed |
 

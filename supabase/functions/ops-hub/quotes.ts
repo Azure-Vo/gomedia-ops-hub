@@ -10,6 +10,12 @@ import {
   nextQuoteStatus,
   PublicBandReason,
   approveGate,
+  approverFor,
+  LOST_REASON_LABEL,
+  OUTCOME_LABEL,
+  outcomeErrors,
+  QuoteKind,
+  QuoteOutcome,
   changesSummary,
   publicBand,
   QuoteStatus,
@@ -22,7 +28,7 @@ import {
 } from '../../../src/domain/index';
 import { appLink, calendarOf, Ctx, loadRules, loadSettings, Profile, requireRole } from './context';
 import { ApiError, must } from './http';
-import { approvalRequestText, decisionText, linkButton } from './messages';
+import { approvalRequestText, decisionText, linkButton, signRequestText } from './messages';
 import { openThreadCount } from './review';
 
 interface LibRow {
@@ -51,6 +57,9 @@ interface QuoteRow {
   band_result: BandLevel | null;
   band_detail: { reasons?: PublicBandReason[] } | null;
   total: number;
+  kind: QuoteKind;
+  source: 'app' | 'import';
+  outcome: QuoteOutcome | null;
 }
 
 interface LineIn {
@@ -62,7 +71,7 @@ interface LineIn {
   kind?: LineKind;
 }
 
-const QUOTE_COLS = 'id, code, client, service_group, status, requested_at, discount_pct, vat_pct, created_by, approver, band_result, band_detail, total';
+const QUOTE_COLS = 'id, code, client, service_group, status, requested_at, discount_pct, vat_pct, created_by, approver, band_result, band_detail, total, kind, source, outcome';
 
 async function libraryMap(ctx: Ctx, ids: (string | null)[]): Promise<Map<string, LibRow>> {
   const wanted = [...new Set(ids.filter((x): x is string => !!x))];
@@ -97,6 +106,8 @@ function checkLinesShape(lines: unknown): LineIn[] {
     return { library_item_id: (x.library_item_id as string) || null, item_name: String(x.item_name ?? ''), qty, unit_price: Math.round(price), override_reason: (x.override_reason as string) ?? null, kind: x.kind === 'pass_through' ? 'pass_through' : 'service' };
   });
 }
+
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 async function loadQuote(ctx: Ctx, id: string): Promise<QuoteRow> {
   const q = must(await ctx.db.from('quotes').select(QUOTE_COLS).eq('id', id).maybeSingle(), 'load quote') as QuoteRow | null;
@@ -208,14 +219,14 @@ export async function submitQuote(ctx: Ctx, user: Profile, quoteId: string) {
   const q = await loadQuote(ctx, quoteId);
   own(user, q);
   const { band, totals } = await readyLines(ctx, q);
-  const t = nextQuoteStatus(q.status, 'submit', band.level);
+  const t = nextQuoteStatus(q.status, 'submit', band.level, q.kind);
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
   const quote = await transition(ctx, {
     quote_id: q.id,
     expected_status: q.status,
     new_status: t.status,
     actor: user.id,
-    fields: { band_result: band.level, band_detail: publicBand(band), approver: band.level, approval_requested: true, subtotal: totals.subtotal, total: totals.total, vat_amount: totals.vatAmount, grand_total: totals.grandTotal },
+    fields: { band_result: band.level, band_detail: publicBand(band), approver: approverFor(q.kind, band.level), approval_requested: true, subtotal: totals.subtotal, total: totals.total, vat_amount: totals.vatAmount, grand_total: totals.grandTotal },
     event_action: 'quote.submitted',
     event_payload: { band: band.level, total: totals.total },
   });
@@ -236,8 +247,10 @@ export async function reopenQuote(ctx: Ctx, user: Profile, quoteId: string) {
 export async function decideQuote(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
   requireRole(user, 'pm', 'ceo');
   const q = await loadQuote(ctx, String(body.quote_id ?? ''));
-  if (q.status !== 'pending') throw new ApiError(409, 'not_pending', 'Báo giá này không còn chờ duyệt.');
-  if (q.approver !== user.role) throw new ApiError(403, 'wrong_approver', `Báo giá này chờ ${ROLE_LABEL[q.approver ?? 'ceo']} duyệt.`);
+  const signing = q.status === 'signing';
+  if (q.status !== 'pending' && !signing) throw new ApiError(409, 'not_pending', 'Báo giá này không còn chờ duyệt.');
+  if (signing ? user.role !== 'ceo' : q.approver !== user.role) throw new ApiError(403, 'wrong_approver', signing ? 'Báo giá này chờ CEO ký.' : `Báo giá này chờ ${ROLE_LABEL[q.approver ?? 'ceo']} duyệt.`);
+  if (signing && body.decision === 'approve') throw new ApiError(409, 'use_sign', 'Báo giá đã duyệt, đang chờ CEO ký.');
   const decision = body.decision === 'approve' ? 'approve' : body.decision === 'changes' ? 'changes' : null;
   if (!decision) throw new ApiError(400, 'bad_decision', 'Chọn Duyệt hoặc Yêu cầu sửa.');
   const note = String(body.comment ?? '').trim();
@@ -255,18 +268,70 @@ export async function decideQuote(ctx: Ctx, user: Profile, body: Record<string, 
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
   const quote = await transition(ctx, {
     quote_id: q.id,
-    expected_status: 'pending',
+    expected_status: q.status,
     new_status: t.status,
     actor: user.id,
-    approval: { level: q.approver, approver_id: user.id, decision, comment },
+    approval: { level: signing ? 'ceo' : q.approver, approver_id: user.id, decision, comment },
     event_action: decision === 'approve' ? 'quote.approved' : 'quote.changes_requested',
     event_payload: { comment, open_comments: open },
   });
   const s = await loadSettings(ctx.db);
   if (isWorkingTime(ctx.now(), calendarOf(s))) {
     await ctx.notifier.send(q.created_by, decisionText({ code: q.code, decision, approverRole: user.role, comment: comment || null }), linkButton('Mở báo giá', appLink(s, `/quotes/${q.id}`)));
+    if (decision === 'approve') await ctx.notifier.sendToRoles(['ceo'], signRequestText({ code: q.code, client: q.client }), linkButton('Mở báo giá để ký', appLink(s, `/quotes/${q.id}`)));
   }
   return { quote };
+}
+
+/** 1.7 · The CEO has signed the PDF with the digital signature; the quote can go to the client. */
+export async function signQuote(ctx: Ctx, user: Profile, quoteId: string) {
+  requireRole(user, 'ceo');
+  const q = await loadQuote(ctx, quoteId);
+  const t = nextQuoteStatus(q.status, 'sign');
+  if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
+  if ((await openThreadCount(ctx, q.id)) > 0) throw new ApiError(409, 'open_comments', 'Còn góp ý mở: xử lý xong rồi ký.');
+  const quote = await transition(ctx, {
+    quote_id: q.id,
+    expected_status: 'signing',
+    new_status: t.status,
+    actor: user.id,
+    fields: { signed_by: user.id },
+    event_action: 'quote.signed',
+  });
+  const s = await loadSettings(ctx.db);
+  await ctx.notifier.send(q.created_by, `<b>${esc(q.code)} đã được CEO ký</b> · có thể gửi khách`, linkButton('Mở báo giá', appLink(s, `/quotes/${q.id}`)));
+  return { quote };
+}
+
+/** 1.7 · The client's answer on a sent quote: won (with the PM who takes it over) or lost (with a reason). */
+export async function setQuoteOutcome(ctx: Ctx, user: Profile, body: Record<string, unknown>) {
+  const q = await loadQuote(ctx, String(body.quote_id ?? ''));
+  const linked = must(await ctx.db.from('project_quotes').select('project_id').eq('quote_id', q.id).maybeSingle(), 'quote project') as { project_id: string } | null;
+  const outcome = body.outcome === 'won' || body.outcome === 'lost' ? (body.outcome as QuoteOutcome) : null;
+  const lostReason = outcome === 'lost' ? String(body.lost_reason ?? '') : null;
+  const handoverPm = outcome === 'won' ? String(body.handover_pm ?? '') || null : null;
+  const errs = outcomeErrors({ status: q.status, source: q.source, createdBy: q.created_by, hasProject: !!linked }, user, { outcome, lostReason, handoverPm });
+  if (handoverPm) {
+    const pm = (await ctx.db.from('profiles').select('role, active').eq('id', handoverPm).maybeSingle()).data as { role: string; active: boolean } | null;
+    if (!pm || pm.role !== 'pm' || !pm.active) errs.push('Người nhận phải là PM đang hoạt động.');
+  }
+  if (errs.length) throw new ApiError(400, 'invalid', errs.join(' '));
+  const stamp = new Date(ctx.now()).toISOString();
+  const row = must(
+    await ctx.db
+      .from('quotes')
+      .update({ outcome, outcome_at: outcome ? stamp : null, outcome_by: outcome ? user.id : null, lost_reason: lostReason, lost_note: outcome === 'lost' ? String(body.lost_note ?? '').trim() || null : null, handover_pm: handoverPm })
+      .eq('id', q.id)
+      .select('id, outcome, outcome_at, lost_reason, lost_note, handover_pm')
+      .single(),
+    'save outcome',
+  );
+  must(await ctx.db.from('events').insert({ actor: user.id, entity: 'quotes', entity_id: q.id, action: 'quote.outcome', payload: { outcome, lost_reason: lostReason, handover_pm: handoverPm } }), 'log outcome');
+  if (outcome === 'won' && handoverPm && q.outcome !== 'won') {
+    const s = await loadSettings(ctx.db);
+    await ctx.notifier.send(handoverPm, `<b>${OUTCOME_LABEL.won} · ${esc(q.code)}</b>\nKhách: ${esc(q.client)}\nBạn nhận dự án này: tạo dự án từ báo giá.`, linkButton('Tạo dự án', appLink(s, `/du-an?tu-bao-gia=${q.id}`)));
+  }
+  return { quote: row, lostReasonLabel: lostReason ? LOST_REASON_LABEL[lostReason as keyof typeof LOST_REASON_LABEL] : null };
 }
 
 export async function sendQuote(ctx: Ctx, user: Profile, quoteId: string) {
@@ -275,7 +340,7 @@ export async function sendQuote(ctx: Ctx, user: Profile, quoteId: string) {
   const gate = sendGate(await openThreadCount(ctx, q.id));
   if (!gate.ok) throw new ApiError(409, 'open_comments', gate.error);
   const { band, totals } = await readyLines(ctx, q);
-  const t = nextQuoteStatus(q.status, 'send', q.status === 'approved' ? q.band_result ?? undefined : band.level);
+  const t = nextQuoteStatus(q.status, 'send', q.status === 'approved' ? q.band_result ?? undefined : band.level, q.kind);
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
   const fields: Record<string, unknown> = { subtotal: totals.subtotal, total: totals.total, vat_amount: totals.vatAmount, grand_total: totals.grandTotal };
   if (q.status !== 'approved') Object.assign(fields, { band_result: band.level, band_detail: publicBand(band) });

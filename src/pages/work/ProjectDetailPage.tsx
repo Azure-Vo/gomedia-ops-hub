@@ -4,7 +4,7 @@ import { fmtDueDate, MEMBER_STATUS_LABEL } from '@/domain';
 import { Badge, Banner, Button, Card, cx, EmptyState, ErrorBox, Field, Loading, Modal, PageHeader, Select, Textarea, useAsync, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { useProfile } from '@/lib/session';
-import { isMine, isProjectPm, loadMessages, MemberRow, PersonRow } from './data';
+import { isMine, isProjectPm, loadMessages, loadProjectQuotes, loadWonQuotes, MemberRow, PersonRow } from './data';
 import { TaskHost, useOpenTask, useWork } from './hooks';
 import { ChatPicker, MessageHistory, ProgressBar, ProjectForm, ProjectStatusBadge, ProjectSwatch, TaskForm, TaskTable } from './parts';
 
@@ -117,6 +117,7 @@ export function ProjectDetailPage() {
             )}
           </p>
           {project.description && <p className="mt-2 whitespace-pre-wrap text-[14px] text-ink-2">{project.description}</p>}
+          <ProjectQuotes projectId={project.id} canLink={pm && activeProject} />
         </div>
         <ProgressBar r={project.rollup} />
       </div>
@@ -341,3 +342,81 @@ function LinkChat({ code, projectId, onClose, onDone }: { code: string; projectI
   );
 }
 
+
+/** 1.7 · The quotes this project came from (codes only, no money) and, for its PM, attaching another one. */
+function ProjectQuotes({ projectId, canLink }: { projectId: string; canLink: boolean }) {
+  const me = useProfile();
+  const toast = useToast();
+  const linked = useAsync(() => loadProjectQuotes(projectId), [projectId]);
+  const [picking, setPicking] = useState(false);
+  const won = useAsync(() => (picking ? loadWonQuotes(me) : Promise.resolve([])), [picking]);
+  const [quoteId, setQuoteId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const list = linked.data ?? [];
+  if (!list.length && !canLink) return null;
+  const mineOnly = me.role === 'account' && list.some((q) => q.created_by === me.id);
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-[13.5px]">
+      <span className="text-ink-3">Báo giá:</span>
+      {list.length ? (
+        list.map((q) => (
+          <Link key={q.quote_id} to={`/quotes/${q.quote_id}`} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
+            {q.code}
+            {q.kind === 'project' && <Badge tone="accent">Dự án</Badge>}
+          </Link>
+        ))
+      ) : (
+        <span className="text-ink-3">chưa gắn</span>
+      )}
+      {canLink && (
+        <Button size="sm" variant="ghost" icon="link" onClick={() => setPicking(true)}>
+          Gắn báo giá
+        </Button>
+      )}
+      {mineOnly && <span className="text-[12.5px] text-ink-3">· Bạn xem dự án này vì báo giá là của bạn.</span>}
+      <Modal
+        open={picking}
+        onClose={() => setPicking(false)}
+        title="Gắn báo giá đã chốt"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPicking(false)}>
+              Huỷ
+            </Button>
+            <Button
+              busy={busy}
+              disabled={!quoteId}
+              onClick={() => {
+                setBusy(true);
+                callApi('work.link_quote', { project_id: projectId, quote_id: quoteId })
+                  .then(() => (toast('Đã gắn báo giá'), setPicking(false), setQuoteId(''), linked.reload()), (e) => toast(e.message, 'bad'))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Gắn
+            </Button>
+          </>
+        }
+      >
+        {won.loading ? (
+          <Loading />
+        ) : !won.data?.length ? (
+          <p className="text-[14px] text-ink-3">Không có báo giá đã chốt nào đang chờ dự án.</p>
+        ) : (
+          <Field label="Báo giá" hint="Dùng cho phụ lục, bán thêm">
+            {(id) => (
+              <Select id={id} value={quoteId} onChange={(e) => setQuoteId(e.target.value)}>
+                <option value="">Chọn báo giá…</option>
+                {won.data!.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.code} · {q.client || '(chưa có khách)'}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
+      </Modal>
+    </div>
+  );
+}
