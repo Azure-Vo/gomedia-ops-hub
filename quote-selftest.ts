@@ -344,6 +344,9 @@ function nextQuoteStatus(status, event, band, kind = "quick") {
     case "approve":
       if (status !== "pending") return fail("Ch\u1EC9 duy\u1EC7t \u0111\u01B0\u1EE3c b\xE1o gi\xE1 \u0111ang ch\u1EDD duy\u1EC7t.");
       return { ok: true, status: "signing" };
+    case "approve_sign":
+      if (status !== "pending") return fail("Ch\u1EC9 duy\u1EC7t \u0111\u01B0\u1EE3c b\xE1o gi\xE1 \u0111ang ch\u1EDD duy\u1EC7t.");
+      return { ok: true, status: "approved" };
     case "request_changes":
       if (status !== "pending" && status !== "signing") return fail("Ch\u1EC9 y\xEAu c\u1EA7u s\u1EEDa \u0111\u01B0\u1EE3c b\xE1o gi\xE1 \u0111ang ch\u1EDD duy\u1EC7t ho\u1EB7c ch\u1EDD k\xFD.");
       return { ok: true, status: "changes_requested" };
@@ -499,6 +502,19 @@ function checkProjectCode(raw, existing = []) {
 function projectTitle(code, name) {
   return `[${code}] ${name.trim()}`;
 }
+function chatMatchesCode(chatName, code) {
+  const c = normalizeProjectCode(code);
+  if (!c) return false;
+  return new RegExp(`(^|[^A-Z0-9])${c}([^A-Z0-9]|$)`).test(normalizeCode(chatName));
+}
+function chatNameFor(code, name) {
+  return `${normalizeProjectCode(code)} - ${name.trim().replace(/\s+/g, " ")}`;
+}
+function chatCodeConflict(chatName, ownCode, otherCodes) {
+  const own2 = normalizeProjectCode(ownCode);
+  if (own2 && chatMatchesCode(chatName, own2)) return null;
+  return otherCodes.map(normalizeProjectCode).find((c) => c && c !== own2 && chatMatchesCode(chatName, c)) ?? null;
+}
 function shiftKey(key, days) {
   const [y, m, d] = key.split("-").map(Number);
   const r = addDays(y, m, d, days);
@@ -621,7 +637,7 @@ function decisionText(o) {
   return [head, `Ng\u01B0\u1EDDi duy\u1EC7t: ${ROLE_LABEL[o.approverRole]}`, o.comment ? `Nh\u1EADn x\xE9t: ${escapeHtml(o.comment)}` : ""].filter(Boolean).join("\n");
 }
 function signRequestText(o) {
-  return [`<b>B\xE1o gi\xE1 ch\u1EDD CEO k\xFD \xB7 ${escapeHtml(o.code)}</b>`, `Kh\xE1ch: ${escapeHtml(o.client)}`, 'K\xFD s\u1ED1 tr\xEAn PDF r\u1ED3i b\u1EA5m "\u0110\xE3 k\xFD" trong app.'].join("\n");
+  return [`<b>B\xE1o gi\xE1 ch\u1EDD CEO k\xFD \xB7 ${escapeHtml(o.code)}</b>`, `Kh\xE1ch: ${escapeHtml(o.client)}`, "M\u1EDF b\xE1o gi\xE1, xem tr\u01B0\u1EDBc r\u1ED3i b\u1EA5m K\xFD."].join("\n");
 }
 function linkButton(text, url) {
   return url ? [[{ text, url }]] : void 0;
@@ -683,6 +699,24 @@ async function loadLines(ctx, quoteId) {
 function own(user, q) {
   requireRole(user, "account");
   if (q.created_by !== user.id) throw new ApiError(403, "not_owner", "\u0110\xE2y kh\xF4ng ph\u1EA3i b\xE1o gi\xE1 c\u1EE7a b\u1EA1n.");
+}
+async function requireSignature(ctx) {
+  const row = must(await ctx.db.from("quote_signature").select("id").eq("id", 1).maybeSingle(), "load signature");
+  if (!row) throw new ApiError(409, "no_signature", "Ch\u01B0a c\xF3 ch\u1EEF k\xFD m\u1EABu c\u1EE7a CEO. CEO t\u1EA3i ho\u1EB7c v\u1EBD ch\u1EEF k\xFD \u1EDF trang H\u1ED3 s\u01A1 r\u1ED3i k\xFD l\u1EA1i.");
+}
+async function setSignature(ctx, user, body) {
+  requireRole(user, "ceo", "admin");
+  const image = body.image === null ? null : String(body.image ?? "");
+  if (image === null) {
+    must(await ctx.db.from("quote_signature").delete().eq("id", 1), "remove signature");
+  } else {
+    if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(image)) throw new ApiError(400, "invalid", "Ch\u1EEF k\xFD ph\u1EA3i l\xE0 \u1EA3nh PNG.");
+    if (image.length > 4e5) throw new ApiError(400, "too_big", "\u1EA2nh ch\u1EEF k\xFD qu\xE1 l\u1EDBn (t\u1ED1i \u0111a kho\u1EA3ng 300 KB).");
+    const s = await loadSettings(ctx.db);
+    must(await ctx.db.from("quote_signature").upsert({ id: 1, image, signer_name: s.signer_name || user.full_name || null, updated_by: user.id, updated_at: new Date(ctx.now()).toISOString() }), "save signature");
+  }
+  must(await ctx.db.from("events").insert({ actor: user.id, entity: "quote_signature", entity_id: "1", action: image ? "signature.set" : "signature.removed", payload: {} }), "log signature");
+  return { ok: true };
 }
 async function termGate(ctx, q) {
   const lib = must(await ctx.db.from("quote_terms").select("text, choice_group"), "load terms");
@@ -794,18 +828,21 @@ async function decideQuote(ctx, user, body) {
     if (!gate.ok) throw new ApiError(400, "comment_required", gate.error);
   }
   const comment = decision === "changes" ? changesSummary(note, open) : note;
-  const t = nextQuoteStatus(q.status, decision === "approve" ? "approve" : "request_changes");
+  const ceoSigns = decision === "approve" && user.role === "ceo";
+  if (ceoSigns) await requireSignature(ctx);
+  const t = nextQuoteStatus(q.status, decision === "approve" ? ceoSigns ? "approve_sign" : "approve" : "request_changes");
   if (!t.ok) throw new ApiError(409, "bad_transition", t.error);
   const quote = await transition(ctx, {
     quote_id: q.id,
     expected_status: q.status,
     new_status: t.status,
     actor: user.id,
+    fields: ceoSigns ? { signed_by: user.id } : {},
     approval: { level: signing ? "ceo" : q.approver, approver_id: user.id, decision, comment },
-    event_action: decision === "approve" ? "quote.approved" : "quote.changes_requested",
+    event_action: decision === "approve" ? ceoSigns ? "quote.approved_signed" : "quote.approved" : "quote.changes_requested",
     event_payload: { comment, open_comments: open }
   });
-  if (decision === "approve") {
+  if (decision === "approve" && !ceoSigns) {
     must(await ctx.db.from("quotes").update({ approval_notified_at: null }).eq("id", q.id).eq("status", "signing"), "reset notice");
     await notifyApproval(ctx, q.id);
   }
@@ -821,6 +858,7 @@ async function signQuote(ctx, user, quoteId) {
   const t = nextQuoteStatus(q.status, "sign");
   if (!t.ok) throw new ApiError(409, "bad_transition", t.error);
   if (await openThreadCount(ctx, q.id) > 0) throw new ApiError(409, "open_comments", "C\xF2n g\xF3p \xFD m\u1EDF: x\u1EED l\xFD xong r\u1ED3i k\xFD.");
+  await requireSignature(ctx);
   const quote = await transition(ctx, {
     quote_id: q.id,
     expected_status: "signing",
@@ -1149,6 +1187,35 @@ async function tryLark(what, fn) {
     console.error(`lark ${what} failed`, e.message);
   }
 }
+async function createSimChat(ctx, user, body) {
+  if (user.role !== "pm" && user.role !== "admin") throw new ApiError(403, "forbidden", "Ch\u1EC9 PM ho\u1EB7c Admin.");
+  const w = await workEnv(ctx);
+  if (w.cfg.mode !== "simulation") throw new ApiError(400, "live", "\u0110ang k\u1EBFt n\u1ED1i Lark th\u1EADt: h\xE3y th\xEAm bot v\xE0o group tr\xEAn Lark.");
+  const code = normalizeProjectCode(String(body.code ?? ""));
+  const title = String(body.name ?? "").trim();
+  const codeErr = checkProjectCode(code);
+  if (codeErr.length) throw new ApiError(400, "invalid", `Nh\u1EADp m\xE3 d\u1EF1 \xE1n h\u1EE3p l\u1EC7 tr\u01B0\u1EDBc khi t\u1EA1o group. ${codeErr.join(" ")}`);
+  if (!title) throw new ApiError(400, "invalid", "Nh\u1EADp t\xEAn d\u1EF1 \xE1n tr\u01B0\u1EDBc khi t\u1EA1o group.");
+  const projectId = body.project_id ? String(body.project_id) : null;
+  const owner = must(await ctx.db.from("lark_tasks").select("id, name").eq("kind", "parent").eq("code", code).is("deleted_at", null).maybeSingle(), "check code");
+  if (owner && owner.id !== projectId) throw new ApiError(409, "code_taken", `M\xE3 ${code} \u0111ang l\xE0 c\u1EE7a d\u1EF1 \xE1n "${owner.name}". \u0110\u1ED5i m\xE3 d\u1EF1 \xE1n tr\u01B0\u1EDBc khi t\u1EA1o group.`);
+  const chats = must(await ctx.db.from("lark_chats").select("chat_id, name").eq("mode", "simulation").eq("active", true), "load chats");
+  const same = chats.find((c) => chatMatchesCode(c.name, code));
+  if (same) throw new ApiError(409, "chat_exists", `\u0110\xE3 c\xF3 group cho m\xE3 ${code}: "${same.name}". Ch\u1ECDn group \u0111\xF3 trong danh s\xE1ch.`);
+  const row = { chat_id: `sim-chat:${crypto.randomUUID()}`, name: chatNameFor(code, title), mode: "simulation", active: true };
+  must(await ctx.db.from("lark_chats").insert(row), "save chat");
+  return { chat: row };
+}
+async function deleteSimChat(ctx, user, body) {
+  if (user.role !== "pm" && user.role !== "admin") throw new ApiError(403, "forbidden", "Ch\u1EC9 PM ho\u1EB7c Admin.");
+  const w = await workEnv(ctx);
+  const chatId = String(body.chat_id ?? "");
+  if (w.cfg.mode !== "simulation" || !chatId.startsWith("sim-chat:")) throw new ApiError(400, "live", "Group Lark th\u1EADt: gi\u1EA3i t\xE1n ho\u1EB7c xo\xE1 bot kh\u1ECFi group tr\xEAn Lark.");
+  const holder = must(await ctx.db.from("lark_tasks").select("code, name").eq("kind", "parent").eq("chat_id", chatId).is("deleted_at", null).limit(1).maybeSingle(), "check chat");
+  if (holder) throw new ApiError(409, "in_use", `Group \u0111ang g\u1EAFn v\u1EDBi d\u1EF1 \xE1n ${holder.code} \xB7 ${holder.name}. B\u1ECF g\u1EAFn tr\u01B0\u1EDBc khi xo\xE1.`);
+  must(await ctx.db.from("lark_chats").delete().eq("chat_id", chatId), "delete chat");
+  return { ok: true };
+}
 async function syncMembersFromChat(ctx, w, project) {
   if (w.cfg.mode !== "live" || !w.api || project.chat_status !== "linked" || !project.chat_id) return;
   const members = await w.api.chatMembers(project.chat_id);
@@ -1161,9 +1228,20 @@ async function syncMembersFromChat(ctx, w, project) {
   const left = current.filter((c) => c.open_id && !still.has(c.open_id)).map((c) => c.id);
   if (left.length) await ctx.db.from("project_members").delete().in("id", left);
 }
-async function bindChat(ctx, w, project, chatId) {
+async function chatProblem(ctx, w, chatId, code, projectId) {
   const chat = must(await ctx.db.from("lark_chats").select("chat_id, name, mode, active").eq("chat_id", chatId).maybeSingle(), "load chat");
-  if (!chat || !chat.active || chat.mode !== w.cfg.mode) throw new ApiError(400, "invalid", "Bot ch\u01B0a \u1EDF trong group n\xE0y. Th\xEAm bot v\xE0o group tr\xEAn Lark r\u1ED3i t\u1EA3i l\u1EA1i danh s\xE1ch.");
+  if (!chat || !chat.active || chat.mode !== w.cfg.mode) return "Bot ch\u01B0a \u1EDF trong group n\xE0y. Th\xEAm bot v\xE0o group tr\xEAn Lark r\u1ED3i t\u1EA3i l\u1EA1i danh s\xE1ch.";
+  const others = must(await ctx.db.from("lark_tasks").select("id, code, name, chat_id, state").eq("kind", "parent").is("deleted_at", null), "load projects");
+  const holder = others.find((p) => p.id !== projectId && p.chat_id === chat.chat_id && p.state !== "cancelled");
+  if (holder) return `Group "${chat.name}" \u0111ang g\u1EAFn v\u1EDBi d\u1EF1 \xE1n ${holder.code} \xB7 ${holder.name}.`;
+  const clash = chatCodeConflict(chat.name, code, others.filter((p) => p.id !== projectId).map((p) => p.code));
+  if (clash) return `T\xEAn group "${chat.name}" mang m\xE3 ${clash} c\u1EE7a d\u1EF1 \xE1n kh\xE1c. Ch\u1ECDn group c\xF3 m\xE3 ${normalizeProjectCode(code)}.`;
+  return null;
+}
+async function bindChat(ctx, w, project, chatId) {
+  const problem = await chatProblem(ctx, w, chatId, project.code ?? "", project.id);
+  if (problem) throw new ApiError(400, "invalid", problem);
+  const chat = must(await ctx.db.from("lark_chats").select("chat_id, name").eq("chat_id", chatId).single(), "load chat");
   const row = must(
     await ctx.db.from("lark_tasks").update({ chat_id: chat.chat_id, chat_name: chat.name, chat_status: "linked", chat_warned_at: null }).eq("id", project.id).select(WORK_COLS).single(),
     "link chat"
@@ -1194,6 +1272,10 @@ async function createProject(ctx, user, body, via = "web") {
   else {
     if (dueDate <= startDate) errors.push("Deadline d\u1EF1 \xE1n ph\u1EA3i sau ng\xE0y b\u1EAFt \u0111\u1EA7u.");
     if (dueDate < w.today) errors.push("Deadline d\u1EF1 \xE1n \u0111\xE3 qua.");
+  }
+  if (body.chat_id) {
+    const problem = await chatProblem(ctx, w, String(body.chat_id), String(body.code ?? ""), null);
+    if (problem) errors.push(problem);
   }
   const fromQuote = body.quote_id ? await quoteForLink(ctx, String(body.quote_id), user) : null;
   if (fromQuote?.errors.length) errors.push(...fromQuote.errors);
@@ -1273,6 +1355,34 @@ async function linkQuote(ctx, user, body) {
   await saveQuoteLink(ctx, project.id, q.id, user);
   return { ok: true, quote: q.code };
 }
+async function updateProject(ctx, user, body) {
+  const w = await workEnv(ctx);
+  const project = await loadRow(ctx, String(body.project_id ?? ""));
+  if (!project || project.kind !== "parent") throw new ApiError(404, "not_found", "Kh\xF4ng t\xECm th\u1EA5y d\u1EF1 \xE1n.");
+  requireProjectPm(user, project);
+  const patch = {};
+  for (const k of ["name", "client", "description", "color"]) if (body[k] !== void 0) patch[k] = String(body[k]).trim() || (k === "name" ? project.name : null);
+  if (body.due_date !== void 0 && body.due_date !== project.due_date) {
+    const to = String(body.due_date);
+    const reason = String(body.reason ?? "");
+    const kids = must(await ctx.db.from("lark_tasks").select("code, due_date, state").eq("parent_id", project.id).is("deleted_at", null), "load tasks");
+    const after = kids.filter((k) => (k.state === "doing" || k.state === "changes" || k.state === "review") && k.due_date > to);
+    const errs = [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(to)) errs.push("Deadline kh\xF4ng h\u1EE3p l\u1EC7.");
+    else if (to <= project.start_date) errs.push("Deadline d\u1EF1 \xE1n ph\u1EA3i sau ng\xE0y b\u1EAFt \u0111\u1EA7u.");
+    if (reason !== "scope" && reason !== "quality") errs.push("Ch\u1ECDn l\xFD do \u0111\u1ED5i deadline.");
+    if (after.length) errs.push(`C\xE1c task ${after.map((a) => a.code).join(", ")} c\xF3 deadline sau ng\xE0y m\u1EDBi: \u0111\u1ED5i deadline c\xE1c task \u0111\xF3 tr\u01B0\u1EDBc.`);
+    if (errs.length) throw new ApiError(400, "invalid", errs.join(" "));
+    patch.due_date = to;
+    patch.kpi_due_date = reason === "scope" ? to : project.kpi_due_date;
+    must(await ctx.db.from("task_extensions").insert({ task_id: project.id, from_date: project.due_date, to_date: to, reason, note: String(body.note ?? "") || null, created_by: user.id }), "save extension");
+    if (project.lark_guid && w.api) await tryLark("project due", () => w.api.patchTask(project.lark_guid, { due: dueToLark(to) }, ["due"]));
+  }
+  if (body.name !== void 0 && project.lark_guid && w.api) await tryLark("project title", () => w.api.patchTask(project.lark_guid, { summary: projectTitle(project.code, String(body.name)) }, ["summary"]));
+  const row = Object.keys(patch).length ? must(await ctx.db.from("lark_tasks").update(patch).eq("id", project.id).select(WORK_COLS).single(), "save project") : project;
+  if (body.chat_id && body.chat_id !== project.chat_id) return { project: await bindChat(ctx, w, row, String(body.chat_id)) };
+  return { project: row };
+}
 
 // tools/selftest/quote-selftest.ts
 Deno.serve(async (req) => {
@@ -1287,7 +1397,7 @@ Deno.serve(async (req) => {
   };
   const nowVn = new Date(Date.now() + 7 * 36e5);
   const clock = Date.UTC(nowVn.getUTCFullYear(), nowVn.getUTCMonth(), nowVn.getUTCDate(), 8, 0);
-  const ctx = { env, db, tg: null, notifier, now: () => Math.max(clock, Date.now()) };
+  const ctx = { env, db, tg: null, notifier, now: () => clock };
   const log = [];
   const ok = (step, cond, detail) => log.push({ step, ok: !!cond, detail });
   const fails = async (step, fn, re) => {
@@ -1299,6 +1409,7 @@ Deno.serve(async (req) => {
     }
   };
   const status = async (id) => (await db.from("quotes").select("status, approver, signed_at, sent_at, outcome, handover_pm, kind").eq("id", id).single()).data;
+  let hadSig = true;
   try {
     const profiles = (await db.from("profiles").select("id, email, full_name, role, active, telegram_chat_id, tg_state").eq("active", true)).data ?? [];
     const account = profiles.find((p2) => p2.role === "account" && p2.email.startsWith("long.nguyen230608@")) ?? profiles.find((p2) => p2.role === "account");
@@ -1312,8 +1423,10 @@ Deno.serve(async (req) => {
     const terms = (await db.from("quote_terms").select("text, choice_group").eq("active", true)).data ?? [];
     const pay = terms.filter((t) => t.choice_group);
     ok("payment terms grouped", pay.length >= 2, pay.map((t) => t.text.slice(0, 20)));
+    hadSig = (await db.from("quote_signature").select("id").eq("id", 1).maybeSingle()).data !== null;
+    const tmpSig = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
     const makeQuote = async (code, kind, discount = 0) => {
-      const q = (await db.from("quotes").insert({ code, client: "ZZ Selftest", project: "D\u1EF1 \xE1n selftest", venue: "\u0110\xE0 N\u1EB5ng", contact: "Ch\u1ECB A", requested_at: new Date(Date.now() - 36e5).toISOString(), created_by: account.id, kind, discount_pct: discount }).select("id, terms").single()).data;
+      const q = (await db.from("quotes").insert({ code, client: "ZZ Selftest", project: "D\u1EF1 \xE1n selftest", venue: "\u0110\xE0 N\u1EB5ng", contact: "Ch\u1ECB A", requested_at: new Date(clock - 36e5).toISOString(), created_by: account.id, kind, discount_pct: discount }).select("id, terms").single()).data;
       await db.from("quote_lines").insert(lib.map((l, i) => ({ quote_id: q.id, position: i + 1, library_item_id: l.id, item_name: l.name, unit: l.unit, qty: 1, unit_price: l.unit_price, library_price: l.unit_price })));
       return q;
     };
@@ -1328,20 +1441,17 @@ Deno.serve(async (req) => {
     ok("project quote \u2192 pending, CEO decides (even inside the band)", s.status === "pending" && s.approver === "ceo", s);
     ok("PMs and CEO notified to comment/decide", sent.some((m) => m.to === "ceo,pm"));
     await fails("PM cannot approve a project quote", () => decideQuote(ctx, pm, { quote_id: p.id, decision: "approve" }), /chờ CEO/);
-    await decideQuote(ctx, ceo, { quote_id: p.id, decision: "approve" });
-    s = await status(p.id);
-    ok("CEO approve \u2192 Ch\u1EDD CEO k\xFD", s.status === "signing", s);
-    await fails("cannot send while waiting for the signature", () => sendQuote(ctx, account, p.id), /chờ CEO ký/);
-    await fails("PM cannot sign", () => signQuote(ctx, pm, p.id), /./);
+    if (!hadSig) await fails("CEO cannot approve-and-sign without a signature image", () => decideQuote(ctx, ceo, { quote_id: p.id, decision: "approve" }), /chữ ký mẫu/);
+    await fails("Account cannot store the signature", () => setSignature(ctx, account, { image: tmpSig }), /quyền/);
+    if (!hadSig) await setSignature(ctx, ceo, { image: tmpSig });
     await decideQuote(ctx, ceo, { quote_id: p.id, decision: "changes", comment: "S\u1EEDa t\xEAn d\u1EF1 \xE1n" });
     s = await status(p.id);
-    ok("CEO can send it back at the signing step", s.status === "changes_requested", s);
+    ok("CEO can send it back", s.status === "changes_requested", s);
     await reopenQuote(ctx, account, p.id);
     await submitQuote(ctx, account, p.id);
     await decideQuote(ctx, ceo, { quote_id: p.id, decision: "approve" });
-    await signQuote(ctx, ceo, p.id);
     s = await status(p.id);
-    ok("CEO sign \u2192 approved with signed_at", s.status === "approved" && !!s.signed_at, s);
+    ok("CEO Duy\u1EC7t & k\xFD \u2192 approved and signed in one step", s.status === "approved" && !!s.signed_at, s);
     await sendQuote(ctx, account, p.id);
     s = await status(p.id);
     ok("Account sends after signing", s.status === "sent" && !!s.sent_at, s);
@@ -1363,6 +1473,23 @@ Deno.serve(async (req) => {
     ok("project created and linked to the quote", link2?.project_id === project.id, link2);
     await fails("answer locked once a project exists", () => setQuoteOutcome(ctx, account, { quote_id: p.id, outcome: "lost", lost_reason: "price" }), /đã có dự án/);
     await fails("a quote belongs to one project", () => linkQuote(ctx, pm, { project_id: project.id, quote_id: p.id }), /đã thuộc/);
+    const mt = (await db.from("lark_tasks").select("id, code").eq("kind", "parent").eq("code", "MT35").maybeSingle()).data;
+    if (mt) await fails("cannot create a group for a code owned by another project", () => createSimChat(ctx, pm, { code: "MT35", name: "LOLO" }), /đang là của dự án/);
+    const g = await createSimChat(ctx, pm, { code: "ZZ9", name: "  Th\u1EED   group " });
+    ok('group name is standard "CODE - Name"', g.chat.name === "ZZ9 - Th\u1EED group", g.chat.name);
+    await fails("one group per code", () => createSimChat(ctx, pm, { code: "ZZ9", name: "kh\xE1c" }), /Đã có group/);
+    if (mt) {
+      const clashing = (await db.from("lark_chats").insert({ chat_id: `sim-chat:${crypto.randomUUID()}`, name: "MT35 ZZ selftest", mode: "simulation", active: true }).select("chat_id").single()).data;
+      await fails("cannot bind a group named with another project's code", () => updateProject(ctx, pm, { project_id: project.id, chat_id: clashing.chat_id }), /mã MT35 của dự án khác/);
+      await deleteSimChat(ctx, pm, { chat_id: clashing.chat_id });
+      ok("unused mistaken group deleted", !(await db.from("lark_chats").select("chat_id").eq("chat_id", clashing.chat_id).maybeSingle()).data);
+      const mtChat = (await db.from("lark_tasks").select("chat_id").eq("id", mt.id).single()).data;
+      if (mtChat.chat_id) {
+        await fails("cannot delete a group a project uses", () => deleteSimChat(ctx, pm, { chat_id: mtChat.chat_id }), /đang gắn/);
+        await fails("cannot take a group another project uses", () => updateProject(ctx, pm, { project_id: project.id, chat_id: mtChat.chat_id }), /đang gắn với dự án MT35/);
+      }
+    }
+    await deleteSimChat(ctx, pm, { chat_id: g.chat.chat_id });
     const fast = await makeQuote("ZZ-TEST-02", "quick");
     await sendQuote(ctx, account, fast.id);
     s = await status(fast.id);
@@ -1371,24 +1498,35 @@ Deno.serve(async (req) => {
     await setQuoteOutcome(ctx, account, { quote_id: fast.id, outcome: "won", handover_pm: pm.id });
     await linkQuote(ctx, pm, { project_id: project.id, quote_id: fast.id });
     ok("second quote attached to the same project", ((await db.from("project_quotes").select("quote_id").eq("project_id", project.id)).data ?? []).length === 2);
-    const off = await makeQuote("ZZ-TEST-03", "quick", 60);
+    const rules = (await db.from("price_rules").select("*").limit(1).single()).data;
+    const pmDiscount = Math.min(99, Number(rules.max_discount_pct ?? 10) + 1);
+    const off = await makeQuote("ZZ-TEST-03", "quick", pmDiscount);
+    ok("price rules loaded", true, { pmDiscount, rules });
     await fails("quick quote outside the band cannot be sent directly", () => sendQuote(ctx, account, off.id), /duyệt/);
     await submitQuote(ctx, account, off.id);
     s = await status(off.id);
     ok("outside the band \u2192 pending with a PM or CEO approver", s.status === "pending" && (s.approver === "pm" || s.approver === "ceo"), s);
     const approver = s.approver === "pm" ? pm : ceo;
-    await decideQuote(ctx, approver, { quote_id: off.id, decision: "approve" });
-    ok("approved \u2192 Ch\u1EDD CEO k\xFD", (await status(off.id)).status === "signing");
-    ok("CEO asked to sign", sent.some((m) => m.to === "ceo" && /chờ CEO ký/i.test(m.text)), sent.map((m) => m.to));
-    const queued = (await db.from("quotes").select("approval_notified_at").eq("id", off.id).single()).data.approval_notified_at;
-    ok("signing notice marked as sent", !!queued);
-    await signQuote(ctx, ceo, off.id);
+    if (approver.role === "ceo") {
+      await decideQuote(ctx, ceo, { quote_id: off.id, decision: "approve" });
+      ok("CEO-level quick quote: approved and signed at once", (await status(off.id)).status === "approved");
+    } else {
+      await decideQuote(ctx, approver, { quote_id: off.id, decision: "approve" });
+      ok("PM approve \u2192 Ch\u1EDD CEO k\xFD", (await status(off.id)).status === "signing");
+      ok("CEO asked to sign", sent.some((m) => m.to === "ceo" && /chờ CEO ký/i.test(m.text)), sent.map((m) => m.to));
+      await fails("cannot send while waiting for the signature", () => sendQuote(ctx, account, off.id), /chờ CEO ký/);
+      await fails("PM cannot sign", () => signQuote(ctx, pm, off.id), /./);
+      await signQuote(ctx, ceo, off.id);
+    }
     await sendQuote(ctx, account, off.id);
     ok("signed quick quote sent", (await status(off.id)).status === "sent");
   } catch (e) {
     log.push({ step: "exception", ok: false, detail: `${e.message}
 ${e.stack}` });
   } finally {
+    if (!hadSig) await db.from("quote_signature").delete().eq("id", 1);
+    await db.from("lark_chats").delete().like("name", "ZZ9 %");
+    await db.from("lark_chats").delete().eq("name", "MT35 ZZ selftest");
     const zz = ((await db.from("lark_tasks").select("id").like("code", "ZZ8%")).data ?? []).map((r) => r.id);
     if (zz.length) await db.from("bot_messages").delete().in("project_id", zz);
     await db.from("lark_tasks").delete().like("code", "ZZ8%");
