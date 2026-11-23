@@ -103,24 +103,48 @@ export function toRoman(n: number): string {
   return r;
 }
 
-export type QuoteStatus = 'draft' | 'pending' | 'approved' | 'changes_requested' | 'sent';
-export type QuoteEvent = 'edit' | 'submit' | 'approve' | 'request_changes' | 'send';
+export type QuoteStatus = 'draft' | 'pending' | 'signing' | 'approved' | 'changes_requested' | 'sent';
+export type QuoteEvent = 'edit' | 'submit' | 'approve' | 'request_changes' | 'sign' | 'send';
 
 export const QUOTE_STATUS_LABEL: Record<QuoteStatus, string> = {
   draft: 'Nháp',
   pending: 'Chờ duyệt',
-  approved: 'Đã duyệt',
+  signing: 'Chờ CEO ký',
+  approved: 'Đã ký, sẵn sàng gửi',
   changes_requested: 'Yêu cầu sửa',
   sent: 'Đã gửi',
 };
 
+/**
+ * 1.7 · Two kinds of quote (Long, 23/11). The kind follows the service package the client picks:
+ * a short package is "Nhanh", a package that covers a longer stretch of the client's project is "Dự án".
+ */
+export type QuoteKind = 'quick' | 'project';
+export const QUOTE_KIND_LABEL: Record<QuoteKind, string> = { quick: 'Báo giá nhanh', project: 'Báo giá dự án' };
+
+/**
+ * The CEO signs every quote with a digital signature, except a quick quote inside the price band:
+ * that one goes out with the printed signature, with no wait (CEO, via Long, 23/11).
+ */
+export function needsSignature(kind: QuoteKind, band: BandLevel | null | undefined): boolean {
+  return kind === 'project' || (band !== undefined && band !== null && band !== 'send_now');
+}
+
+/** A project quote is always reviewed (PMs comment, the CEO decides); a quick one only outside the band. */
+export function approverFor(kind: QuoteKind, band: BandLevel): 'pm' | 'ceo' | null {
+  if (kind === 'project') return 'ceo';
+  return band === 'send_now' ? null : band;
+}
+
 export type Transition = { ok: true; status: QuoteStatus } | { ok: false; error: string };
 
 /**
- * Lifecycle: Draft → Sent (in band) or Draft → Pending → Approved → Sent;
- * Pending → Changes requested → Draft. Any edit after Pending or Approved returns to Draft.
+ * Lifecycle:
+ *   quick, in band:       Draft → Sent (printed signature)
+ *   otherwise:            Draft → Pending → Signing → Approved (signed) → Sent
+ *   Pending or Signing → Changes requested → Draft. Any edit before Sent returns to Draft.
  */
-export function nextQuoteStatus(status: QuoteStatus, event: QuoteEvent, band?: BandLevel): Transition {
+export function nextQuoteStatus(status: QuoteStatus, event: QuoteEvent, band?: BandLevel, kind: QuoteKind = 'quick'): Transition {
   const fail = (error: string): Transition => ({ ok: false, error });
   switch (event) {
     case 'edit':
@@ -129,20 +153,69 @@ export function nextQuoteStatus(status: QuoteStatus, event: QuoteEvent, band?: B
     case 'submit':
       if (status !== 'draft') return fail('Chỉ gửi duyệt được báo giá đang ở trạng thái Nháp.');
       if (!band) return fail('Chưa có kết quả kiểm tra khung giá.');
-      if (band === 'send_now') return fail('Báo giá nằm trong khung giá, có thể gửi ngay, không cần duyệt.');
+      if (band === 'send_now' && kind !== 'project') return fail('Báo giá nằm trong khung giá, có thể gửi ngay, không cần duyệt.');
       return { ok: true, status: 'pending' };
     case 'approve':
       if (status !== 'pending') return fail('Chỉ duyệt được báo giá đang chờ duyệt.');
-      return { ok: true, status: 'approved' };
+      return { ok: true, status: 'signing' };
     case 'request_changes':
-      if (status !== 'pending') return fail('Chỉ yêu cầu sửa được báo giá đang chờ duyệt.');
+      if (status !== 'pending' && status !== 'signing') return fail('Chỉ yêu cầu sửa được báo giá đang chờ duyệt hoặc chờ ký.');
       return { ok: true, status: 'changes_requested' };
+    case 'sign':
+      if (status !== 'signing') return fail('Chỉ ký được báo giá đang chờ CEO ký.');
+      return { ok: true, status: 'approved' };
     case 'send':
       if (status === 'approved') return { ok: true, status: 'sent' };
+      if (status === 'draft' && kind === 'project') return fail('Báo giá dự án phải được duyệt và CEO ký trước khi gửi.');
       if (status === 'draft' && band === 'send_now') return { ok: true, status: 'sent' };
-      if (status === 'draft') return fail('Báo giá ngoài khung giá phải được duyệt trước khi gửi.');
+      if (status === 'draft') return fail('Báo giá ngoài khung giá phải được duyệt và CEO ký trước khi gửi.');
+      if (status === 'signing') return fail('Báo giá đang chờ CEO ký.');
       return fail('Báo giá ở trạng thái này chưa gửi được.');
   }
+}
+
+// ------------------------------------------------------------------ client answer (1.7) -----
+
+export type QuoteOutcome = 'won' | 'lost';
+export type LostReason = 'price' | 'competitor' | 'postponed' | 'other';
+export const OUTCOME_LABEL: Record<QuoteOutcome, string> = { won: 'Khách đã chốt', lost: 'Không chốt' };
+export const LOST_REASON_LABEL: Record<LostReason, string> = { price: 'Giá cao', competitor: 'Chọn bên khác', postponed: 'Khách hoãn', other: 'Khác' };
+
+/**
+ * Who records the client's answer: the Account who owns the quote; PM and CEO may correct it.
+ * Only sent quotes made in the app; an answer can be changed until a project is created from it.
+ */
+export function outcomeErrors(
+  q: { status: QuoteStatus; source: 'app' | 'import'; createdBy: string; hasProject: boolean },
+  user: { id: string; role: string },
+  next: { outcome: QuoteOutcome | null; lostReason?: string | null; handoverPm?: string | null },
+): string[] {
+  const out: string[] = [];
+  if (!(user.id === q.createdBy || user.role === 'pm' || user.role === 'ceo')) out.push('Chỉ Account của báo giá, PM hoặc CEO ghi được kết quả.');
+  if (q.status !== 'sent') out.push('Chỉ ghi kết quả cho báo giá đã gửi khách.');
+  if (q.source === 'import') out.push('Báo giá nhập từ lịch sử không ghi kết quả.');
+  if (q.hasProject) out.push('Báo giá đã có dự án: không đổi kết quả được.');
+  if (next.outcome === 'won' && !next.handoverPm) out.push('Chọn PM nhận dự án.');
+  if (next.outcome === 'lost' && !(next.lostReason && next.lostReason in LOST_REASON_LABEL)) out.push('Chọn lý do không chốt.');
+  return out;
+}
+
+/** Whether a PM may turn this quote into a project, or attach it to one of their projects. */
+export function quoteLinkErrors(q: { outcome: QuoteOutcome | null; source: 'app' | 'import'; handoverPm: string | null; linked: boolean }, user: { id: string; role: string }): string[] {
+  const out: string[] = [];
+  if (user.role !== 'pm') out.push('Chỉ PM gắn được báo giá vào dự án.');
+  if (q.outcome !== 'won') out.push('Chỉ gắn được báo giá khách đã chốt.');
+  if (q.source === 'import') out.push('Báo giá nhập từ lịch sử không gắn được.');
+  if (q.linked) out.push('Báo giá này đã thuộc một dự án.');
+  if (q.handoverPm && q.handoverPm !== user.id) out.push('Báo giá này giao cho PM khác.');
+  return out;
+}
+
+/** Share of answered quotes the client accepted, or null when none were answered. */
+export function winRate(quotes: { outcome: QuoteOutcome | null }[]): { won: number; lost: number; pct: number | null } {
+  const won = quotes.filter((q) => q.outcome === 'won').length;
+  const lost = quotes.filter((q) => q.outcome === 'lost').length;
+  return { won, lost, pct: won + lost ? Math.round((won / (won + lost)) * 1000) / 10 : null };
 }
 
 /** Statuses in which the owner may change lines and discount without reopening. */

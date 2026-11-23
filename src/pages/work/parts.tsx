@@ -33,7 +33,7 @@ import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
 import { BotCard } from '@/pages/lark/BotCard';
-import { BotMessageRow, isMine, isProjectPm, loadTaskHistory, PersonRow, Project, ProjectRow, SubmissionRow, Task } from './data';
+import { BotMessageRow, isMine, isProjectPm, loadTaskHistory, loadWonQuotes, PersonRow, Project, ProjectRow, SubmissionRow, Task, WonQuote } from './data';
 
 // ------------------------------------------------------------------------------ small marks --------
 
@@ -867,7 +867,7 @@ export function ChatPicker({ code, value, onChange }: { code: string; value: str
   );
 }
 
-export function ProjectForm({ project, people, existingCodes, onDone, onCancel }: { project?: Project; people: PersonRow[]; existingCodes: string[]; onDone: (code: string) => void; onCancel: () => void }) {
+export function ProjectForm({ project, people, existingCodes, onDone, onCancel, fromQuoteId }: { project?: Project; people: PersonRow[]; existingCodes: string[]; onDone: (code: string) => void; onCancel: () => void; fromQuoteId?: string }) {
   const toast = useToast();
   const { tz } = useSettings();
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: tz });
@@ -883,6 +883,19 @@ export function ProjectForm({ project, people, existingCodes, onDone, onCancel }
   });
   const [reason, setReason] = useState<ExtendReason | ''>('');
   const [members, setMembers] = useState<string[]>([]);
+  const me = useProfile();
+  // 1.7: create from a won quote; the fields are filled from it and stay editable.
+  const won = useAsync(() => (project ? Promise.resolve([] as WonQuote[]) : loadWonQuotes(me)), [project?.id]);
+  const [quoteId, setQuoteId] = useState('');
+  const pickQuote = (id: string) => {
+    setQuoteId(id);
+    const q = won.data?.find((x) => x.id === id);
+    if (q) setF((x) => ({ ...x, name: q.project || q.client || x.name, client: q.client || x.client, description: [q.venue && `Địa điểm: ${q.venue}`, q.contact && `Liên hệ: ${q.contact}`].filter(Boolean).join(' · ') || x.description }));
+  };
+  useEffect(() => {
+    if (fromQuoteId && won.data?.some((x) => x.id === fromQuoteId)) pickQuote(fromQuoteId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromQuoteId, won.data]);
   const [busy, setBusy] = useState(false);
   const code = normalizeProjectCode(f.code);
   const codeErr = project ? [] : f.code ? checkProjectCode(code, existingCodes) : [];
@@ -900,7 +913,7 @@ export function ProjectForm({ project, people, existingCodes, onDone, onCancel }
         await callApi('work.project_update', { project_id: project.id, name: f.name, client: f.client, description: f.description, color: f.color, ...(dueChanged ? { due_date: f.due_date, reason } : {}), ...(f.chat_id && f.chat_id !== project.chat_id ? { chat_id: f.chat_id } : {}) });
         onDone(project.code);
       } else {
-        const r = await callApi<{ project: ProjectRow }>('work.project_create', { ...f, code, chat_id: f.chat_id || undefined, member_ids: members });
+        const r = await callApi<{ project: ProjectRow }>('work.project_create', { ...f, code, chat_id: f.chat_id || undefined, member_ids: members, quote_id: quoteId || undefined });
         onDone(r.project.code);
       }
     } catch (e) {
@@ -927,6 +940,21 @@ export function ProjectForm({ project, people, existingCodes, onDone, onCancel }
       }
     >
       <div className="flex flex-col gap-3">
+        {!project && (won.data?.length ?? 0) > 0 && (
+          <Field label="Từ báo giá đã chốt (không bắt buộc)" hint="Điền sẵn tên, khách, mô tả">
+            {(id) => (
+              <Select id={id} value={quoteId} onChange={(e) => pickQuote(e.target.value)}>
+                <option value="">Không dùng báo giá</option>
+                {won.data!.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.code} · {q.client || '(chưa có khách)'}
+                    {q.kind === 'project' ? ' · Dự án' : ''}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
         <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
           <Field label="Mã dự án" error={codeErr[0]} hint={!project ? 'VD: MT35. Không đổi được sau khi có task.' : undefined}>
             {(id) => <Input id={id} className="font-mono uppercase" value={f.code} disabled={!!project} onChange={(e) => setF({ ...f, code: e.target.value })} placeholder="MT35" />}

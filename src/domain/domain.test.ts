@@ -151,7 +151,8 @@ describe('quote lifecycle and maths', () => {
   });
   it('follows Draft → Pending → Approved → Sent', () => {
     expect(nextQuoteStatus('draft', 'submit', 'pm')).toEqual({ ok: true, status: 'pending' });
-    expect(nextQuoteStatus('pending', 'approve')).toEqual({ ok: true, status: 'approved' });
+    expect(nextQuoteStatus('pending', 'approve')).toEqual({ ok: true, status: 'signing' });
+    expect(nextQuoteStatus('signing', 'sign')).toEqual({ ok: true, status: 'approved' });
     expect(nextQuoteStatus('approved', 'send')).toEqual({ ok: true, status: 'sent' });
   });
   it('follows Pending → Changes requested → Draft', () => {

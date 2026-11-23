@@ -71,6 +71,10 @@ export function decisionText(o: { code: string; decision: 'approve' | 'changes';
   return [head, `Người duyệt: ${ROLE_LABEL[o.approverRole]}`, o.comment ? `Nhận xét: ${e(o.comment)}` : ''].filter(Boolean).join('\n');
 }
 
+export function signRequestText(o: { code: string; client: string }): string {
+  return [`<b>Báo giá chờ CEO ký · ${e(o.code)}</b>`, `Khách: ${e(o.client)}`, 'Ký số trên PDF rồi bấm "Đã ký" trong app.'].join('\n');
+}
+
 export function commentText(o: { code: string; client: string; authorName: string; place: string; body: string; reply: boolean }): string {
   const body = o.body.length > 300 ? `${o.body.slice(0, 300)}…` : o.body;
   return [

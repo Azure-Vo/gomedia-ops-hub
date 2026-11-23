@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { fmtNum, localToMs, QUOTE_STATUS_LABEL, quoteKpis, QuoteStatus, turnaroundByBand, workingHoursBetween } from '@/domain';
+import { fmtNum, localToMs, OUTCOME_LABEL, QUOTE_KIND_LABEL, QUOTE_STATUS_LABEL, quoteKpis, QuoteStatus, turnaroundByBand, workingHoursBetween } from '@/domain';
 import { Badge, Button, Card, EmptyState, ErrorBox, Icon, Loading, PageHeader, Select, useAsync, useToast } from '@/components/ui';
 import { fmtVnd, fmtVnDateTime } from '@/lib/format';
 import { useProfile } from '@/lib/session';
@@ -16,7 +16,7 @@ export function QuotesPage() {
   const { calendar, tz, settings } = useSettings();
   const nav = useNavigate();
   const toast = useToast();
-  const [status, setStatus] = useState<'open' | QuoteStatus | 'all'>('open');
+  const [status, setStatus] = useState<'open' | QuoteStatus | 'all' | 'waiting' | 'won' | 'lost'>('open');
   const [creating, setCreating] = useState(false);
   const { data, error, loading } = useAsync(async () => {
     let q = supabase.from('quotes').select(QUOTE_COLS).eq('source', 'app').order('created_at', { ascending: false }).limit(500);
@@ -32,6 +32,8 @@ export function QuotesPage() {
     const all = data?.rows ?? [];
     if (status === 'all') return all;
     if (status === 'open') return all.filter((q) => q.status !== 'sent');
+    if (status === 'waiting') return all.filter((q) => q.status === 'sent' && !q.outcome);
+    if (status === 'won' || status === 'lost') return all.filter((q) => q.outcome === status);
     return all.filter((q) => q.status === status);
   }, [data, status]);
 
@@ -73,6 +75,9 @@ export function QuotesPage() {
         actions={
           <Select aria-label="Lọc trạng thái" value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="w-56">
             <option value="open">Chưa gửi</option>
+            <option value="waiting">Đã gửi · chờ khách trả lời</option>
+            <option value="won">{OUTCOME_LABEL.won}</option>
+            <option value="lost">{OUTCOME_LABEL.lost}</option>
             <option value="all">Tất cả</option>
             {(Object.keys(QUOTE_STATUS_LABEL) as QuoteStatus[]).map((s) => (
               <option key={s} value={s}>
@@ -118,6 +123,8 @@ export function QuotesPage() {
                       <td className="py-2.5 pr-3">
                         <span className="flex flex-wrap items-center gap-1.5">
                           <StatusBadge status={q.status} />
+                          {q.kind === 'project' && <Badge tone="accent">{QUOTE_KIND_LABEL.project.replace('Báo giá ', '')}</Badge>}
+                          {q.outcome && <Badge tone={q.outcome === 'won' ? 'ok' : 'neutral'}>{OUTCOME_LABEL[q.outcome]}</Badge>}
                           {(data!.open.get(q.id) ?? 0) > 0 && (
                             <Badge tone="warn">
                               <Icon name="message" size={12} />

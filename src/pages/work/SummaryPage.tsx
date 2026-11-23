@@ -1,11 +1,11 @@
 import { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { fmtDueDate, localDateKey, PROGRESS_LABEL, sortSummary, summarizeProject, SummaryProject, SummaryTask } from '@/domain';
-import { Badge, cx, EmptyState, ErrorBox, Loading, PageHeader, Stat } from '@/components/ui';
+import { Badge, Button, cx, EmptyState, ErrorBox, Loading, PageHeader, Stat, useAsync } from '@/components/ui';
 import { timeAgo } from '@/lib/format';
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
-import { Task, WorkData } from './data';
+import { loadWonQuotes, Task, WorkData } from './data';
 import { TaskHost, useOpenTask, useWork } from './hooks';
 import { ProjectStatusBadge, ProjectSwatch } from './parts';
 
@@ -64,6 +64,7 @@ export function SummaryPage() {
         <Stat label="Chậm / chưa cập nhật" value={sum((s) => s.behind.length + s.noUpdate.length)} />
       </div>
       <InvitationNotes data={data} pmId={me.role === 'pm' ? me.id : undefined} />
+      <WonQuotesNote />
       {!list.length ? (
         <EmptyState title="Không có dự án nào đang chạy">{me.role === 'pm' ? <Link className="underline" to="/du-an">Tạo dự án</Link> : null}</EmptyState>
       ) : (
@@ -169,5 +170,37 @@ function Bucket({ title, items, onOpen, render, tone }: { title: string; items: 
         ))}
       </ul>
     </div>
+  );
+}
+
+/** 1.7 · Quotes the client accepted that are waiting for a project (the PM they were handed to). */
+function WonQuotesNote() {
+  const me = useProfile();
+  const nav = useNavigate();
+  const won = useAsync(() => loadWonQuotes(me), [me.id]);
+  const list = won.data ?? [];
+  if (!list.length) return null;
+  const days = (at: string | null) => (at ? Math.max(0, Math.floor((Date.now() - Date.parse(at)) / 86400000)) : 0);
+  return (
+    <section className="mb-6 rounded-xl border border-ok-line bg-ok-soft/50 p-4">
+      <h2 className="mb-2 text-[16px] font-semibold text-ink">Báo giá đã chốt, chưa có dự án · {list.length}</h2>
+      <ul className="flex flex-col gap-1.5">
+        {list.map((q) => (
+          <li key={q.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px]">
+            <Link to={`/quotes/${q.id}`} className="font-semibold text-brand hover:underline">
+              {q.code}
+            </Link>
+            <span className="text-ink">{q.client || '(chưa có khách)'}</span>
+            {q.kind === 'project' && <Badge tone="accent">Dự án</Badge>}
+            <span className="text-[13px] text-ink-3">chốt {days(q.outcome_at) ? `${days(q.outcome_at)} ngày trước` : 'hôm nay'}</span>
+            {me.role === 'pm' && (
+              <Button size="sm" className="ml-auto" onClick={() => nav(`/du-an?tu-bao-gia=${q.id}`)}>
+                Tạo dự án
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

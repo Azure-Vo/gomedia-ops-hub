@@ -33,9 +33,8 @@ import {
   setMembers,
   submitTask,
   updateProject,
-  updateTask as updateWorkTask,
-} from './work';
-import { decideQuote, importQuotes, previewBand, reopenQuote, sendQuote, submitQuote } from './quotes';
+  updateTask as updateWorkTask, linkQuote } from './work';
+import { decideQuote, importQuotes, previewBand, reopenQuote, sendQuote, submitQuote, setQuoteOutcome, signQuote } from './quotes';
 import { addComment, resolveComment } from './review';
 import { connectTelegram, inviteUser, systemHealth, testMessage } from './system';
 import { deriveWebhookSecret, TelegramApi } from './telegram';
@@ -80,6 +79,10 @@ async function handleApi(ctx: Ctx, req: Request) {
       return decideQuote(ctx, user, body);
     case 'quote.send':
       return sendQuote(ctx, user, id);
+    case 'quote.sign':
+      return signQuote(ctx, user, id);
+    case 'quote.outcome':
+      return setQuoteOutcome(ctx, user, body);
     case 'quote.comment':
       return addComment(ctx, user, body);
     case 'quote.comment_resolve':
@@ -128,6 +131,8 @@ async function handleApi(ctx: Ctx, req: Request) {
     // 1.6 · Dự án & Task (work.ts)
     case 'work.project_create':
       return createProject(ctx, user, body);
+    case 'work.link_quote':
+      return linkQuote(ctx, user, body);
     case 'work.project_update':
       return updateProject(ctx, user, body);
     case 'work.project_cancel':
