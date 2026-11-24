@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BUSY_OPEN, daysBetween, fmtDueDate, Health, LOAD_LABEL, LoadState, loadState, shiftKey } from '@/domain';
+import { BUSY_OPEN, daysBetween, Health, HEALTH_LABEL, LOAD_LABEL, LoadState, loadState, shiftKey } from '@/domain';
 import { Badge, cx, EmptyState, ErrorBox, Icon, PageHeader, PageSkeleton } from '@/components/ui';
 import { useProfile } from '@/lib/session';
 import { isProjectPm, Project, Task } from './data';
@@ -16,6 +16,7 @@ const STATE_STYLE: Record<LoadState, { chip: string; edge: string }> = {
 };
 const BAR: Partial<Record<Health, string>> = { red: 'bg-bad', amber: 'bg-[#D08A1A]', green: 'bg-ok', blue: 'bg-brand' };
 const ORDER: LoadState[] = ['help', 'busy', 'ok', 'free'];
+const HEALTH_RANK_UI: Health[] = ['red', 'amber', 'blue', 'green'];
 
 interface PersonCard {
   key: string;
@@ -110,8 +111,8 @@ export function PeoplePage() {
           </div>
 
           <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12.5px] text-ink-3">
-            <span>Thanh = task đang làm, màu theo sức khoẻ; mốc dọc = {BUSY_OPEN} task</span>
-            <span>Ô ngày = số task đến hạn</span>
+            <span>Thanh màu: task đang làm theo sức khoẻ, từ {BUSY_OPEN} task là kín việc. Rê chuột hoặc bấm vào màu, vào ô ngày để xem task.</span>
+            <span>Hàng hạn chót: mỗi task nằm đúng một ô, cộng lại bằng số trên thanh.</span>
             {only && (
               <button type="button" className="font-semibold text-brand hover:underline" onClick={() => setOnly('')}>
                 Bỏ lọc
@@ -133,12 +134,15 @@ export function PeoplePage() {
 
 function PersonItem({ p, days, today, onOpen }: { p: PersonCard; days: string[]; today: string; onOpen: (t: Task) => void }) {
   const st = STATE_STYLE[p.state];
-  const scale = Math.max(BUSY_OPEN + 1, p.open.length);
+  const scale = Math.max(BUSY_OPEN, p.open.length);
+  const room = BUSY_OPEN - p.open.length;
+  const later = p.open.filter((t) => t.due_date > days[days.length - 1]);
   const attention = [...p.overdue, ...p.blocked.filter((t) => !p.overdue.includes(t))].slice(0, 3);
   const next = p.open.find((t) => t.due_date >= today);
-  const segs = (['red', 'amber', 'green', 'blue'] as Health[]).map((h) => [h, p.open.filter((t) => t.health === h).length] as const).filter(([, n]) => n);
+  const segs = (['red', 'amber', 'blue', 'green'] as Health[]).map((h) => [h, p.open.filter((t) => t.health === h)] as const).filter(([, ts]) => ts.length);
+  const pop = usePeek();
   return (
-    <li className={cx('flex flex-col gap-3 rounded-xl border border-l-4 border-line bg-white p-4 shadow-sheet', st.edge)}>
+    <li ref={pop.ref} className={cx('flex flex-col gap-3 rounded-xl border border-l-4 border-line bg-white p-4 shadow-sheet', st.edge)}>
       {/* who + state */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink/[0.06] text-[14px] font-semibold text-ink-2" aria-hidden>
@@ -162,40 +166,69 @@ function PersonItem({ p, days, today, onOpen }: { p: PersonCard; days: string[];
         <span className={cx('rounded-full px-2.5 py-0.5 text-[13px] font-semibold', st.chip)}>{LOAD_LABEL[p.state]}</span>
       </div>
 
-      {/* load bar */}
+      {/* load: open tasks split by health, against the "kín việc" threshold */}
       <div>
-        <div className="mb-1 flex items-baseline justify-between text-[13px]">
+        <div className="mb-1.5 flex items-baseline justify-between gap-2 text-[13px]">
           <span className="font-medium text-ink-2">
             <b className="text-[18px] text-ink">{p.open.length}</b> task đang làm
           </span>
-          <span className="text-ink-3">{next ? `Gần nhất: ${dueText(next.due_date, today)}` : p.open.length ? '' : 'Có thể giao việc'}</span>
+          <span className={cx(room <= 0 && p.open.length ? 'font-medium text-warn' : 'text-ink-3')}>
+            {!p.open.length ? 'Có thể giao việc' : room > 0 ? `Nhận thêm được ${room} task` : room === 0 ? `Đã chạm ngưỡng ${BUSY_OPEN} task` : `Vượt ngưỡng ${BUSY_OPEN} task (+${-room})`}
+          </span>
         </div>
-        <div className="relative flex h-2.5 overflow-hidden rounded-full bg-ink/[0.06]" role="img" aria-label={`${p.open.length} task đang làm trên mốc ${BUSY_OPEN}`}>
-          {segs.map(([h, n]) => (
-            <span key={h} className={BAR[h]} style={{ width: `${(n / scale) * 100}%` }} />
+        <div className="relative flex h-3 gap-px rounded-full bg-ink/[0.06]">
+          {segs.map(([h, ts], i) => (
+            <Peek
+              key={h}
+              id={`bar:${h}`}
+              pop={pop}
+              wrap="h-full"
+              style={{ width: `${(ts.length / scale) * 100}%` }}
+              className={cx('h-full', BAR[h], i === 0 && 'rounded-l-full', i === segs.length - 1 && p.open.length >= scale && 'rounded-r-full', pop.active === `bar:${h}` ? 'ring-2 ring-ink ring-offset-1' : 'hover:brightness-110')}
+              title={`${ts.length} task ${lower(HEALTH_LABEL[h])}`}
+              tasks={ts}
+              today={today}
+              onOpen={onOpen}
+              align={i === segs.length - 1 && segs.length > 1 ? 'right' : 'left'}
+            />
           ))}
-          <span aria-hidden className="absolute inset-y-0 w-px bg-ink/40" style={{ left: `${(BUSY_OPEN / scale) * 100}%` }} />
+          {p.open.length > BUSY_OPEN && <span aria-hidden className="pointer-events-none absolute -inset-y-0.5 w-0.5 bg-ink" style={{ left: `${(BUSY_OPEN / scale) * 100}%` }} />}
         </div>
+        {segs.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-x-1 gap-y-0.5 text-[12.5px] text-ink-2">
+            {segs.map(([h, ts]) => (
+              <Peek key={h} id={`leg:${h}`} pop={pop} className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-canvas" title={`${ts.length} task ${lower(HEALTH_LABEL[h])}`} tasks={ts} today={today} onOpen={onOpen}>
+                <span aria-hidden className={cx('h-2 w-2 rounded-full', BAR[h])} />
+                <b className="font-semibold text-ink">{ts.length}</b> {lower(HEALTH_LABEL[h])}
+              </Peek>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* next 7 days */}
-      <div className="grid grid-cols-7 gap-1" aria-label="Task đến hạn 7 ngày tới">
-        {days.map((d, i) => {
-          const n = p.byDay[i];
-          const weekend = [0, 6].includes(new Date(`${d}T00:00:00Z`).getUTCDay());
-          return (
-            <div key={d} className={cx('rounded-md px-1 py-1 text-center', n >= 3 ? 'bg-[#D3DCF3]' : n === 2 ? 'bg-brand-soft' : n === 1 ? 'bg-brand-soft/50' : weekend ? 'bg-canvas' : 'bg-white ring-1 ring-inset ring-line-soft')} title={`${fmtDueDate(d)}: ${n} task đến hạn`}>
-              <div className={cx('text-[11px]', i === 0 ? 'font-semibold text-brand' : 'text-ink-3')}>{i === 0 ? 'Nay' : WD[new Date(`${d}T00:00:00Z`).getUTCDay()]}</div>
-              <div className={cx('text-[14px] font-semibold leading-tight', n ? 'text-ink' : 'text-ink-3/50')}>{n || '–'}</div>
+      {/* due dates: every open task sits in exactly one cell, so the row adds up to the bar */}
+      {p.open.length > 0 && (
+        <div>
+          <div className="mb-1.5 flex items-baseline justify-between gap-2 text-[13px]">
+            <span className="font-medium text-ink-2">Hạn chót của {p.open.length} task</span>
+            {next && <span className="text-ink-3">Gần nhất: {dueText(next.due_date, today)}</span>}
+          </div>
+          <div className="flex gap-1.5" aria-label="Số task theo hạn chót">
+            <DueCell id="due:over" pop={pop} onOpen={onOpen} todayKey={today} label="Quá hạn" tasks={p.overdue} tone="bad" />
+            <div className="grid flex-[7] grid-cols-7 gap-1">
+              {days.map((d, i) => {
+                const weekend = [0, 6].includes(new Date(`${d}T00:00:00Z`).getUTCDay());
+                return <DueCell key={d} id={`due:${d}`} pop={pop} onOpen={onOpen} todayKey={today} align={i >= 4 ? 'right' : 'left'} label={i === 0 ? 'Nay' : WD[new Date(`${d}T00:00:00Z`).getUTCDay()]} sub={d.slice(8, 10) + '/' + d.slice(5, 7)} tasks={p.open.filter((t) => t.due_date === d)} today={i === 0} weekend={weekend} />;
+              })}
             </div>
-          );
-        })}
-      </div>
+            <DueCell id="due:later" pop={pop} onOpen={onOpen} todayKey={today} align="right" label="Sau đó" tasks={later} />
+          </div>
+        </div>
+      )}
 
-      {/* counters, only when non-zero */}
-      {(p.overdue.length > 0 || p.blocked.length > 0 || p.changes > 0 || p.review > 0) && (
+      {/* counters, only when non-zero (quá hạn already shows in the due row) */}
+      {(p.blocked.length > 0 || p.changes > 0 || p.review > 0) && (
         <div className="flex flex-wrap gap-1.5">
-          {p.overdue.length > 0 && <Badge tone="bad">{p.overdue.length} quá hạn</Badge>}
           {p.blocked.length > 0 && <Badge tone="bad">{p.blocked.length} bị chặn</Badge>}
           {p.changes > 0 && <Badge tone="warn">{p.changes} cần sửa</Badge>}
           {p.review > 0 && <Badge tone="brand">{p.review} chờ bạn duyệt</Badge>}
@@ -226,6 +259,92 @@ function PersonItem({ p, days, today, onOpen }: { p: PersonCard; days: string[];
     </li>
   );
 }
+
+/** One slot of the due-date row: how many tasks fall due there, one dot per task in its health colour. Hover or click lists them. */
+function DueCell({ id, pop, onOpen, todayKey, align, label, sub, tasks, tone, today, weekend }: { id: string; pop: PeekState; onOpen: (t: Task) => void; todayKey: string; align?: 'left' | 'right'; label: string; sub?: string; tasks: Task[]; tone?: 'bad'; today?: boolean; weekend?: boolean }) {
+  const n = tasks.length;
+  const hot = tone === 'bad' && n > 0;
+  const body = (
+    <>
+      <div className={cx('truncate text-[11px] leading-tight', hot ? 'font-semibold text-bad' : today ? 'font-semibold text-brand' : 'text-ink-3')}>{label}</div>
+      {sub && <div className="text-[10.5px] leading-tight text-ink-3">{sub}</div>}
+      <div className={cx('mt-0.5 text-[15px] font-semibold leading-tight', hot ? 'text-bad' : n ? 'text-ink' : 'text-ink-3/50')}>{n || '–'}</div>
+      <div className="mt-0.5 flex h-1.5 items-center justify-center gap-0.5" aria-hidden>
+        {[...tasks].sort((a, b) => HEALTH_RANK_UI.indexOf(a.health) - HEALTH_RANK_UI.indexOf(b.health)).slice(0, 4).map((t) => (
+          <span key={t.id} className={cx('h-1.5 w-1.5 rounded-full', BAR[t.health] ?? 'bg-ink-3')} />
+        ))}
+      </div>
+    </>
+  );
+  const base = cx(
+    'flex w-full min-w-0 flex-col items-center rounded-md px-0.5 py-1 text-center',
+    hot ? 'bg-bad-soft' : n ? 'bg-brand-soft' : weekend ? 'bg-canvas' : 'bg-white ring-1 ring-inset ring-line-soft',
+  );
+  if (!n) return <div className={cx(base, 'flex-1')} title={`${label}${sub ? ` ${sub}` : ''}: không có task`}>{body}</div>;
+  return (
+    <Peek id={id} pop={pop} wrap="flex-1 min-w-0" className={cx(base, pop.active === id ? 'ring-2 ring-inset ring-ink' : 'hover:ring-1 hover:ring-inset hover:ring-ink-3')} title={`${label}${sub ? ` ${sub}` : ''}`} tasks={tasks} today={todayKey} onOpen={onOpen} align={align}>
+      {body}
+    </Peek>
+  );
+}
+
+/** Which peek is open on a card: hover shows it, click pins it until a click outside or Esc. */
+interface PeekState {
+  ref: React.RefObject<HTMLLIElement>;
+  active: string | null;
+  hover: (id: string | null) => void;
+  toggle: (id: string) => void;
+}
+function usePeek(): PeekState {
+  const ref = useRef<HTMLLIElement>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pinned) return;
+    const out = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setPinned(null);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setPinned(null);
+    document.addEventListener('mousedown', out);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', out);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [pinned]);
+  return { ref, active: hovered ?? pinned, hover: setHovered, toggle: (id) => setPinned((cur) => (cur === id ? null : id)) };
+}
+
+/** A trigger (bar segment, legend item, due cell) with a small list of its tasks underneath. */
+function Peek({ id, pop, tasks, today, onOpen, title, className, style, wrap, align = 'left', children }: { id: string; pop: PeekState; tasks: Task[]; today: string; onOpen: (t: Task) => void; title: string; className?: string; style?: React.CSSProperties; wrap?: string; align?: 'left' | 'right'; children?: ReactNode }) {
+  const open = pop.active === id;
+  return (
+    <div className={cx('relative', wrap)} style={style} onMouseEnter={() => pop.hover(id)} onMouseLeave={() => pop.hover(null)}>
+      <button type="button" aria-expanded={open} aria-label={`${title}: xem task`} onClick={() => pop.toggle(id)} className={cx('block', className)} style={style ? { width: '100%' } : undefined}>
+        {children}
+      </button>
+      {open && (
+        <div className={cx('absolute top-full z-20 w-80 pt-1.5', align === 'right' ? 'right-0' : 'left-0')}>
+          <div className="rounded-lg border border-line bg-white p-1.5 shadow-lg">
+            <div className="px-1.5 pb-1 pt-0.5 text-[12px] font-semibold text-ink-3">{title}</div>
+            <ul className="flex max-h-64 flex-col overflow-auto">
+              {tasks.map((t) => (
+                <li key={t.id}>
+                  <button type="button" onClick={() => onOpen(t)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] hover:bg-canvas">
+                    <HealthDot health={t.health} reason={t.reason} />
+                    <span className="font-mono text-[12px] text-brand">{t.code}</span>
+                    <span className="min-w-0 flex-1 truncate text-ink">{t.name}</span>
+                    <span className={cx('shrink-0 text-[12px]', t.due_date < today ? 'font-medium text-bad' : 'text-ink-3')}>{dueText(t.due_date, today)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
