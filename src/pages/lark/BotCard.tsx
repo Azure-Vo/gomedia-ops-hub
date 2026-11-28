@@ -67,6 +67,17 @@ const GLYPHS: Record<string, Glyph> = {
   '🔴': { icon: L.Circle, className: 'text-bad', fill: true },
   '🟡': { icon: L.Circle, className: 'text-[#D08A1A]', fill: true },
   '🟢': { icon: L.Circle, className: 'text-ok', fill: true },
+  // 1.8 · tin báo giá
+  '🟠': { icon: L.Circle, className: 'text-[#E46A1F]', fill: true },
+  '📄': { icon: L.FileText },
+  '💰': { icon: L.Wallet },
+  '✍️': { icon: L.Signature },
+  '👀': { icon: L.Eye },
+  '👁️': { icon: L.Eye },
+  '⏱️': { icon: L.Timer },
+  '🙋': { icon: L.Hand },
+  '📤': { icon: L.Send },
+  '🔁': { icon: L.Repeat },
 };
 
 const EMOJI = /(\p{Extended_Pictographic}(?:‍\p{Extended_Pictographic})*️?|[ℹ↩]️?)/u;

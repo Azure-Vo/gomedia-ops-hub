@@ -3,7 +3,7 @@ import { Button, Card, cx, useAsync, useToast } from '@/components/ui';
 import { callApi } from '@/lib/api';
 import { fmtVnDateTime } from '@/lib/format';
 import { useSettings } from '@/lib/settings';
-import { loadSignature } from '@/pages/quotes/data';
+import { loadMySignature, loadSignature } from '@/pages/quotes/data';
 
 const W = 600;
 const H = 220;
@@ -12,10 +12,10 @@ const H = 220;
  * 1.7 · The CEO's signature image, printed on quotes the CEO signs in the app (and on quick quotes
  * inside the price band). Draw it, or upload a photo/scan: the white paper is made transparent.
  */
-export function SignatureCard() {
+export function SignatureCard({ mine = false }: { mine?: boolean } = {}) {
   const { tz } = useSettings();
   const toast = useToast();
-  const current = useAsync(loadSignature, []);
+  const current = useAsync(mine ? loadMySignature : loadSignature, [mine]);
   const [mode, setMode] = useState<'view' | 'draw'>('view');
   const [draft, setDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,7 +24,7 @@ export function SignatureCard() {
   async function save(image: string | null) {
     setBusy(true);
     try {
-      await callApi('quote.signature', { image });
+      await callApi(mine ? 'profile.signature' : 'quote.signature', { image });
       toast(image ? 'Đã lưu chữ ký mẫu' : 'Đã xoá chữ ký mẫu');
       setDraft(null);
       setMode('view');
@@ -38,7 +38,11 @@ export function SignatureCard() {
 
   const shown = draft ?? current.data?.image ?? null;
   return (
-    <Card title="Chữ ký mẫu trên báo giá" subtitle="In lên báo giá khi bạn bấm Duyệt & ký." info="Ảnh chữ ký, không phải chữ ký số theo luật giao dịch điện tử. Báo giá nhanh trong khung giá cũng in chữ ký này, không cần chờ ký.">
+    <Card
+      title={mine ? 'Chữ ký của tôi (người lập)' : 'Chữ ký mẫu trên báo giá'}
+      subtitle={mine ? 'In ở ô "Người lập" khi bạn gửi duyệt hoặc gửi khách.' : 'In lên báo giá khi bạn bấm Duyệt & ký.'}
+      info={mine ? 'Báo giá có 3 chữ ký: người lập (Account), đại diện Go Media (CEO) và khách hàng (ký qua link).' : 'Ảnh chữ ký, không phải chữ ký số theo luật giao dịch điện tử. Báo giá nhanh trong khung giá cũng in chữ ký này, không cần chờ ký.'}
+    >
       {mode === 'draw' ? (
         <DrawPad onDone={(img) => (setDraft(img), setMode('view'))} onCancel={() => setMode('view')} />
       ) : (
@@ -88,7 +92,7 @@ export function SignatureCard() {
   );
 }
 
-function DrawPad({ onDone, onCancel }: { onDone: (img: string) => void; onCancel: () => void }) {
+export function DrawPad({ onDone, onCancel }: { onDone: (img: string) => void; onCancel: () => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [empty, setEmpty] = useState(true);
   const drawing = useRef(false);

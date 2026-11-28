@@ -32,6 +32,7 @@ import { appLink, calendarOf, Ctx, loadRules, loadSettings, Profile, requireRole
 import { ApiError, must } from './http';
 import { approvalRequestText, decisionText, linkButton, signRequestText } from './messages';
 import { openThreadCount } from './review';
+import { approverLabel, quoteBot, roundsOf, signAsAccount } from './quotebot';
 
 interface LibRow {
   id: string;
@@ -269,7 +270,10 @@ export async function submitQuote(ctx: Ctx, user: Profile, quoteId: string) {
     event_action: 'quote.submitted',
     event_payload: { band: band.level, total: totals.total },
   });
+  await signAsAccount(ctx, user, q.id);
   await notifyApproval(ctx, q.id);
+  const round = (await roundsOf(ctx, q.id)) + 1;
+  await quoteBot(ctx, { ...q, total: totals.grandTotal }, 'submitted', { round, accountSigned: true, waitingFor: q.kind === 'project' ? 'PM góp ý, CEO duyệt và ký' : approverLabel(approverFor(q.kind, band.level) as 'pm' | 'ceo') }, `quote:${q.id}:submitted:${round}`);
   return { quote };
 }
 
@@ -318,6 +322,12 @@ export async function decideQuote(ctx: Ctx, user: Profile, body: Record<string, 
     event_action: decision === 'approve' ? (ceoSigns ? 'quote.approved_signed' : 'quote.approved') : 'quote.changes_requested',
     event_payload: { comment, open_comments: open },
   });
+  const who = user.full_name || user.email;
+  if (decision === 'changes') {
+    const round = await roundsOf(ctx, q.id);
+    await quoteBot(ctx, q, 'changes', { round, actorName: `${who} (${ROLE_LABEL[user.role]})`, openComments: open, body: note || undefined }, `quote:${q.id}:changes:${round}`);
+  } else if (ceoSigns) await quoteBot(ctx, q, 'signed', { actorName: who }, `quote:${q.id}:signed`);
+  else await quoteBot(ctx, q, 'approved', { actorName: `${who} (${ROLE_LABEL[user.role]})` }, `quote:${q.id}:approved:${await roundsOf(ctx, q.id)}`);
   if (decision === 'approve' && !ceoSigns) {
     // Ask the CEO to sign now, or at the next working hour (deliverPendingApprovals).
     must(await ctx.db.from('quotes').update({ approval_notified_at: null }).eq('id', q.id).eq('status', 'signing'), 'reset notice');
@@ -346,6 +356,7 @@ export async function signQuote(ctx: Ctx, user: Profile, quoteId: string) {
     fields: { signed_by: user.id },
     event_action: 'quote.signed',
   });
+  await quoteBot(ctx, q, 'signed', { actorName: user.full_name || user.email }, `quote:${q.id}:signed`);
   const s = await loadSettings(ctx.db);
   await ctx.notifier.send(q.created_by, `<b>${esc(q.code)} đã được CEO ký</b> · có thể gửi khách`, linkButton('Mở báo giá', appLink(s, `/quotes/${q.id}`)));
   return { quote };
@@ -391,6 +402,8 @@ export async function sendQuote(ctx: Ctx, user: Profile, quoteId: string) {
   const { band, totals } = await readyLines(ctx, q);
   const t = nextQuoteStatus(q.status, 'send', q.status === 'approved' ? q.band_result ?? undefined : band.level, q.kind);
   if (!t.ok) throw new ApiError(409, 'bad_transition', t.error);
+  // 1.8: báo giá gửi thẳng (trong khung) thì Account ký người lập lúc gửi.
+  const signed = (must(await ctx.db.from('quotes').select('account_signed_at').eq('id', q.id).single(), 'account signature state') as { account_signed_at: string | null }).account_signed_at;
   const fields: Record<string, unknown> = { subtotal: totals.subtotal, total: totals.total, vat_amount: totals.vatAmount, grand_total: totals.grandTotal };
   if (q.status !== 'approved') Object.assign(fields, { band_result: band.level, band_detail: publicBand(band) });
   const quote = await transition(ctx, {
@@ -402,6 +415,8 @@ export async function sendQuote(ctx: Ctx, user: Profile, quoteId: string) {
     event_action: 'quote.sent',
     event_payload: { total: totals.total, grand_total: totals.grandTotal, band: q.status === 'approved' ? q.band_result : band.level },
   });
+  if (!signed) await signAsAccount(ctx, user, q.id);
+  await quoteBot(ctx, { ...q, total: totals.grandTotal }, 'sent', { rounds: await roundsOf(ctx, q.id) }, `quote:${q.id}:sent`);
   return { quote };
 }
 

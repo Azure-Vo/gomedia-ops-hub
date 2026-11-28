@@ -116,6 +116,7 @@ export function LarkSetupPage() {
         info="Custom App + bot. Secret lưu trong Supabase Vault, không hiện lại trên web." />
       <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
         <div className="flex flex-col gap-4">
+          <WebhookCard />
           <Card title="Chế độ">
             <div className="flex flex-wrap gap-2">
               {(
@@ -313,6 +314,92 @@ function PeopleLinks() {
             </li>
           ))}
         </ul>
+      )}
+    </Card>
+  );
+}
+
+interface WebhookStatus {
+  configured: boolean;
+  active: boolean;
+  label: string;
+  url: string | null;
+  signed: boolean;
+  updatedAt: string | null;
+  last: { status: string; last_error: string | null; sent_at: string | null; created_at: string } | null;
+}
+
+/** 1.8 · Webhook Custom Bot của nhóm Lark: tin báo giá (gửi duyệt, góp ý, vòng sửa, ký, gửi khách, khách ký). */
+function WebhookCard() {
+  const toast = useToast();
+  const st = useAsync(() => callApi<WebhookStatus>('lark.webhook_status'), []);
+  const [url, setUrl] = useState('');
+  const [secret, setSecret] = useState('');
+  const [label, setLabel] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  async function run(what: string, fn: () => Promise<unknown>, ok: string) {
+    setBusy(what);
+    try {
+      await fn();
+      toast(ok);
+      st.reload();
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setBusy(null);
+    }
+  }
+  const s = st.data;
+  return (
+    <Card
+      title="Webhook nhóm Lark (tin báo giá)"
+      subtitle="Thêm Custom Bot vào nhóm Lark → Cài đặt → Bot → Thêm bot → Custom Bot, sao chép Webhook URL dán vào đây."
+      info="Custom Bot chỉ gửi tin một chiều vào nhóm, không cần quản trị viên duyệt app. Nút trên tin mở thẳng báo giá trong Ops Hub. Nên bật Signature verification trong Security settings của bot và dán secret vào ô bên dưới."
+    >
+      {st.loading ? (
+        <Loading />
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-[14px]">
+            {s?.configured ? <Badge tone={s.active ? 'ok' : 'warn'}>{s.active ? 'Đang gửi lên Lark' : 'Đã tắt'}</Badge> : <Badge>Chưa kết nối: tin chỉ hiện trên web (mô phỏng)</Badge>}
+            {s?.url && <code className="rounded bg-canvas px-1.5 py-0.5 text-[12.5px]">{s.url}</code>}
+            {s?.signed && <Badge tone="brand">Có chữ ký bảo mật</Badge>}
+            {s?.label && <span className="text-ink-3">Nhóm: {s.label}</span>}
+          </div>
+          {s?.last && (
+            <p className="text-[13px] text-ink-3">
+              Tin báo giá gần nhất: {s.last.status === 'sent' ? 'đã gửi lên Lark' : s.last.status === 'failed' ? `lỗi (${s.last.last_error ?? ''})` : 'mô phỏng'}
+            </p>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Webhook URL">{(id) => <Input id={id} placeholder={s?.configured ? 'Để trống nếu không đổi' : 'https://open.larksuite.com/open-apis/bot/v2/hook/…'} value={url} onChange={(e) => setUrl(e.target.value)} />}</Field>
+            <Field label="Secret (Signature verification)">{(id) => <Input id={id} type="password" placeholder={s?.signed ? 'Để trống nếu không đổi' : 'Không bắt buộc'} value={secret} onChange={(e) => setSecret(e.target.value)} />}</Field>
+            <Field label="Tên nhóm (để nhớ)">{(id) => <Input id={id} placeholder="VD: Go Media · Báo giá (thử)" value={label} onChange={(e) => setLabel(e.target.value)} />}</Field>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              icon="check"
+              busy={busy === 'save'}
+              disabled={!url.trim() && !s?.configured}
+              onClick={() => run('save', () => callApi('lark.webhook_save', { url: url.trim() || undefined, secret: secret.trim() || undefined, label: label.trim() || undefined, active: true }), 'Đã lưu webhook')}
+            >
+              Lưu
+            </Button>
+            {s?.configured && (
+              <>
+                <Button variant="secondary" icon="send" busy={busy === 'test'} onClick={() => run('test', () => callApi('lark.webhook_test'), 'Đã gửi tin thử vào nhóm Lark')}>
+                  Gửi tin thử
+                </Button>
+                <Button variant="ghost" busy={busy === 'toggle'} onClick={() => run('toggle', () => callApi('lark.webhook_save', { active: !s.active }), s.active ? 'Đã tắt gửi lên Lark' : 'Đã bật gửi lên Lark')}>
+                  {s.active ? 'Tạm tắt' : 'Bật lại'}
+                </Button>
+                <Button variant="ghost" icon="trash" busy={busy === 'rm'} onClick={() => window.confirm('Gỡ webhook? Tin báo giá sẽ chỉ hiện trên web.') && run('rm', () => callApi('lark.webhook_save', { remove: true }), 'Đã gỡ webhook')}>
+                  Gỡ
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </Card>
   );

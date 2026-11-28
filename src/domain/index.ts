@@ -15,3 +15,5 @@ export * from './version';
 export * from './labels';
 export * from './gostar';
 export * from './projects';
+export * from './journey';
+export * from './quotebot';

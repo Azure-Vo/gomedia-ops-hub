@@ -38,6 +38,7 @@ export const NAV: NavItem[] = [
   // Báo giá (S2), unchanged
   { group: 'Báo giá', to: '/quotes', label: 'Báo giá', icon: 'file', roles: ['account', 'pm', 'ceo', 'admin'] },
   { group: 'Báo giá', to: '/approvals', label: 'Duyệt báo giá', icon: 'fileCheck', roles: ['pm', 'ceo'] },
+  { group: 'Báo giá', to: '/hanh-trinh-bao-gia', label: 'Hành trình báo giá', icon: 'route', roles: ['pm', 'ceo', 'admin'] },
   { group: 'Báo giá', to: '/archive', label: 'Kho tham chiếu', icon: 'archive', roles: ['account', 'pm', 'ceo', 'admin'] },
   { group: 'Báo giá', to: '/library', label: 'Thư viện giá', icon: 'tag', roles: ['pm', 'ceo', 'admin'] },
   { group: 'Báo giá', to: '/rules', label: 'Luật khung giá', icon: 'scale', roles: ['ceo'] },

@@ -4,6 +4,7 @@
 //   POST /ops-hub/dispatch-checkpoints   pg_cron every 15 min (x-cron-secret)
 //   POST /ops-hub/close-tasks            pg_cron every 15 min (x-cron-secret)
 //   POST /ops-hub/lark-events            Lark bot events and card buttons (verification token)
+//   POST /ops-hub/public                 1.8: link báo giá cho khách (mã link, không đăng nhập)
 //   GET  /ops-hub/health                 liveness + domain version
 import { createClient } from '@supabase/supabase-js';
 import { DOMAIN_VERSION } from '../../../src/domain/index';
@@ -36,6 +37,8 @@ import {
   updateTask as updateWorkTask, linkQuote, deleteSimChat, unlinkQuote, setSummarySchedule } from './work';
 import { decideQuote, importQuotes, previewBand, reopenQuote, sendQuote, submitQuote, setQuoteOutcome, setSignature, signQuote } from './quotes';
 import { addComment, resolveComment } from './review';
+import { clientLink, handlePublic, saveWebhook, setMySignature, testWebhook, webhookStatus } from './quotebot';
+import { setGradeScale } from './journey';
 import { connectTelegram, inviteUser, systemHealth, testMessage } from './system';
 import { deriveWebhookSecret, TelegramApi } from './telegram';
 import { handleTelegramUpdate } from './telegram-webhook';
@@ -89,6 +92,18 @@ async function handleApi(ctx: Ctx, req: Request) {
       return addComment(ctx, user, body);
     case 'quote.comment_resolve':
       return resolveComment(ctx, user, body);
+    case 'quote.client_link':
+      return clientLink(ctx, user, body);
+    case 'quote.grade_scale':
+      return setGradeScale(ctx, user, body);
+    case 'profile.signature':
+      return setMySignature(ctx, user, body);
+    case 'lark.webhook_status':
+      return webhookStatus(ctx, user);
+    case 'lark.webhook_save':
+      return saveWebhook(ctx, user, body);
+    case 'lark.webhook_test':
+      return testWebhook(ctx, user);
     case 'quote.import':
       return importQuotes(ctx, user, body);
     case 'task.create':
@@ -233,6 +248,8 @@ export function createHandler(env: Env, opts: HandlerOptions = {}) {
           }
           return json({ ...out, lark });
         }
+        case 'public':
+          return json(await handlePublic(ctx, req));
         case 'lark-events':
           return json(await handleLarkEvent(ctx, req));
         case 'close-tasks':

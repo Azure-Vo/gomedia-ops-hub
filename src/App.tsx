@@ -16,6 +16,8 @@ import { LibraryPage } from '@/pages/library/LibraryPage';
 import { PriceRulesPage } from '@/pages/library/PriceRulesPage';
 import { LoginPage, NotConfiguredPage, RETURN_KEY, takeReturnPath } from '@/pages/LoginPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { PublicQuotePage } from '@/pages/PublicQuotePage';
+import { QuoteJourneyPage } from '@/pages/dashboard/QuoteJourneyPage';
 import { ApprovalsPage } from '@/pages/quotes/ApprovalsPage';
 import { ArchivePage } from '@/pages/quotes/ArchivePage';
 import { QuoteBuilderPage } from '@/pages/quotes/QuoteBuilderPage';
@@ -64,7 +66,16 @@ function ForgetReturnPath() {
 
 export function App() {
   const { loading, session, profile, profileError, signOut } = useSession();
+  const { pathname } = useLocation();
   if (!isConfigured()) return <NotConfiguredPage />;
+  // 1.8 · Trang báo giá cho khách: không cần đăng nhập.
+  if (/^\/k\/[A-Za-z0-9_-]+\/?$/.test(pathname)) {
+    return (
+      <Routes>
+        <Route path="k/:token" element={<PublicQuotePage />} />
+      </Routes>
+    );
+  }
   if (loading) return <AppSkeleton />;
   if (!session) return <LoginPage />;
   if (!profile || !profile.active) {
@@ -105,6 +116,7 @@ export function App() {
           <Route path="alerts" element={guard(TASKS, <AlertsPage />)} />
           <Route path="task-types" element={guard(TASKS, <TaskTypesPage />)} />
           <Route path="dashboard" element={guard(['ceo', 'pm', 'admin'], <DashboardPage />)} />
+          <Route path="hanh-trinh-bao-gia" element={guard(['ceo', 'pm', 'admin'], <QuoteJourneyPage />)} />
           <Route path="admin/users" element={guard(['admin'], <UsersPage />)} />
           <Route path="admin/settings" element={guard(['admin'], <SettingsPage />)} />
           <Route path="admin/diagnostics" element={guard(['admin'], <DiagnosticsPage />)} />

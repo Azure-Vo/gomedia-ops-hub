@@ -62,6 +62,16 @@ export interface QuoteRow {
   lost_reason: LostReason | null;
   lost_note: string | null;
   handover_pm: string | null;
+  // 1.8 · ba chữ ký
+  account_signed_at?: string | null;
+  account_signed_by?: string | null;
+  client_token?: string | null;
+  client_viewed_at?: string | null;
+  client_signed_at?: string | null;
+  client_signer_name?: string | null;
+  client_signer_title?: string | null;
+  client_signature?: string | null;
+  client_note?: string | null;
 }
 
 export interface LineRow {
@@ -156,4 +166,18 @@ export interface Signature {
 export async function loadSignature(): Promise<Signature | null> {
   const r = await supabase.from('quote_signature').select('image, signer_name, updated_at').eq('id', 1).maybeSingle();
   return r.error ? null : ((r.data as Signature | null) ?? null);
+}
+
+/** 1.8 · Ảnh chữ ký cá nhân (người lập) của người đang đăng nhập. */
+export async function loadMySignature(): Promise<Signature | null> {
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) return null;
+  const r = await supabase.from('user_signatures').select('image, updated_at').eq('profile_id', u.user.id).maybeSingle();
+  return r.error || !r.data ? null : ({ ...(r.data as { image: string; updated_at: string }), signer_name: null } as unknown as Signature);
+}
+
+export async function loadUserSignature(id: string | null): Promise<string | null> {
+  if (!id) return null;
+  const r = await supabase.from('user_signatures').select('image').eq('profile_id', id).maybeSingle();
+  return r.error || !r.data ? null : (r.data as { image: string }).image;
 }

@@ -122,6 +122,7 @@ export function ProfilePage() {
           )}
         </Card>
         {(me.role === 'ceo' || me.role === 'admin') && <SignatureCard />}
+        {['account', 'pm', 'ceo'].includes(me.role) && <SignatureCard mine />}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { anchorLabel, canComment, COMMENT_ANCHORS, CommentAnchor, isWorkingTime,
 import { appLink, calendarOf, Ctx, loadSettings, logEvent, Profile } from './context';
 import { ApiError, must } from './http';
 import { commentText, linkButton } from './messages';
+import { quoteBot } from './quotebot';
 
 interface QuoteLite {
   id: string;
@@ -12,6 +13,8 @@ interface QuoteLite {
   status: QuoteStatus;
   created_by: string;
   approver: 'pm' | 'ceo' | null;
+  requested_at: string;
+  total: number;
 }
 
 interface CommentRow {
@@ -34,7 +37,7 @@ const COMMENT_COLS = 'id, quote_id, parent_id, author_id, anchor, line_id, secti
 const NOTIFY_GAP_MS = 10 * 60_000;
 
 async function quoteFor(ctx: Ctx, user: Profile, id: string): Promise<QuoteLite> {
-  const q = must(await ctx.db.from('quotes').select('id, code, client, status, created_by, approver').eq('id', id).maybeSingle(), 'load quote') as QuoteLite | null;
+  const q = must(await ctx.db.from('quotes').select('id, code, client, status, created_by, approver, requested_at, total').eq('id', id).maybeSingle(), 'load quote') as QuoteLite | null;
   if (!q) throw new ApiError(404, 'quote_not_found', 'Không tìm thấy báo giá.');
   if (q.status === 'sent') throw new ApiError(409, 'quote_sent', 'Báo giá đã gửi khách, không góp ý thêm được.');
   if (!canComment(user.role, q.created_by === user.id, q.status)) throw new ApiError(403, 'forbidden', 'Chỉ PM, CEO và Account lập báo giá này mới góp ý được.');
@@ -113,6 +116,8 @@ export async function addComment(ctx: Ctx, user: Profile, body: Record<string, u
     must(await ctx.db.from('quote_comments').update({ resolved_at: null, resolved_by: null }).eq('id', root.id).select('id'), 'reopen thread');
   }
   await logEvent(ctx.db, user.id, 'quotes', q.id, root ? 'quote.comment_replied' : 'quote.commented', { comment_id: comment.id, anchor: comment.anchor, label: comment.anchor_label });
+  // 1.8: góp ý của PM / CEO báo vào nhóm Lark để Account biết sửa ngay.
+  if (user.id !== q.created_by) await quoteBot(ctx, q, 'commented', { actorName: user.full_name || user.email, place: comment.anchor_label, body: comment.body });
   try {
     await notify(ctx, q, user, comment, root);
   } catch (err) {

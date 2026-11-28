@@ -163,8 +163,20 @@ export interface PdfSignature {
  */
 export const QuotePdf = forwardRef<
   HTMLDivElement,
-  { quote: QuoteRow; lines: LineRow[]; company: CompanyInfo; preparedBy: string; tz: string; vatOnPassThrough: boolean; signature?: PdfSignature | null }
->(function QuotePdf({ quote, lines, company, preparedBy, tz, vatOnPassThrough, signature }, ref) {
+  {
+    quote: QuoteRow;
+    lines: LineRow[];
+    company: CompanyInfo;
+    preparedBy: string;
+    tz: string;
+    vatOnPassThrough: boolean;
+    signature?: PdfSignature | null;
+    /** 1.8 · chữ ký người lập (Account). */
+    accountSignature?: { image: string; name: string; signedAt: string | null } | null;
+    /** 1.8 · chữ ký khách (qua link). */
+    clientSignature?: { image: string; name: string; title?: string | null; signedAt: string | null } | null;
+  }
+>(function QuotePdf({ quote, lines, company, preparedBy, tz, vatOnPassThrough, signature, accountSignature, clientSignature }, ref) {
   const date = quote.sent_at ?? new Date().toISOString();
   const t = quoteTotals(
     lines.map((l) => ({ qty: l.qty, unitPrice: l.unit_price, kind: l.kind })),
@@ -327,25 +339,32 @@ export const QuotePdf = forwardRef<
         </div>
       )}
 
-      {/* signatures */}
-      <div className="no-break" style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'center', marginTop: '22px' }}>
-        <div style={{ width: '46%' }}>
-          <div style={{ fontWeight: 700, color: PDF.navy }}>ĐẠI DIỆN KHÁCH HÀNG</div>
-          <div style={{ fontStyle: 'italic', color: PDF.mute, fontSize: '10.5px' }}>(Ký, ghi rõ họ tên)</div>
-        </div>
-        <div style={{ width: '46%' }}>
-          <div style={{ fontWeight: 700, color: PDF.navy }}>ĐẠI DIỆN {company.shortName.toUpperCase()}</div>
-          <div style={{ fontStyle: 'italic', color: PDF.mute, fontSize: '10.5px' }}>(Ký, đóng dấu)</div>
-          <div style={{ height: '24mm', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-            {signature && <img src={signature.image} alt="Chữ ký" style={{ maxHeight: '22mm', maxWidth: '60mm', display: 'block' }} />}
-            {signature?.preview && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: PDF.orange, fontWeight: 800, fontSize: '15px', letterSpacing: '2px', opacity: 0.75, transform: 'rotate(-12deg)' }}>XEM TRƯỚC</div>
-            )}
-          </div>
-          {company.signerName && <div style={{ fontWeight: 700 }}>{company.signerName}</div>}
-          {company.signerTitle && <div style={{ color: PDF.mute }}>{company.signerTitle}</div>}
-          {signature?.signedAt && <div style={{ color: PDF.mute, fontSize: '9.5px', marginTop: '3px' }}>Đã ký trên Go Media Ops Hub lúc {fmtVnDateTime(signature.signedAt, tz)}</div>}
-        </div>
+      {/* signatures (1.8: khách hàng · người lập · đại diện Go Media) */}
+      <div className="no-break" style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'center', marginTop: '22px', gap: '8px' }}>
+        <SignBox
+          title="ĐẠI DIỆN KHÁCH HÀNG"
+          hint="(Ký, ghi rõ họ tên)"
+          image={clientSignature?.image}
+          name={clientSignature?.name}
+          role={clientSignature?.title ?? undefined}
+          stamp={clientSignature?.signedAt ? `Ký qua link lúc ${fmtVnDateTime(clientSignature.signedAt, tz)}` : undefined}
+        />
+        <SignBox
+          title="NGƯỜI LẬP"
+          hint="(Account phụ trách)"
+          image={accountSignature?.image}
+          name={accountSignature?.name || preparedBy}
+          stamp={accountSignature?.signedAt ? `Ký lúc ${fmtVnDateTime(accountSignature.signedAt, tz)}` : undefined}
+        />
+        <SignBox
+          title={`ĐẠI DIỆN ${company.shortName.toUpperCase()}`}
+          hint="(Ký, đóng dấu)"
+          image={signature?.image}
+          preview={signature?.preview}
+          name={company.signerName}
+          role={company.signerTitle}
+          stamp={signature?.signedAt ? `Đã ký trên Go Media Ops Hub lúc ${fmtVnDateTime(signature.signedAt, tz)}` : undefined}
+        />
       </div>
 
       <div style={{ marginTop: '18px' }}>
@@ -358,6 +377,24 @@ export const QuotePdf = forwardRef<
     </div>
   );
 });
+
+function SignBox({ title, hint, image, preview, name, role, stamp }: { title: string; hint: string; image?: string | null; preview?: boolean; name?: string; role?: string; stamp?: string }) {
+  return (
+    <div style={{ width: '32%' }}>
+      <div style={{ fontWeight: 700, color: PDF.navy, fontSize: '11px' }}>{title}</div>
+      <div style={{ fontStyle: 'italic', color: PDF.mute, fontSize: '10px' }}>{hint}</div>
+      <div style={{ height: '22mm', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        {image && <img src={image} alt="Chữ ký" style={{ maxHeight: '20mm', maxWidth: '52mm', display: 'block' }} />}
+        {preview && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: PDF.orange, fontWeight: 800, fontSize: '14px', letterSpacing: '2px', opacity: 0.75, transform: 'rotate(-12deg)' }}>XEM TRƯỚC</div>
+        )}
+      </div>
+      {name && <div style={{ fontWeight: 700, fontSize: '11.5px' }}>{name}</div>}
+      {role && <div style={{ color: PDF.mute, fontSize: '10.5px' }}>{role}</div>}
+      {stamp && <div style={{ color: PDF.mute, fontSize: '9px', marginTop: '3px' }}>{stamp}</div>}
+    </div>
+  );
+}
 
 export async function downloadQuotePdf(el: HTMLElement, code: string) {
   const mod = (await import('html2pdf.js')) as unknown as { default: () => Html2Pdf };

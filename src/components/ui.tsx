@@ -63,6 +63,9 @@ const ICONS = {
   userPlus: L.UserPlus,
   userX: L.UserX,
   handshake: L.Handshake,
+  route: L.Route,
+  timer: L.Timer,
+  trophy: L.Trophy,
 } satisfies Record<string, L.LucideIcon>;
 export type IconName = keyof typeof ICONS;
 

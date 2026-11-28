@@ -34,10 +34,11 @@ import { fmtVnd, fmtVnDate, fmtVnDateTime, fmtVnLong, fromLocalInput, toLocalInp
 import { useProfile } from '@/lib/session';
 import { useSettings } from '@/lib/settings';
 import { check, supabase } from '@/lib/supabase';
-import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadPeople, loadSignature, loadTerms, normLine, normQuote, personName, QUOTE_COLS, QuoteRow, QuoteTerm, Signature } from './data';
+import { ApprovalRow, LibraryItem, LINE_COLS, LineRow, loadLibrary, loadMySignature, loadPeople, loadSignature, loadTerms, normLine, normQuote, personName, QUOTE_COLS, QuoteRow, QuoteTerm, Signature } from './data';
 import { LibraryPicker } from './LibraryPicker';
 import { OutcomeBlock } from './outcome';
 import { BandReasons, BandRuler, companyFromSettings, downloadQuotePdf, QuotePdf, StatusBadge } from './parts';
+import { QuoteBotHistory, SignatureTrail, useSignState } from './signatures';
 import { AnchorThreads, CommentTableRow, CommentToggle, copyText, quoteLink, ReviewCard, ReviewProvider } from './review';
 
 interface EditLine {
@@ -125,6 +126,13 @@ export function QuoteBuilderPage() {
   const [now, setNow] = useState(Date.now());
   const [openComments, setOpenComments] = useState(0);
   const pdfRef = useRef<HTMLDivElement>(null);
+  // 1.8 · ba chữ ký + tin bot Lark của báo giá
+  const signVersion = `${quote?.status}|${quote?.updated_at}|${quote?.signed_at}|${busy ?? ''}`;
+  const signState = useSignState(id, signVersion);
+  const [myImage, setMyImage] = useState<string | null>(null);
+  useEffect(() => {
+    void loadMySignature().then((r) => setMyImage(r?.image ?? null));
+  }, []);
 
   const state = useRef<{ header: Header | null; lines: EditLine[] }>({ header: null, lines: [] });
   state.current = { header, lines };
@@ -649,6 +657,9 @@ export function QuoteBuilderPage() {
   const printedSignature = header.kind === 'quick' && (quote.status === 'sent' ? !quote.approver && !quote.signed_at : quote.status === 'draft' && band?.level === 'send_now');
   const pdfSignature = signature && (quote.signed_at || printedSignature) ? { image: signature.image, signedAt: quote.signed_at } : null;
   const isCeo = me.role === 'ceo';
+  const signRow = signState.data;
+  const pdfAccountSignature = signRow?.account_signed_at && signRow.accountImage ? { image: signRow.accountImage, name: accountName, signedAt: signRow.account_signed_at } : null;
+  const pdfClientSignature = signRow?.client_signed_at && signRow.client_signature ? { image: signRow.client_signature, name: signRow.client_signer_name ?? '', title: signRow.client_signer_title, signedAt: signRow.client_signed_at } : null;
   const company = companyFromSettings(settings);
   const libraryTerms = termLib.filter((t) => t.active || header.terms.includes(t.text));
   const customTerms = header.terms.filter((t) => !termLib.some((x) => x.text === t));
@@ -1300,7 +1311,19 @@ export function QuoteBuilderPage() {
         </section>
 
         <div className="flex min-w-0 flex-[1_1_320px] flex-wrap content-start gap-4 [&>*]:flex-[1_1_320px]">
+        <SignatureTrail
+          quote={quote}
+          sign={signRow}
+          accountName={accountName}
+          ceoSigned={!!quote.signed_at || (quote.status === 'sent' && quote.kind === 'quick' && !quote.approver)}
+          canShare={isOwner || me.role === 'pm' || me.role === 'ceo'}
+          isOwner={isOwner}
+          myImage={myImage}
+          tz={tz}
+          onChanged={signState.reload}
+        />
         <ReviewCard quoteId={quote.id} code={quote.code} locked={quote.status === 'sent'} />
+        <QuoteBotHistory quoteId={quote.id} version={signVersion} />
         <aside aria-label="Báo giá tương tự" className="flex min-w-0 flex-col gap-0 border-t border-ink pt-3.5">
           <div className="mb-1">
             <h2 className="text-[17px] font-semibold text-ink">Báo giá tương tự đã gửi</h2>
@@ -1315,13 +1338,13 @@ export function QuoteBuilderPage() {
       </div>
 
       <div aria-hidden="true" style={{ position: 'fixed', left: '-10000px', top: 0 }}>
-        <QuotePdf ref={pdfRef} quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} signature={pdfSignature} />
+        <QuotePdf ref={pdfRef} quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} signature={pdfSignature} accountSignature={pdfAccountSignature} clientSignature={pdfClientSignature} />
       </div>
 
       <Modal open={preview} onClose={() => setPreview(false)} title={`Xem trước ${quote.code}`} wide>
         <div className="relative overflow-x-auto">
           <div className="mx-auto w-[190mm] shadow-sm ring-1 ring-line-soft">
-            <QuotePdf quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} signature={pdfSignature ?? (isCeo && signature && (quote.status === 'pending' || quote.status === 'signing') ? { image: signature.image, signedAt: null, preview: true } : null)} />
+            <QuotePdf quote={pdfQuote} lines={pdfLines} company={company} preparedBy={accountName} tz={tz} vatOnPassThrough={vatOnPassThrough} accountSignature={pdfAccountSignature} clientSignature={pdfClientSignature} signature={pdfSignature ?? (isCeo && signature && (quote.status === 'pending' || quote.status === 'signing') ? { image: signature.image, signedAt: null, preview: true } : null)} />
           </div>
         </div>
       </Modal>
